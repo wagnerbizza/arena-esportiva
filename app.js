@@ -150,10 +150,17 @@ function eventLabel(e, m) {
     }[e.type] || e.type
   );
 }
+// Mostra o acontecimento e sua justificativa juntos em todos os relatórios.
+// Apenas apresentação: não altera eventos, placares ou a auditoria gravada.
 function eventDescription(e) {
-  return e.type === "cadastro"
-    ? "Partida cadastrada na central"
-    : e.text || e.reason || "—";
+  const text = String(
+    e.type === "cadastro" ? "Partida cadastrada na central" : e.text || "",
+  ).trim();
+  const reason = String(e.reason || "").trim();
+  if (text && reason && text !== reason) {
+    return `${text} — Motivo: ${reason}`;
+  }
+  return text || reason || "—";
 }
 
 function field(label, name, type = "text", extra = "") {
