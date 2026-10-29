@@ -1752,10 +1752,73 @@ function setupAccessibility(){
     const b=e.target.closest("button,input,select,textarea");if(!b)return;
     if(b.hasAttribute("data-touch-help")){touchHelp=!touchHelp;b.setAttribute("aria-pressed",String(touchHelp));b.textContent="Ajuda da função: "+(touchHelp?"ativada":"desativada");return;}
     if(b.hasAttribute("data-reset-preferences")){preferences={...preferenceDefaults};savePreferences();for(const el of region.querySelectorAll("[data-pref]")){if(el.type==="checkbox")el.checked=preferences[el.dataset.pref];else el.value=preferences[el.dataset.pref];}hideContextHelp();return;}
-    if(touchHelp&&!b.closest(".accessibility-bar")){e.preventDefault();e.stopImmediatePropagation();document.getElementById("touchHelpStatus").textContent=helpFor(b)||"Este controle não possui uma explicação adicional.";showContextHelp(b);}
+    if(touchHelp&&!b.closest(".accessibility-bar")&&!b.closest("#arenaTutorial")){e.preventDefault();e.stopImmediatePropagation();document.getElementById("touchHelpStatus").textContent=helpFor(b)||"Este controle não possui uma explicação adicional.";showContextHelp(b);}
   },true);
   themeQuery.addEventListener("change",()=>{if(preferences.theme==="auto")applyPreferences();});
 }
 setupAccessibility();
+
+// 14 — COMO USAR. Guia por perfil, sem gravar ou alterar dados esportivos.
+let tutorialIndex = 0, tutorialReturnFocus = null;
+function tutorialSteps() {
+  if (!admin) return [
+    ["Bem-vindo ao painel público", "Aqui você acompanha resultados, situação das partidas e avisos publicados pela organização. Não é necessário fazer login para assistir."],
+    ["Escolha a modalidade", "Use Filtrar modalidade acima dos jogos. Cada cartão mostra as equipes, placar, etapa, data e local. O cronômetro depende da ativação pela organização."],
+    ["Entenda as interrupções", "Ao vivo, pausada, suspensa e encerrada são situações diferentes. Quando houver um aviso da organização, ele aparecerá no cartão. Você não precisa atualizar a página a cada lance."],
+    ["Ajuste a leitura", "Em Aparência, acessibilidade e ajuda, escolha tema, tamanho do texto e contraste. Para participar da organização, use Área da organização; novos operadores precisam solicitar acesso."]
+  ];
+  if (!C.demo && (!user || !role)) return [
+    ["Entrar ou solicitar acesso", "Quem já possui uma conta pode entrar com seu método atual. Para uma conta nova, escolha Solicitar acesso e cadastre com Google ou e-mail e senha."],
+    ["Confirmação e aprovação", "Confirme seu e-mail quando solicitado. O cadastro não autoriza mudanças de resultados: o administrador principal precisa aprovar o acesso e atribuir partidas."],
+    ["Adicionar Google à conta existente", "Entre primeiro com o método que já utiliza. Depois, em Minha conta, use Vincular Google para manter a mesma conta. Se houver conflito com outra conta, o sistema não faz mesclagem automática."],
+    ["Recuperar acesso", "Esqueci minha senha envia instruções ao seu e-mail. Se estiver bloqueado ou sem partidas atribuídas, procure o administrador principal."]
+  ];
+  if (role === "operator") return [
+    ["Sua conta de operador", "O cabeçalho identifica sua conta. Você recebe somente as partidas atribuídas pelo administrador principal. Minha conta permite conferir seu perfil e suas formas de entrada."],
+    ["Encontre sua partida", "Abra Partidas. Use busca, modalidade, situação e campeonato. Em andamento e próximas esconde as finalizadas; Todas permite localizar qualquer partida disponível para sua conta."],
+    ["Durante o jogo", "Abra Operar partida, confira as equipes e inicie o jogo quando autorizado. Use o lançamento rápido para registrar pontos ou gols na equipe correta. Se desejar, selecione o atleta antes do lançamento."],
+    ["Interrupções e avisos", "Pausar e suspender registram o motivo e interrompem o cronômetro. O campo Aviso para quem está assistindo publica informações. Observações operacionais compõem a súmula. Confira sempre o que ficará público."],
+    ["Correções e encerramento", "Se registrar um resultado errado, avise o administrador principal para realizar o estorno auditado. Ao encerrar, confira o placar. Reabertura, homologação, auditoria e relatórios são funções administrativas."],
+    ["Ajuda quando precisar", "Use Tab e Enter para navegar pelo teclado. A ajuda contextual explica controles sem modificar o jogo. Quando Ajuda da função estiver ativada, o toque apenas consulta; desative para voltar a operar."]
+  ];
+  return [
+    ["Administrador principal", "Sua conta gerencia cadastros, permissões, jogos e relatórios. O cabeçalho mostra com qual conta você entrou. Como usar pode ser aberto novamente a qualquer momento."],
+    ["Equipes e jogadores", "Cadastre as equipes e seus escudos em Equipes. Em Jogadores, informe equipe, número, posição e titular ou reserva. Prepare o elenco antes de criar a partida: a súmula preserva uma cópia daquele momento."],
+    ["Importação com prévia", "Em Importar, selecione equipes ou jogadores e forneça a planilha ou o texto. Confira a prévia antes de confirmar. Corrija linhas inválidas e verifique duplicados. A importação não deve ser confirmada sem essa revisão."],
+    ["Campeonatos e temporadas", "Cadastre uma edição para cada modalidade e categoria. A modalidade fica fixa após salvar. Encerrar o campeonato impede novas partidas vinculadas, mas não encerra os jogos automaticamente."],
+    ["Programar e localizar partidas", "Em Partidas, escolha campeonato, equipes diferentes, data e local. O vínculo preenche a modalidade. Use Todas para encontrar jogos encerrados e Ver partidas no cartão do campeonato para filtrar seus jogos."],
+    ["Operar um jogo", "Confira as equipes antes de iniciar. Use +1 para gols no futebol e os valores próprios nas outras modalidades. O cronômetro possui início, parada e ajuste com justificativa. Cartões, faltas e outros lances ficam na seção de detalhes."],
+    ["Gol anulado e VAR", "Se um gol for anulado, localize o ponto no Histórico e use Estornar com justificativa. Em uma partida encerrada, primeiro reabra com motivo. Para uma análise de VAR, publique um aviso ao público e aguarde a decisão antes do estorno."],
+    ["Interrupções e súmula", "Informe o motivo ao pausar, suspender ou cancelar. Avisos são públicos; observações operacionais entram na súmula e ficam disponíveis a quem opera a partida. Ao concluir, confira o resultado e encerre. Homologação é uma ação separada."],
+    ["Relatórios e cópia dos dados", "Em Súmulas e relatórios, selecione a partida e exporte PDF ou Excel. A auditoria preserva as correções. Baixar cópia JSON gera uma cópia para consulta; ainda não existe restauração automática nesta versão."],
+    ["Operadores e permissões", "Em Usuários e permissões, copie o link de cadastro, revise o pedido, aprove e atribua somente os jogos necessários. Bloquear retira o acesso operacional. Operadores não recebem sua autoridade de administrador principal."],
+    ["Logo, conta e leitura", "Configurações publica logo, título, cor e capa. Minha conta mostra sua identidade e permite vincular Google. Tema e acessibilidade são preferências deste navegador e não mudam as escolhas dos outros usuários."],
+    ["Antes de usar em um evento", "Confira equipes, elenco, campeonato e permissões. Teste um lançamento e a atualização do painel público. A demonstração interativa, idiomas, classificação e limpeza dos testes ainda estão em preparação nesta etapa."]
+  ];
+}
+function drawTutorial() {
+  const steps = tutorialSteps(); tutorialIndex = Math.max(0,Math.min(tutorialIndex,steps.length-1));
+  const [title,body] = steps[tutorialIndex];
+  document.getElementById("arenaTutorialProgress").textContent=`Passo ${tutorialIndex+1} de ${steps.length}`;
+  document.getElementById("arenaTutorialTitle").textContent=title;
+  document.getElementById("arenaTutorialBody").textContent=body;
+  document.getElementById("arenaTutorialPrevious").disabled=tutorialIndex===0;
+  document.getElementById("arenaTutorialNext").textContent=tutorialIndex===steps.length-1?"Concluir":"Próximo";
+}
+function setupTutorial() {
+  const bar=document.querySelector(".accessibility-bar"); if(!bar)return;
+  const open=document.createElement("button");open.type="button";open.textContent="Como usar — guia passo a passo";open.style.marginTop="8px";bar.append(open);
+  const dialog=document.createElement("dialog");dialog.id="arenaTutorial";
+  dialog.setAttribute("aria-labelledby","arenaTutorialTitle");dialog.setAttribute("aria-describedby","arenaTutorialBody");
+  dialog.style.cssText="width:min(92vw,650px);max-height:85vh;overflow:auto;background:var(--panel);color:var(--text);border:2px solid var(--line);border-radius:12px;padding:24px";
+  dialog.innerHTML='<p id="arenaTutorialProgress" class="muted" aria-live="polite"></p><h2 id="arenaTutorialTitle" tabindex="-1"></h2><p id="arenaTutorialBody"></p><p class="muted">Este guia apenas orienta: não cria nem altera registros.</p><div class="toolbar"><button type="button" id="arenaTutorialPrevious">Anterior</button><button type="button" id="arenaTutorialNext" class="primary">Próximo</button><button type="button" id="arenaTutorialClose">Fechar guia</button></div>';
+  document.body.append(dialog);
+  open.addEventListener("click",()=>{hideContextHelp();tutorialReturnFocus=document.activeElement;tutorialIndex=0;drawTutorial();dialog.showModal();document.getElementById("arenaTutorialTitle").focus();});
+  document.getElementById("arenaTutorialPrevious").addEventListener("click",()=>{tutorialIndex--;drawTutorial();document.getElementById("arenaTutorialTitle").focus();});
+  document.getElementById("arenaTutorialNext").addEventListener("click",()=>{if(tutorialIndex>=tutorialSteps().length-1)dialog.close();else{tutorialIndex++;drawTutorial();document.getElementById("arenaTutorialTitle").focus();}});
+  document.getElementById("arenaTutorialClose").addEventListener("click",()=>dialog.close());
+  dialog.addEventListener("close",()=>{hideContextHelp();if(tutorialReturnFocus?.isConnected)tutorialReturnFocus.focus();});
+}
+setupTutorial();
 
 boot();
