@@ -2,8 +2,9 @@
    1 conexão | 2 visualização | 3 cadastros | 4 partida | 5 importação | 6 relatórios.
    Nunca acrescente senhas neste arquivo. Dados externos são escapados antes da exibição. */
 // Arquivo sem ferramenta de compilação: funciona no GitHub Pages.
+const trainingMode = new URLSearchParams(location.search).get("demonstracao") === "1";
 const D = window.Domain,
-  C = window.CONFIG,
+  C = trainingMode ? { ...window.CONFIG, demo: true } : window.CONFIG,
   M = window.SparkModel,
   admin = document.body.dataset.admin === "true";
 const $ = (s) => document.querySelector(s),
@@ -32,7 +33,7 @@ let accessStatus = "loading",
   authMode = new URLSearchParams(location.search).get("acesso") === "cadastro" ? "register" : "login",
   accessBusy = false,
   managedUserId = "";
-const key = "arena-demo-v1",
+const key = trainingMode ? "arena-treinamento-isolado-v1" : "arena-demo-v1",
   app = $("#app");
 let reportFilter = "",
   publicFilter = "";
@@ -385,7 +386,8 @@ async function boot() {
     : "FIREBASE SPARK • conectando…";
   if (C.demo) {
     try {
-      state = JSON.parse(localStorage.getItem(key)) || D.fresh();
+      state = JSON.parse(localStorage.getItem(key)) || (trainingMode ? trainingSeed() : D.fresh());
+      if (trainingMode) trainingStore(state);
     } catch {
       toast(
         "Dados locais inválidos. Limpe o armazenamento para reiniciar.",
@@ -393,10 +395,11 @@ async function boot() {
       );
     }
     role = "admin";
+    if (trainingMode) $("#mode").textContent = "DEMONSTRAÇÃO ISOLADA • sem Firebase • nenhum resultado real é alterado";
     render();
     window.addEventListener("storage", (e) => {
       if (e.key === key) {
-        state = e.newValue ? JSON.parse(e.newValue) : D.fresh();
+        state = e.newValue ? JSON.parse(e.newValue) : (trainingMode ? trainingSeed() : D.fresh());
         render();
       }
     });
@@ -429,9 +432,10 @@ async function boot() {
 async function dispatch(a) {
   if (busy) throw Error("Aguarde a operação anterior.");
   busy = true;
-  document.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  app.querySelectorAll("button").forEach((b) => (b.disabled = true));
   try {
     if (C.demo) {
+      if (trainingMode && role === "operator" && ["team","player","match","settings","import","championship","championshipLink","correct"].includes(a.type)) throw Error("Esta ação é do administrador na simulação. Troque o perfil para treinar essa função.");
       const latest = JSON.parse(localStorage.getItem(key)) || D.fresh();
       if (!["team", "player", "match", "settings", "import", "championship"].includes(a.type)) {
         const old = latest.matches.find((m) => m.id === a.matchId);
@@ -476,7 +480,7 @@ async function dispatch(a) {
           m.publicNotice = "";
         }
       }
-      localStorage.setItem(key, JSON.stringify(state));
+      trainingMode ? trainingStore(state) : localStorage.setItem(key, JSON.stringify(state));
     } else {
       if (!cloud) throw Error("Aguarde a conexão com o Firebase.");
       await cloud.send(a);
@@ -497,10 +501,11 @@ function matchCard(m, button = false) {
     sc = gameResult(m),
     a = team(m.home),
     b = team(m.away);
-  return `<article class="card match-card ${m.status === "Ao vivo" ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${m.status === "Ao vivo" ? "live" : ""}">${m.status === "Ao vivo" ? "● " : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score"><div>${badge(a)}<div class="name">${esc(a.name)}</div></div><strong>${sc[0]} <span class="muted">:</span> ${sc[1]}</strong><div>${badge(b)}<div class="name">${esc(b.name)}</div></div></div>${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || cloud?.canOperate(m.id)) ? `<button data-open="${m.id}">Operar partida →</button>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
+  return `<article class="card match-card ${m.status === "Ao vivo" ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${m.status === "Ao vivo" ? "live" : ""}">${m.status === "Ao vivo" ? "● " : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score"><div>${badge(a)}<div class="name">${esc(a.name)}</div></div><strong>${sc[0]} <span class="muted">:</span> ${sc[1]}</strong><div>${badge(b)}<div class="name">${esc(b.name)}</div></div></div>${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator") || cloud?.canOperate(m.id)) ? `<button data-open="${m.id}">Operar partida →</button>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
 }
 
 function render() {
+  hideContextHelp();
   document.documentElement.style.setProperty("--accent", state.settings.color);
   document.title = state.settings.title;
   renderBrandAndIdentity();
@@ -1793,7 +1798,7 @@ function tutorialSteps() {
     ["Relatórios e cópia dos dados", "Em Súmulas e relatórios, selecione a partida e exporte PDF ou Excel. A auditoria preserva as correções. Baixar cópia JSON gera uma cópia para consulta; ainda não existe restauração automática nesta versão."],
     ["Operadores e permissões", "Em Usuários e permissões, copie o link de cadastro, revise o pedido, aprove e atribua somente os jogos necessários. Bloquear retira o acesso operacional. Operadores não recebem sua autoridade de administrador principal."],
     ["Logo, conta e leitura", "Configurações publica logo, título, cor e capa. Minha conta mostra sua identidade e permite vincular Google. Tema e acessibilidade são preferências deste navegador e não mudam as escolhas dos outros usuários."],
-    ["Antes de usar em um evento", "Confira equipes, elenco, campeonato e permissões. Teste um lançamento e a atualização do painel público. A demonstração interativa, idiomas, classificação e limpeza dos testes ainda estão em preparação nesta etapa."]
+    ["Antes de usar em um evento", "Confira equipes, elenco, campeonato e permissões. Teste um lançamento e a atualização do painel público. A demonstração interativa usa dados fictícios em outra aba. Idiomas, classificação e limpeza dos testes ainda estão em preparação nesta etapa."]
   ];
 }
 function drawTutorial() {
@@ -1820,5 +1825,44 @@ function setupTutorial() {
   dialog.addEventListener("close",()=>{hideContextHelp();if(tutorialReturnFocus?.isConnected)tutorialReturnFocus.focus();});
 }
 setupTutorial();
+
+// 15 — TREINAMENTO ISOLADO. O parâmetro só ativa dados locais fictícios.
+// Não altera window.CONFIG e não abre conexão com Firebase neste modo.
+function trainingSeed() {
+  let s = D.fresh();
+  s = D.reduce(s,{type:"settings",data:{title:"Arena — Treinamento",subtitle:"Dados fictícios para aprender sem alterar o evento real.",color:"#c8fa64",banner:"",logo:""}});
+  for(const [name,short,coach] of [["Treino Azul","AZL","Técnico fictício Azul"],["Treino Verde","VER","Técnico fictício Verde"]]) s=D.reduce(s,{type:"team",data:{name,short,coach,category:"Demonstração",badge:""}});
+  for(const t of s.teams) for(let i=1;i<=2;i++) s=D.reduce(s,{type:"player",data:{name:`Atleta fictício ${t.short} ${i}`,team:t.id,number:String(i+6),position:"Treinamento",reserve:i===2}});
+  for(const sport of ["Futebol","Basquete"]){
+    s=D.reduce(s,{type:"championship",data:{name:`Copa Treino ${sport}`,season:"Demonstração",sport,category:"Treinamento",status:"Planejado"}});
+    s=D.reduce(s,{type:"match",data:{sport,championshipId:s.championships.at(-1).id,home:s.teams[0].id,away:s.teams[1].id,date:new Date().toISOString(),place:"Local fictício de treinamento",referees:"Arbitragem fictícia",stage:"1"}});
+    const m=s.matches.at(-1);m.score=[0,0];m.clock=M.emptyClock();m.publicNotice="";m.rosterTeams=Object.fromEntries(m.roster.map(p=>[p.id,p.team]));
+  }
+  return s;
+}
+function trainingStore(value) {
+  try { localStorage.setItem(key,JSON.stringify(value)); }
+  catch { throw Error("O navegador não permitiu salvar o treino local. Nenhum dado real foi alterado."); }
+}
+function setupTraining() {
+  const bar=document.querySelector(".accessibility-bar");if(!bar)return;
+  if(!trainingMode){
+    const link=document.createElement("a");link.className="button";link.style.margin="8px 0 0 8px";
+    const url=new URL("painel.html",location.href);url.search="?demonstracao=1";
+    link.href=url.href;link.target="_blank";link.rel="noopener";link.textContent="Abrir demonstração para treinar";bar.append(link);return;
+  }
+  const banner=document.createElement("section");banner.className="card noprint";banner.style.cssText="margin:16px 5%;border:3px solid #ba891a";
+  banner.innerHTML='<h2>Demonstração — somente dados fictícios</h2><p>Este treino funciona apenas neste navegador, sem conexão com o Firebase. Sua conta e os resultados reais permanecem na outra aba.</p><div class="toolbar"><label>Simular perfil<select id="trainingRole"><option value="admin">Administrador</option><option value="operator">Operador</option></select></label><button type="button" id="trainingReset">Reiniciar apenas o treino</button><a class="button" id="trainingCentral">Voltar à central real</a><a class="button" id="trainingPublic" target="_blank" rel="noopener">Ver painel público do treino</a></div><p class="muted">Para começar, abra Partidas → Operar partida → Iniciar jogo. Cadastros e lançamentos daqui não são publicados no evento real. As permissões simuladas são apenas uma orientação; não representam contas reais.</p>';
+  bar.after(banner);
+  const central=new URL("painel.html",location.href);central.search="";document.getElementById("trainingCentral").href=central.href;
+  const pub=new URL("index.html",location.href);pub.search="?demonstracao=1";document.getElementById("trainingPublic").href=pub.href;
+  for(const link of document.querySelectorAll("header a")) {const url=new URL(link.href,location.href);if(url.origin===location.origin){url.search="?demonstracao=1";link.href=url.href;}}
+  document.getElementById("trainingRole").addEventListener("change",e=>{role=e.target.value;section="overview";selected="";render();toast("Perfil simulado: "+(role==="admin"?"administrador":"operador")+". Dados apenas de treinamento.");});
+  document.getElementById("trainingReset").addEventListener("click",()=>{
+    if(!confirm("Reiniciar somente os dados fictícios deste treino? Os dados reais não serão alterados."))return;
+    try{const seed=trainingSeed();trainingStore(seed);state=seed;selected="";section="overview";pendingImport=null;quickPlayers=["",""];render();toast("Treino reiniciado com dados fictícios.");}catch(e){toast(e.message,true);}
+  });
+}
+setupTraining();
 
 boot();
