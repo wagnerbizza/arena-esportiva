@@ -165,6 +165,40 @@ document.addEventListener("input", (e) => {
   if (e.target.dataset.championshipFilter === "query") { championshipQuery = e.target.value; updateChampionshipList(); }
 });
 
+
+// 2.3 — IDENTIDADE VISUAL E CONTA. Dados da sessão aparecem apenas na central.
+// O logo é compactado e gravado nas configurações existentes, sem Firebase Storage.
+let systemLogoBusy = false, systemLogoVersion = 0;
+const accountRole = () => C.demo ? "Demonstração local" : role === "admin" ? "Administrador principal" : role === "operator" ? "Operador" : "Aguardando autorização";
+const accountName = () => user?.displayName || (state.users || []).find((p) => p.id === user?.uid)?.name || user?.email?.split("@")[0] || "Conta conectada";
+function renderBrandAndIdentity() {
+  const brand = $("#systemBrand");
+  if (brand) brand.innerHTML = `<span class="system-logo">${state.settings.logo ? `<img src="${esc(state.settings.logo)}" alt="Logo da organização" onerror="this.hidden=true">` : '<span aria-hidden="true">◈</span>'}</span><span class="brand-copy"><b>${esc(state.settings.title || "ARENA")}</b><small>CENTRAL ESPORTIVA</small></span>`;
+  const identity = $("#sessionIdentity");
+  if (!identity) return;
+  identity.hidden = !admin || (!user && !C.demo);
+  identity.innerHTML = identity.hidden ? "" : `<div><strong>${esc(C.demo ? "Demonstração local" : accountName())}</strong>${!C.demo ? `<span>${esc(user.email || "Sem e-mail informado")}</span>` : ""}<small>${esc(accountRole())}</small></div>${C.demo || role ? '<button type="button" data-my-account>Minha conta</button>' : ""}`;
+}
+function settingsView() {
+  const s = state.settings;
+  return `<div class="card"><h2>Identidade visual e configurações</h2><p class="muted">A aparência é compartilhada pelo painel público e pela central. Somente o administrador principal pode alterá-la.</p><form id="settings"><div class="formgrid">${field("Título do sistema", "title", "text", `value="${esc(s.title)}" required maxlength="100"`)}${field("Subtítulo", "subtitle", "text", `value="${esc(s.subtitle)}" maxlength="200"`)}${field("Cor de destaque", "color", "color", `value="${esc(s.color)}"`)}${field("Endereço HTTPS da imagem de capa", "banner", "url", `value="${esc(s.banner)}" maxlength="1500"`)}<label>Logo do sistema (PNG, JPG ou WebP)<input id="systemLogoFile" type="file" accept="image/png,image/jpeg,image/webp"><small>Escolha uma imagem de até 5 MB. Ela será reduzida automaticamente.</small></label><label>Ou endereço HTTPS do logo<input name="logoURL" type="url" maxlength="1500" placeholder="https://..." value="${esc(s.logo?.startsWith("https://") ? s.logo : "")}"></label><input type="hidden" name="logo" value="${esc(s.logo || "")}"><div class="system-logo-preview" id="systemLogoPreview">${systemLogoPreview(s.logo || "")}</div></div><p><button class="primary">Salvar aparência</button></p></form><p class="muted">Escolher ou remover uma imagem só muda a prévia. Clique em Salvar aparência para publicar. Os escudos dos times são alterados na aba Equipes. A assinatura WagnerBIZZA é preservada.</p></div>`;
+}
+function systemLogoPreview(value) {
+  return `<div class="system-logo-sample">${value ? `<img src="${esc(value)}" alt="Prévia do logo do sistema" onerror="this.hidden=true">` : '<span class="muted">Sem logo personalizado</span>'}</div><button type="button" data-remove-system-logo>Remover logo</button>`;
+}
+function setSystemLogoDraft(value) {
+  const f = $("#settings"); if (!f) return;
+  f.elements.logo.value = value;
+  f.elements.logoURL.value = value.startsWith("https://") ? value : "";
+  $("#systemLogoPreview").innerHTML = systemLogoPreview(value);
+}
+function accountView() {
+  if (C.demo) return `<section class="card"><h2>Minha conta</h2><p>Você está na demonstração local. Nome, e-mail e recuperação de senha aparecem ao entrar com uma conta do Firebase.</p></section>`;
+  if (!user) return "";
+  const providers = [...new Set((user.providerData || []).map((p) => ({password:"E-mail e senha", "google.com":"Google", "microsoft.com":"Microsoft"})[p.providerId] || p.providerId))];
+  return `<section class="card"><h2>Minha conta</h2><p class="muted">Confira a conta que está usando nesta sessão.</p><dl class="account-details"><div><dt>Nome</dt><dd>${esc(accountName())}</dd></div><div><dt>E-mail</dt><dd>${esc(user.email || "Não informado")}</dd></div><div><dt>Perfil de acesso</dt><dd>${esc(accountRole())}</dd></div><div><dt>Confirmação do e-mail</dt><dd>${user.emailVerified ? "Confirmado" : "Ainda não confirmado"}</dd></div><div><dt>Formas de entrada já vinculadas</dt><dd>${esc(providers.join(", ") || "Não informado")}</dd></div></dl>${role === "admin" ? '<p class="public-notice">Sua conta continua como administrador principal. Nenhuma opção desta tela altera suas permissões.</p>' : '<p class="muted">Seu acesso às partidas é definido pelo administrador principal.</p>'}<div class="toolbar"><button type="button" data-account-recover ${!user.email ? "disabled" : ""}>Enviar e-mail para redefinir senha</button><button type="button" data-account-exit>Sair desta conta</button></div><p class="muted">A redefinição é concluída pelo link enviado ao seu e-mail. A vinculação de novas formas de entrada será adicionada na próxima etapa.</p></section>`;
+}
+
 // Atualizações ao vivo preservam o formulário ainda não enviado.
 function refresh() {
   const focused = document.activeElement;
@@ -222,6 +256,7 @@ function refresh() {
     $("#paste").value = importDraft.paste;
     $("#preview").innerHTML = importDraft.preview;
   }
+  if ($("#settings")?.elements.logo) setSystemLogoDraft($("#settings").elements.logo.value);
   if (championshipFocus) {
     const el = document.querySelector(`[data-championship-filter="${championshipFocus.key}"]`);
     if (el) { el.focus({preventScroll:true}); if (el.type === "search") el.setSelectionRange(championshipFocus.start, championshipFocus.end); }
@@ -459,6 +494,7 @@ function matchCard(m, button = false) {
 function render() {
   document.documentElement.style.setProperty("--accent", state.settings.color);
   document.title = state.settings.title;
+  renderBrandAndIdentity();
   document.body.classList.toggle("report-mode", admin && section === "reports");
   $("#logout")?.classList.toggle("hidden", C.demo || !user);
   if (admin && !C.demo && (!user || !role)) {
@@ -479,7 +515,7 @@ function render() {
     return;
   }
   // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
-  if (role !== "admin" && !["overview", "matches"].includes(section)) {
+  if (role !== "admin" && !["overview", "matches", "account"].includes(section)) {
     section = "overview";
     selected = "";
   }
@@ -494,11 +530,12 @@ function render() {
     ["reports", "Súmulas e relatórios"],
     ["settings", "Configurações"],
     ["users", "Usuários e permissões"],
+    ["account", "Minha conta"],
   ];
   app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">PAINEL DA ORGANIZAÇÃO</span><h2>${esc(state.settings.title)}</h2></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div><nav>${sections
     .filter(
       ([id]) =>
-        role === "admin" || ["overview", "matches"].includes(id),
+        role === "admin" || ["overview", "matches", "account"].includes(id),
     )
     .map(
       ([id, label]) =>
@@ -529,6 +566,7 @@ function publicMatches(filter) {
     : empty("Nenhuma partida publicada para esta seleção.");
 }
 function view() {
+  if (section === "account") return accountView();
   if (section === "championships" && role === "admin") return championshipsView();
   if (section === "users" && role === "admin") return usersView();
   if (section === "overview")
@@ -576,8 +614,7 @@ function view() {
         )}${select("Equipe da casa", "home", teamOptions())}${select("Equipe visitante", "away", teamOptions())}${field("Data e horário (horário deste computador)", "date", "datetime-local", "required")}${field("Local", "place")}${field("Competição / edição (partida sem vínculo)", "competition", "text", 'maxlength="150"')}${field("Árbitros e mesários", "referees")}${field("Etapa inicial (ex.: 1 ou 1º quarto)", "stage", "text", 'value="1"')}</div><button class="primary" ${role === "admin" ? "" : "disabled"}>Criar partida</button></form></div>${listPanel("matches")}`;
   if (section === "imports") return importView();
   if (section === "reports") return reports();
-  if (section === "settings")
-    return `<div class="card"><h2>Personalizar a central</h2><form id="settings"><div class="formgrid">${field("Título", "title", "text", `value="${esc(state.settings.title)}" required`)}${field("Subtítulo", "subtitle", "text", `value="${esc(state.settings.subtitle)}"`)}${field("Cor de destaque", "color", "color", `value="${esc(state.settings.color)}"`)}${field("Endereço HTTPS da imagem de capa", "banner", "url", `value="${esc(state.settings.banner)}"`)}</div><button class="primary">Salvar aparência</button></form><p class="muted">Nesta versão, escudos e capa utilizam endereços HTTPS de imagens já hospedadas.</p></div>`;
+  if (section === "settings") return settingsView();
   return "";
 }
 // 3 — O Firestore valida permissões, auditoria e transições em firestore.rules.
@@ -1099,6 +1136,10 @@ document.addEventListener("submit", async (e) => {
       return;
     }
     if (["team", "player", "match", "settings", "championship"].includes(f.id)) {
+      if (f.id === "settings") {
+        if (systemLogoBusy) throw Error("Aguarde a preparação do logo antes de salvar.");
+        delete d.logoURL;
+      }
       if (f.id === "team") {
         delete d.badgeURL;
       }
@@ -1143,6 +1184,22 @@ document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
   try {
+    if (b.hasAttribute("data-my-account")) {
+      if (!C.demo && (!user || !role)) return;
+      cloud?.stopHistory(); section = "account"; selected = ""; render(); return;
+    }
+    if (b.hasAttribute("data-account-recover")) {
+      if (!user?.email || C.demo) return;
+      await accessAction(async () => { await cloud.recoverPassword(user.email); toast("Enviamos as instruções de redefinição de senha para " + user.email + ". Confira também o spam."); }); return;
+    }
+    if (b.hasAttribute("data-account-exit")) {
+      if (cloud) await cloud.auth.signOut(cloud.authentication); return;
+    }
+    if (b.hasAttribute("data-remove-system-logo")) {
+      systemLogoVersion++; systemLogoBusy = false; setSystemLogoDraft("");
+      if ($("#systemLogoFile")) $("#systemLogoFile").value = "";
+      toast("Logo removido da prévia. Clique em Salvar aparência para publicar."); return;
+    }
     if (b.dataset.editChampionship) {
       editedChampionshipId = b.dataset.editChampionship; render();
       $("#championship")?.scrollIntoView({behavior:"smooth"}); return;
@@ -1438,6 +1495,22 @@ document.addEventListener("click", async (e) => {
 });
 document.addEventListener("change", async (e) => {
   try {
+    if (e.target.id === "systemLogoFile") {
+      const file = e.target.files[0]; if (!file) return;
+      const version = ++systemLogoVersion;
+      systemLogoBusy = true; toast("Preparando logo do sistema…");
+      try {
+        const value = await compactLogo(file);
+        if (version === systemLogoVersion && $("#settings")) { setSystemLogoDraft(value); toast("Logo pronto. Clique em Salvar aparência para publicar."); }
+      } finally { if (version === systemLogoVersion) systemLogoBusy = false; }
+      return;
+    }
+    if (e.target.name === "logoURL") {
+      systemLogoVersion++; systemLogoBusy = false;
+      const value = e.target.value.trim();
+      if (value && (!/^https:\/\//i.test(value) || value.length > 1500)) throw Error("Use um endereço HTTPS de até 1500 caracteres.");
+      setSystemLogoDraft(value); return;
+    }
     if (e.target.dataset.championshipFilter === "status") {
       championshipStatus = e.target.value; updateChampionshipList(); return;
     }

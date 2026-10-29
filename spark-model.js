@@ -295,7 +295,7 @@
   }
   function publicSettings(t) {
     const { id, title, subtitle, color, banner, _revision, _updatedAt } = t;
-    return { id, title, subtitle, color, banner, _revision, _updatedAt };
+    return { ...(Object.hasOwn(t, "logo") ? { logo: t.logo } : {}), id, title, subtitle, color, banner, _revision, _updatedAt };
   }
   function publicMatch(m) {
     const {

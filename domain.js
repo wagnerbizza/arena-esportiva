@@ -16,6 +16,7 @@
       subtitle: "Cada lance, uma história.",
       color: "#c8fa64",
       banner: "",
+      logo: "",
     },
     championships: [],
     teams: [],
@@ -72,6 +73,7 @@
         subtitle: str(a.data.subtitle, 200),
         color: /^#[0-9a-f]{6}$/i.test(a.data.color) ? a.data.color : "#c8fa64",
         banner: url(a.data.banner),
+        logo: url(a.data.logo ?? s.settings.logo ?? ""),
       };
     } else if (a.type === "championship") {
       const d = a.data;
