@@ -9,6 +9,10 @@ export async function connectSpark({
   onError,
   onConnection,
 }) {
+  // A mesma identidade está protegida nas regras do Firestore.
+  const OWNER_UID = "mwYVHBGiEJSYfKimTiBUMzcWHhn1";
+  const isOwner = () => session?.uid === OWNER_UID;
+  const authorized = () => isOwner() || (profile?.role === "operator" && profile.enabled !== false);
   const version = "11.0.2";
   const [fb, auth, F] = await Promise.all([
     import(`https://www.gstatic.com/firebasejs/${version}/firebase-app.js`),
@@ -36,6 +40,8 @@ export async function connectSpark({
     );
   }
   let authStop = () => {};
+  let profileStop = () => {};
+  let dataEpoch = 0;
   let state = D.fresh(),
     session = null,
     profile = null,
@@ -45,6 +51,7 @@ export async function connectSpark({
     cache = new Map(),
     generation = 0;
   const stop = () => {
+    dataEpoch++;
     stops.forEach((f) => f());
     stops = [];
     historyStop?.();
@@ -65,11 +72,13 @@ export async function connectSpark({
     onData(state);
   }
   function watchDoc(path, assign) {
+    const epoch = dataEpoch;
     stops.push(
       F.onSnapshot(
         F.doc(database, path),
         { includeMetadataChanges: true },
         (snap) => {
+          if (epoch !== dataEpoch) return;
           assign(snap.exists() ? snap.data() : null);
           onConnection(
             snap.metadata.fromCache
@@ -83,10 +92,12 @@ export async function connectSpark({
     );
   }
   function watchCollection(name, assign) {
+    const epoch = dataEpoch;
     stops.push(
       F.onSnapshot(
         F.collection(database, name),
         (snap) => {
+          if (epoch !== dataEpoch) return;
           assign(snap.docs.map((d) => d.data()));
           publish();
         },
@@ -96,16 +107,28 @@ export async function connectSpark({
   }
   function listen(full) {
     state = D.fresh();
-    watchDoc(
-      full ? "settings/main" : "publicSettings/main",
-      (d) => (state.settings = d || D.fresh().settings),
-    );
-    watchCollection(full ? "teams" : "publicTeams", (d) => (state.teams = d));
-    if (full) watchCollection("players", (d) => (state.players = d));
-    watchCollection(
-      full ? "matches" : "publicMatches",
-      (d) => (state.matches = d),
-    );
+    const ownerView = full && isOwner();
+    watchDoc(ownerView ? "settings/main" : "publicSettings/main",
+      (d) => (state.settings = d || D.fresh().settings));
+    watchCollection(ownerView ? "teams" : "publicTeams", (d) => (state.teams = d));
+    if (ownerView) {
+      watchCollection("players", (d) => (state.players = d));
+      watchCollection("matches", (d) => (state.matches = d));
+    } else if (!full) {
+      watchCollection("publicMatches", (d) => (state.matches = d));
+    } else {
+      // Operador não consulta a coleção privada inteira: recebe cada partida autorizada.
+      // Os jogadores disponíveis são os elencos congelados nessas partidas.
+      const ids = [...new Set(profile?.matches || [])];
+      for (const id of ids) {
+        watchDoc("matches/" + id, (d) => {
+          state.matches = state.matches.filter((m) => m.id !== id);
+          if (d) state.matches.push(d);
+          state.players = [...new Map(state.matches.flatMap((m) => m.roster || [])
+            .map((p) => [p.id, p])).values()];
+        });
+      }
+    }
   }
   const events = (snap) =>
     snap.docs
@@ -122,8 +145,7 @@ export async function connectSpark({
           : null,
       }));
   async function loadHistory(ids, { live = false } = {}) {
-    if (!session || !profile)
-      throw Error("Faça login para consultar o histórico.");
+    if (!isOwner()) throw Error("Histórico e auditoria são exclusivos do administrador principal.");
     historyStop?.();
     historyStop = null;
     historyId = "";
@@ -159,6 +181,7 @@ export async function connectSpark({
     historyId = "";
   }
   async function auditRows() {
+    if (!isOwner()) throw Error("Auditoria exclusiva do administrador principal.");
     const snap = await F.getDocsFromServer(F.collection(database, "audit"));
     return snap.docs
       .map((d) => ({ ID: d.id, ...d.data() }))
@@ -169,7 +192,11 @@ export async function connectSpark({
       ? crypto.randomUUID()
       : F.doc(F.collection(database, "audit")).id;
   async function send(action) {
-    if (!session || !profile) throw Error("Faça login.");
+    if (!session || !authorized()) throw Error("Faça login com uma conta autorizada.");
+    if (!isOwner() && (["team", "player", "settings", "match", "import", "correct"].includes(action.type) ||
+      !profile?.matches?.includes(action.matchId))) {
+      throw Error("Sua conta não tem permissão para esta ação ou partida.");
+    }
     if (!navigator.onLine)
       throw Error("Sem conexão. Aguarde antes de lançar novamente.");
     if (action.type === "import") {
@@ -342,33 +369,46 @@ export async function connectSpark({
     }
   }
   if (!privateView) listen(false);
-  else
-    authStop = auth.onAuthStateChanged(authentication, async (u) => {
-      const current = ++generation;
+  else authStop = auth.onAuthStateChanged(authentication, (u) => {
+    const current = ++generation;
+    profileStop();
+    profileStop = () => {};
+    stop();
+    session = u;
+    profile = null;
+    state = D.fresh();
+    onSession(u, "");
+    onData(state);
+    if (!u) return;
+    if (u.uid === OWNER_UID) {
+      // O titular não depende de um campo editável no documento users.
+      onSession(u, "admin");
+      listen(true);
+      return;
+    }
+    profileStop = F.onSnapshot(F.doc(database, "users", u.uid), (snap) => {
+      if (current !== generation) return;
       stop();
-      session = u;
+      state = D.fresh();
+      profile = snap.exists() ? snap.data() : null;
+      const ids = profile?.matches;
+      const valid = profile?.role === "operator" && profile.enabled !== false &&
+        (ids === undefined || (Array.isArray(ids) && ids.every((id) =>
+          typeof id === "string" && id.length > 0 && !id.includes("/"))));
+      onSession(u, valid ? "operator" : "");
+      onData(state);
+      if (valid) listen(true);
+      else onError(Error("Conta sem autorização de operador. Procure o administrador principal."));
+    }, (e) => {
+      if (current !== generation) return;
+      stop();
       profile = null;
       state = D.fresh();
       onSession(u, "");
       onData(state);
-      if (!u) return;
-      try {
-        const snap = await F.getDocFromServer(F.doc(database, "users", u.uid));
-        if (current !== generation) return;
-        profile = snap.data();
-        if (!["admin", "operator"].includes(profile?.role))
-          throw Error(
-            "Conta sem autorização. Cadastre o perfil users/UID no console Firebase.",
-          );
-        onSession(u, profile.role);
-        listen(true);
-      } catch (e) {
-        if (current === generation) {
-          profile = null;
-          message(e);
-        }
-      }
+      message(e);
     });
+  });
   return {
     auth,
     authentication,
@@ -379,9 +419,10 @@ export async function connectSpark({
     stopHistory,
     auditRows,
     canOperate: (id) =>
-      profile?.role === "admin" || profile?.matches?.includes(id),
+      isOwner() || (authorized() && profile?.matches?.includes(id)),
     close: () => {
       stop();
+      profileStop();
       authStop();
     },
   };

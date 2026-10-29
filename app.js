@@ -321,6 +321,12 @@ function render() {
         `linear-gradient(90deg,#0c1014ed,#0c1014b0),url("${encodeURI(state.settings.banner).replace(/"/g, "%22")}")`;
     return;
   }
+  // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
+  if (role !== "admin" && !["overview", "matches"].includes(section)) {
+    section = "overview";
+    selected = "";
+  }
+  if (selected && !state.matches.some((m) => m.id === selected)) selected = "";
   const sections = [
     ["overview", "Visão geral"],
     ["teams", "Equipes"],
@@ -330,10 +336,10 @@ function render() {
     ["reports", "Súmulas e relatórios"],
     ["settings", "Configurações"],
   ];
-  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">PAINEL DA ORGANIZAÇÃO</span><h2>${esc(state.settings.title)}</h2></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador" : "Operador"}</span></div><nav>${sections
+  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">PAINEL DA ORGANIZAÇÃO</span><h2>${esc(state.settings.title)}</h2></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div><nav>${sections
     .filter(
       ([id]) =>
-        role === "admin" || ["overview", "matches", "reports"].includes(id),
+        role === "admin" || ["overview", "matches"].includes(id),
     )
     .map(
       ([id, label]) =>
@@ -406,6 +412,9 @@ function view() {
         ),
       ),
     )}</div>`;
+  if (section === "matches" && role !== "admin" && !selected) {
+    return `<div class="card"><h2>Minhas partidas</h2><p>Você pode operar somente as partidas atribuídas pelo administrador principal. Histórico, relatórios e auditoria são exclusivos dele.</p></div><div class="grid">${state.matches.map((m) => matchCard(m, true)).join("") || empty("Nenhuma partida atribuída à sua conta.")}</div>`;
+  }
   if (section === "matches")
     return selected
       ? operate()
@@ -530,7 +539,7 @@ function operate() {
               (x) => x.number + " • " + x.name,
             ),
         )}</div><label>Detalhes / jogador que entra e sai<textarea name="text" maxlength="500"></textarea></label><p><button class="primary" ${!live ? "disabled" : ""}>Registrar lance</button></p></form>`
-  }</details></div><div class="card"><h3>Aviso para quem está assistindo</h3><form id="public-notice"><label>Mensagem pública<textarea name="notice" maxlength="300" ${locked ? "disabled" : ""}>${esc(m.publicNotice || "")}</textarea></label><p><button ${locked ? "disabled" : ""}>Publicar aviso</button></p></form></div><div class="card"><h3>Observações internas da súmula</h3><form id="notes"><label>Ocorrências<textarea name="notes" maxlength="5000" ${locked ? "disabled" : ""}>${esc(m.notes)}</textarea></label><p><button ${locked ? "disabled" : ""}>Salvar observações</button></p></form></div></div></div><div class="card"><h3>Histórico da partida</h3>${
+  }</details></div><div class="card"><h3>Aviso para quem está assistindo</h3><form id="public-notice"><label>Mensagem pública<textarea name="notice" maxlength="300" ${locked ? "disabled" : ""}>${esc(m.publicNotice || "")}</textarea></label><p><button ${locked ? "disabled" : ""}>Publicar aviso</button></p></form></div><div class="card"><h3>Observações operacionais da súmula</h3><form id="notes"><label>Ocorrências<textarea name="notes" maxlength="5000" ${locked ? "disabled" : ""}>${esc(m.notes)}</textarea></label><p><button ${locked ? "disabled" : ""}>Salvar observações</button></p></form></div></div></div><div class="card"><h3>Histórico da partida</h3>${
     m.events
       .slice()
       .reverse()
@@ -538,7 +547,7 @@ function operate() {
         (e) =>
           `<div class="event"><div><b>${esc(eventLabel(e, m))}</b> ${[0, 1].includes(e.side) ? esc(name([m.home, m.away][e.side])) : ""}</div><p>${esc(eventDescription(e))}</p><small>${esc(format(e.at))} • ${e.gameMs != null ? "Jogo " + prettyTime(e.gameMs) + " • " : ""}Operador ${esc((e.actor || "").slice(0, 8))} • Etapa ${esc(e.stage || "—")}${e.player ? " • " + esc(m.roster.find((p) => p.id === e.player)?.name || "") : ""}</small>${!locked && role === "admin" && e.type === "ponto" && e.value > 0 && !m.events.some((x) => x.correctionOf === e.id) ? ` <button data-correct="${e.id}">Estornar</button>` : ""}</div>`,
       )
-      .join("") || empty("Carregando histórico ou nenhum lançamento.")
+      .join("") || empty("Histórico disponível somente ao administrador principal, ou aguardando carregamento.")
   }</div>`;
 }
 // 5 — Importação. Excel/CSV com cabeçalhos reconhecidos e prévia obrigatória.
@@ -963,7 +972,7 @@ document.addEventListener("click", async (e) => {
       quickPlayers = ["", ""];
       section = "matches";
       render();
-      if (!C.demo) await cloud.loadHistory([selected], { live: true });
+      if (!C.demo && role === "admin") await cloud.loadHistory([selected], { live: true });
     } else if (b.hasAttribute("data-back")) {
       cloud?.stopHistory();
       selected = "";
