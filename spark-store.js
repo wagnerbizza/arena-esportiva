@@ -437,6 +437,52 @@ export async function connectSpark({
     try { await auth.sendPasswordResetEmail(authentication, email); }
     catch (e) { if (e.code !== "auth/user-not-found") throw e; }
   }
+  // 8 — GOOGLE. Popup para evitar dependência de redirecionamento entre domínios.
+  // Nunca exclui/mescla contas nem troca o UID durante uma vinculação.
+  const googleProvider = () => {
+    const provider = new auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account", ...(authentication.currentUser?.email ? {login_hint: authentication.currentUser.email} : {}) });
+    return provider;
+  };
+  let googleBusy = false;
+  async function enterGoogle({register: registerIntent = false} = {}) {
+    if (!privateView) throw Error("Use a central para entrar com Google.");
+    if (googleBusy) throw Error("Aguarde a janela do Google.");
+    if (authentication.currentUser) throw Error("Você já está conectado. Para adicionar Google, use Vincular Google na sua conta.");
+    googleBusy = true;
+    try {
+      const result = await auth.signInWithPopup(authentication, googleProvider());
+      const u = result.user;
+      await auth.reload(u);
+      await auth.getIdToken(u, true);
+      // O login não cria permissões. O cadastro cria apenas solicitação pendente auditada.
+      if (registerIntent && u.uid !== OWNER_UID) {
+        if (!u.email) throw Error("O Google não informou um e-mail. Conclua a solicitação com outra forma de entrada.");
+        await requestAccess(String(u.displayName || u.email.split("@")[0]).trim().slice(0,100));
+      }
+      return { uid: u.uid, isNewUser: auth.getAdditionalUserInfo(result)?.isNewUser === true };
+    } finally { googleBusy = false; }
+  }
+  async function linkGoogle() {
+    if (!privateView) throw Error("Use a central para vincular sua conta.");
+    if (googleBusy) throw Error("Aguarde a janela do Google.");
+    const u = authentication.currentUser;
+    if (!u) throw Error("Entre na sua conta existente antes de vincular Google.");
+    if (u.providerData.some((p) => p.providerId === "google.com")) return {uid:u.uid, alreadyLinked:true};
+    const beforeUID = u.uid;
+    googleBusy = true;
+    try {
+      const result = await auth.linkWithPopup(u, googleProvider());
+      if (result.user.uid !== beforeUID || authentication.currentUser?.uid !== beforeUID) {
+        await auth.signOut(authentication);
+        throw Error("A sessão mudou durante a vinculação. Entre novamente com a conta original.");
+      }
+      await auth.reload(result.user);
+      await auth.getIdToken(result.user, true);
+      // Não escreve users: aprovação, bloqueio e partidas atribuídas são preservados.
+      return {uid:beforeUID, alreadyLinked:false};
+    } finally { googleBusy = false; }
+  }
   async function manageUser({ userId, access, matches, reason }) {
     if (!isOwner()) throw Error("Somente o administrador principal gerencia usuários.");
     if (userId === OWNER_UID) throw Error("A conta principal está protegida e não pode ser alterada.");
@@ -519,6 +565,8 @@ export async function connectSpark({
     refreshAccess,
     recoverPassword,
     manageUser,
+    enterGoogle,
+    linkGoogle,
     loadHistory,
     stopHistory,
     auditRows,

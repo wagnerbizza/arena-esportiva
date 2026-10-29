@@ -192,11 +192,19 @@ function setSystemLogoDraft(value) {
   f.elements.logoURL.value = value.startsWith("https://") ? value : "";
   $("#systemLogoPreview").innerHTML = systemLogoPreview(value);
 }
+function googleLinkPanel() {
+  if (!user || C.demo) return "";
+  const linked = (user.providerData || []).find((p) => p.providerId === "google.com");
+  return `<section class="google-account"><h3>Entrada com Google</h3>${linked ? `<p><strong>Google vinculado</strong>${linked.email ? "<br>" + esc(linked.email) : ""}</p><p class="muted">Você pode entrar pelo Google usando esta identidade. Suas permissões continuam as mesmas.</p>` : `<p>Conta atual: <strong>${esc(user.email || accountName())}</strong>. Adicione o Google mantendo esta conta e seus acessos.</p><p class="muted">Na janela do Google, selecione preferencialmente o mesmo e-mail desta conta. Se já existir outra conta cadastrada com essa identidade Google, a vinculação será recusada.</p><button type="button" class="google-button" data-google-link ${accessBusy ? "disabled" : ""}>Vincular Google à minha conta atual</button>`}</section>`;
+}
+function googleEntryButton(registerIntent = false) {
+  return `<div class="google-entry"><button type="button" class="google-button" data-google-entry="${registerIntent ? "register" : "login"}" ${!cloud || accessBusy ? "disabled" : ""}>${registerIntent ? "Cadastrar com Google" : "Entrar com Google"}</button><p class="muted">${registerIntent ? "Use seu nome e e-mail do Google. Não precisa preencher uma senha neste formulário. O acesso depende da aprovação do administrador." : "Já tem conta por e-mail e senha? Entre por ela primeiro e vincule o Google em Minha conta."}</p></div>`;
+}
 function accountView() {
   if (C.demo) return `<section class="card"><h2>Minha conta</h2><p>Você está na demonstração local. Nome, e-mail e recuperação de senha aparecem ao entrar com uma conta do Firebase.</p></section>`;
   if (!user) return "";
   const providers = [...new Set((user.providerData || []).map((p) => ({password:"E-mail e senha", "google.com":"Google", "microsoft.com":"Microsoft"})[p.providerId] || p.providerId))];
-  return `<section class="card"><h2>Minha conta</h2><p class="muted">Confira a conta que está usando nesta sessão.</p><dl class="account-details"><div><dt>Nome</dt><dd>${esc(accountName())}</dd></div><div><dt>E-mail</dt><dd>${esc(user.email || "Não informado")}</dd></div><div><dt>Perfil de acesso</dt><dd>${esc(accountRole())}</dd></div><div><dt>Confirmação do e-mail</dt><dd>${user.emailVerified ? "Confirmado" : "Ainda não confirmado"}</dd></div><div><dt>Formas de entrada já vinculadas</dt><dd>${esc(providers.join(", ") || "Não informado")}</dd></div></dl>${role === "admin" ? '<p class="public-notice">Sua conta continua como administrador principal. Nenhuma opção desta tela altera suas permissões.</p>' : '<p class="muted">Seu acesso às partidas é definido pelo administrador principal.</p>'}<div class="toolbar"><button type="button" data-account-recover ${!user.email ? "disabled" : ""}>Enviar e-mail para redefinir senha</button><button type="button" data-account-exit>Sair desta conta</button></div><p class="muted">A redefinição é concluída pelo link enviado ao seu e-mail. A vinculação de novas formas de entrada será adicionada na próxima etapa.</p></section>`;
+  return `<section class="card"><h2>Minha conta</h2><p class="muted">Confira a conta que está usando nesta sessão.</p><dl class="account-details"><div><dt>Nome</dt><dd>${esc(accountName())}</dd></div><div><dt>E-mail</dt><dd>${esc(user.email || "Não informado")}</dd></div><div><dt>Perfil de acesso</dt><dd>${esc(accountRole())}</dd></div><div><dt>Confirmação do e-mail</dt><dd>${user.emailVerified ? "Confirmado" : "Ainda não confirmado"}</dd></div><div><dt>Formas de entrada já vinculadas</dt><dd>${esc(providers.join(", ") || "Não informado")}</dd></div></dl>${role === "admin" ? '<p class="public-notice">Sua conta continua como administrador principal. Nenhuma opção desta tela altera suas permissões.</p>' : '<p class="muted">Seu acesso às partidas é definido pelo administrador principal.</p>'}<div class="toolbar"><button type="button" data-account-recover ${!user.email ? "disabled" : ""}>Enviar e-mail para redefinir senha</button><button type="button" data-account-exit>Sair desta conta</button></div><p class="muted">A redefinição é concluída pelo link enviado ao seu e-mail. A vinculação com Microsoft será adicionada em outra etapa.</p>${googleLinkPanel()}</section>`;
 }
 
 // Atualizações ao vivo preservam o formulário ainda não enviado.
@@ -413,6 +421,7 @@ async function boot() {
       onError: (e) => toast(e.message, true),
       onConnection: (t) => ($("#mode").textContent = t),
     });
+    render();
   } catch (e) {
     toast("Não foi possível conectar: " + e.message, true);
   }
@@ -1062,18 +1071,27 @@ function accessView() {
       blocked: "Seu acesso está bloqueado. Procure o administrador principal.",
       unauthorized: "Esta conta ainda não está autorizada. Procure o administrador principal."
     };
-    return wrap(`<h2>Situação do acesso</h2><p>${esc(user.email || "")}</p><p role="status">${messages[accessStatus] || messages.unauthorized}</p>${accessStatus === "incomplete" ? `<form id="complete-access">${field("Seu nome", "name", "text", 'required maxlength="100" autocomplete="name"')}<p><button class="primary">Concluir solicitação</button></p></form>` : ""}<div class="toolbar">${!user.emailVerified && accessStatus !== "loading" ? '<button type="button" data-access-verify>Enviar confirmação de e-mail</button>' : ""}<button type="button" data-access-refresh>Já confirmei / Atualizar acesso</button><button type="button" data-access-exit>Sair desta conta</button></div><p class="muted">O cadastro não autoriza alterações de placar. A senha não é exibida para a organização.</p>`);
+    return wrap(`<h2>Situação do acesso</h2><p>${esc(user.email || "")}</p><p role="status">${messages[accessStatus] || messages.unauthorized}</p>${accessStatus === "incomplete" ? `<form id="complete-access">${field("Seu nome", "name", "text", 'required maxlength="100" autocomplete="name"')}<p><button class="primary">Concluir solicitação</button></p></form>` : ""}<div class="toolbar">${!user.emailVerified && accessStatus !== "loading" ? '<button type="button" data-access-verify>Enviar confirmação de e-mail</button>' : ""}<button type="button" data-access-refresh>Já confirmei / Atualizar acesso</button><button type="button" data-access-exit>Sair desta conta</button></div><p class="muted">O cadastro não autoriza alterações de placar. A senha não é exibida para a organização.</p>${googleLinkPanel()}`);
   }
-  if (authMode === "register") return wrap(`<h2>Solicitar acesso</h2><p>Cadastre sua conta de operador. O administrador principal aprovará o pedido e definirá as partidas autorizadas.</p><form id="register"><div style="display:grid;gap:14px">${field("Nome completo", "name", "text", 'required maxlength="100" autocomplete="name"')}${field("E-mail", "email", "email", 'required maxlength="254" autocomplete="email"')}${field("Senha (mínimo de 8 caracteres)", "password", "password", 'required minlength="8" autocomplete="new-password"')}${field("Confirmar senha", "confirmPassword", "password", 'required minlength="8" autocomplete="new-password"')}</div><p><button class="primary">Criar conta e solicitar acesso</button></p></form><button type="button" data-access-mode="login">Já tenho conta — entrar</button>`);
+  if (authMode === "register") return wrap(`<h2>Solicitar acesso</h2><p>Cadastre sua conta de operador. O administrador principal aprovará o pedido e definirá as partidas autorizadas.</p>${googleEntryButton(true)}<p class="muted">Ou cadastre com e-mail e senha:</p><form id="register"><div style="display:grid;gap:14px">${field("Nome completo", "name", "text", 'required maxlength="100" autocomplete="name"')}${field("E-mail", "email", "email", 'required maxlength="254" autocomplete="email"')}${field("Senha (mínimo de 8 caracteres)", "password", "password", 'required minlength="8" autocomplete="new-password"')}${field("Confirmar senha", "confirmPassword", "password", 'required minlength="8" autocomplete="new-password"')}</div><p><button class="primary">Criar conta e solicitar acesso</button></p></form><button type="button" data-access-mode="login">Já tenho conta — entrar</button>`);
   if (authMode === "recover") return wrap(`<h2>Recuperar senha</h2><p>Informe seu e-mail para receber as instruções do Firebase.</p><form id="recover">${field("E-mail", "email", "email", 'required autocomplete="email"')}<p><button class="primary">Enviar instruções</button></p></form><button type="button" data-access-mode="login">Voltar para entrar</button>`);
-  return wrap(`<h2>Entrar na organização</h2><form id="login"><div style="display:grid;gap:14px">${field("E-mail", "email", "email", 'required autocomplete="username"')}${field("Senha", "password", "password", 'required autocomplete="current-password"')}</div><p><button class="primary">Entrar</button></p></form><div class="toolbar"><button type="button" data-access-mode="register">Solicitar acesso</button><button type="button" data-access-mode="recover">Esqueci minha senha</button></div>`);
+  return wrap(`<h2>Entrar na organização</h2>${googleEntryButton()}<p class="muted">Ou entre com e-mail e senha:</p><form id="login"><div style="display:grid;gap:14px">${field("E-mail", "email", "email", 'required autocomplete="username"')}${field("Senha", "password", "password", 'required autocomplete="current-password"')}</div><p><button class="primary">Entrar</button></p></form><div class="toolbar"><button type="button" data-access-mode="register">Solicitar acesso</button><button type="button" data-access-mode="recover">Esqueci minha senha</button></div>`);
 }
 function accessError(e) {
   return ({
+    "auth/popup-blocked": "O navegador bloqueou a janela do Google. Permita pop-ups para este site e clique novamente.",
+    "auth/popup-closed-by-user": "A janela do Google foi fechada. Nenhuma nova vinculação foi concluída; tente novamente se desejar.",
+    "auth/cancelled-popup-request": "Já existe uma tentativa de entrada aberta. Use uma janela do Google por vez.",
+    "auth/unauthorized-domain": "O domínio deste site ainda não está autorizado no Firebase Authentication.",
+    "auth/operation-not-allowed": "A entrada com Google precisa estar habilitada no Firebase Authentication.",
+    "auth/account-exists-with-different-credential": "Este e-mail já usa outra forma de entrada. Entre com seu método atual e use Minha conta → Vincular Google.",
+    "auth/credential-already-in-use": "Esta identidade Google já está ligada a outra conta. Nenhuma conta foi mesclada. Entre com a conta original ou escolha outra identidade Google.",
+    "auth/email-already-in-use": "Este e-mail já tem conta. Entre com seu método atual e vincule o Google em Minha conta.",
+    "auth/provider-already-linked": "O Google já está vinculado a esta conta. Atualize Minha conta para conferir.",
+    "auth/requires-recent-login": "Por segurança, saia e entre novamente com seu método atual antes de vincular Google.",
     "auth/invalid-credential": "E-mail ou senha inválidos.",
     "auth/wrong-password": "E-mail ou senha inválidos.",
     "auth/user-not-found": "E-mail ou senha inválidos.",
-    "auth/email-already-in-use": "Este e-mail já tem conta. Entre ou use Esqueci minha senha.",
     "auth/invalid-email": "Confira o endereço de e-mail.",
     "auth/weak-password": "A senha não atende aos requisitos do Firebase. Use uma senha mais forte.",
     "auth/too-many-requests": "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.",
@@ -1125,7 +1143,7 @@ document.addEventListener("submit", async (e) => {
         } else if (f.id === "complete-access") {
           await cloud.requestAccess(d.name);
           await cloud.resendVerification();
-          toast("Solicitação registrada. Confira a confirmação enviada ao seu e-mail.");
+          toast(user?.emailVerified ? "Solicitação registrada. Aguarde a aprovação do administrador principal." : "Solicitação registrada. Confira a confirmação enviada ao seu e-mail.");
         } else {
           await cloud.manageUser({userId:d.userId, access:d.access,
             matches: new FormData(f).getAll("assignedMatches"), reason:d.reason});
@@ -1184,6 +1202,21 @@ document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
   try {
+    if (b.dataset.googleEntry) {
+      if (!cloud || accessBusy) return;
+      const registerIntent = b.dataset.googleEntry === "register";
+      await accessAction(async () => {
+        await cloud.enterGoogle({register:registerIntent});
+        toast(registerIntent ? "Conta Google reconhecida. Confira a situação da solicitação de acesso." : "Entrada com Google concluída. Conferindo sua autorização.");
+      }); return;
+    }
+    if (b.hasAttribute("data-google-link")) {
+      if (!cloud || accessBusy) return;
+      await accessAction(async () => {
+        await cloud.linkGoogle();
+        toast("Google vinculado à mesma conta. Suas permissões foram preservadas.");
+      }); return;
+    }
     if (b.hasAttribute("data-my-account")) {
       if (!C.demo && (!user || !role)) return;
       cloud?.stopHistory(); section = "account"; selected = ""; render(); return;
