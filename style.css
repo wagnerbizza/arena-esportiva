@@ -985,3 +985,9 @@ hr {
   .list-controls > button { width: 100%; }
   .list-groups button { flex: 1 1 130px; }
 }
+
+/* 10 — Campeonatos: cartões e controles reaproveitam o tema esportivo. */
+.championship-card h3 { overflow-wrap: anywhere; }
+.championship-card .toolbar { flex-wrap: wrap; }
+#championship-results > .empty { grid-column: 1 / -1; }
+#championship label small, #match label small { display: block; line-height: 1.5; }

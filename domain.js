@@ -17,6 +17,7 @@
       color: "#c8fa64",
       banner: "",
     },
+    championships: [],
     teams: [],
     players: [],
     matches: [],
@@ -63,6 +64,7 @@
   function reduce(input, action, who = "demo", now = new Date().toISOString()) {
     const s = JSON.parse(JSON.stringify(input));
     const a = action;
+    s.championships ||= [];
     need(a && typeof a.type === "string", "Ação inválida.");
     if (a.type === "settings") {
       s.settings = {
@@ -71,6 +73,19 @@
         color: /^#[0-9a-f]{6}$/i.test(a.data.color) ? a.data.color : "#c8fa64",
         banner: url(a.data.banner),
       };
+    } else if (a.type === "championship") {
+      const d = a.data;
+      const previous = s.championships.find((c) => c.id === d.id);
+      need(!d.id || previous, "Campeonato não encontrado.");
+      need(str(d.name, 100), "Informe o nome do campeonato.");
+      need(str(d.season, 40), "Informe a edição ou temporada.");
+      need(SPORTS.includes(d.sport), "Modalidade inválida.");
+      need(["Planejado", "Em andamento", "Encerrado"].includes(d.status), "Situação do campeonato inválida.");
+      need(!previous || previous.sport === d.sport, "A modalidade não pode mudar após o cadastro. Crie outra edição.");
+      const updated = { id: d.id || id(), name: str(d.name, 100), season: str(d.season, 40), sport: d.sport, category: str(d.category), status: d.status };
+      need(!s.championships.some((c) => c.id !== updated.id && c.name.toLocaleLowerCase() === updated.name.toLocaleLowerCase() && c.season.toLocaleLowerCase() === updated.season.toLocaleLowerCase() && c.sport === updated.sport && c.category.toLocaleLowerCase() === updated.category.toLocaleLowerCase()), "Esta edição, modalidade e categoria já estão cadastradas.");
+      if (previous) s.championships[s.championships.indexOf(previous)] = updated;
+      else s.championships.push(updated);
     } else if (a.type === "team") {
       const d = a.data;
       need(str(d.name), "Informe o nome da equipe.");
@@ -134,14 +149,19 @@
         d.date && !isNaN(Date.parse(d.date)),
         "Informe data e horário válidos.",
       );
+      const championship = d.championshipId ? s.championships.find((c) => c.id === d.championshipId) : null;
+      need(!d.championshipId || championship, "Campeonato não encontrado.");
+      need(!championship || championship.status !== "Encerrado", "Este campeonato está encerrado. Reabra seu cadastro antes de programar novas partidas.");
+      need(!championship || championship.sport === d.sport, "A modalidade da partida deve ser a mesma do campeonato.");
       s.matches.push({
+        ...(championship ? { championshipId: championship.id } : {}),
         id: id(),
         home: d.home,
         away: d.away,
         sport: d.sport,
         date: str(d.date),
         place: str(d.place),
-        competition: str(d.competition),
+        competition: championship ? championship.name + " • " + championship.season : str(d.competition),
         referees: str(d.referees, 500),
         stage: str(d.stage) || "1",
         status: "Agendada",
@@ -175,7 +195,14 @@
     } else {
       const m = s.matches.find((m) => m.id === a.matchId);
       need(m, "Partida não encontrada.");
-      if (a.type === "status") {
+      if (a.type === "championshipLink") {
+        need(str(a.reason, 500), "Informe a justificativa do vínculo.");
+        const c = a.championshipId ? s.championships.find((c) => c.id === a.championshipId) : null;
+        need(!a.championshipId || c, "Campeonato não encontrado.");
+        need(!c || c.sport === m.sport, "Modalidades diferentes.");
+        m.championshipId = c?.id || "";
+        if (c) m.competition = c.name + " • " + c.season;
+      } else if (a.type === "status") {
         const allowed = {
           Agendada: ["Ao vivo"],
           "Ao vivo": ["Pausada", "Encerrada"],

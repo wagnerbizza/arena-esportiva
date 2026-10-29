@@ -112,7 +112,18 @@
     e.stage = m.stage;
     e.setIndex = m.sets.length;
     const locked = ["Encerrada", "Homologada", "Cancelada"].includes(m.status);
-    if (a.type === "status") {
+    if (a.type === "championshipLink") {
+      need(text(a.reason), "Informe a justificativa do vínculo.");
+      need(!a.championshipId || a.championship?.id === a.championshipId, "Campeonato não encontrado.");
+      need(!a.championship || a.championship.sport === m.sport, "Modalidades diferentes.");
+      e.type = "campeonato";
+      e.from = m.championshipId || "";
+      e.to = a.championshipId || "";
+      e.reason = text(a.reason);
+      m.championshipId = e.to;
+      if (a.championship) m.competition = a.championship.name + " • " + a.championship.season;
+      e.text = e.to ? "Vínculo ao campeonato: " + m.competition : "Vínculo removido; nome histórico da competição preservado";
+    } else if (a.type === "status") {
       const moves = {
         Agendada: ["Ao vivo", "Adiada", "Cancelada"],
         Adiada: ["Agendada", "Ao vivo", "Cancelada"],
@@ -303,6 +314,7 @@
       _updatedAt,
     } = m;
     return {
+      ...(Object.hasOwn(m, "championshipId") ? { championshipId: m.championshipId } : {}),
       clock: m.clock || emptyClock(),
       publicNotice: m.publicNotice || "",
       id,

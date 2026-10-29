@@ -113,6 +113,7 @@ export async function connectSpark({
       (d) => (state.settings = d || D.fresh().settings));
     watchCollection(ownerView ? "teams" : "publicTeams", (d) => (state.teams = d));
     if (ownerView) {
+      watchCollection("championships", (d) => (state.championships = d));
       watchCollection("players", (d) => (state.players = d));
       watchCollection("matches", (d) => (state.matches = d));
       watchCollection("users", (d) => (state.users = d));
@@ -196,7 +197,7 @@ export async function connectSpark({
       : F.doc(F.collection(database, "audit")).id;
   async function send(action) {
     if (!session || !authorized()) throw Error("Faça login com uma conta autorizada.");
-    if (!isOwner() && (["team", "player", "settings", "match", "import", "correct"].includes(action.type) ||
+    if (!isOwner() && (["team", "player", "settings", "match", "import", "correct", "championship", "championshipLink"].includes(action.type) ||
       !profile?.matches?.includes(action.matchId))) {
       throw Error("Sua conta não tem permissão para esta ação ou partida.");
     }
@@ -232,9 +233,10 @@ export async function connectSpark({
     let entity,
       target,
       prepared = null;
-    if (["team", "player", "settings", "match"].includes(action.type)) {
+    if (["team", "player", "settings", "match", "championship"].includes(action.type)) {
       const checked = D.reduce(state, action, session.uid);
       entity = {
+        championship: "championships",
         team: "teams",
         player: "players",
         settings: "settings",
@@ -288,6 +290,17 @@ export async function connectSpark({
           if (c.exists()) throw Error("Este ponto já foi estornado.");
           original = o.data();
         }
+        // Releitura na transação evita usar uma edição desatualizada do campeonato.
+        const championshipId = prepared?.championshipId || (action.type === "championshipLink" ? action.championshipId : "");
+        let championship = null;
+        if (championshipId) {
+          const snap = await tx.get(F.doc(database, "championships", championshipId));
+          if (!snap.exists()) throw Error("Campeonato não encontrado.");
+          championship = { ...snap.data(), id: snap.id };
+          const sport = prepared?.sport || before?.sport;
+          if (championship.sport !== sport) throw Error("Modalidades diferentes.");
+          if (prepared && championship.status === "Encerrado") throw Error("O campeonato está encerrado para novas partidas.");
+        }
         let next, detail;
         if (prepared) {
           if (action.type === "match" && before)
@@ -297,6 +310,7 @@ export async function connectSpark({
           if (!action.data.id && action.type !== "settings" && before)
             throw Error("Cadastro já existe.");
           next = { ...prepared };
+          if (entity === "matches" && championship) next.competition = championship.name + " • " + championship.season;
           for (const k of Object.keys(next))
             if (k.startsWith("_")) delete next[k];
           detail = M.detail(before ? "edição" : "cadastro");
@@ -308,7 +322,7 @@ export async function connectSpark({
           if (!before) throw Error("Partida não encontrada.");
           const result = M.applyMatch(
             before,
-            action,
+            { ...action, championship },
             original,
             F.serverTimestamp(),
           );

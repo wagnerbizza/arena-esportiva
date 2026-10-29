@@ -42,7 +42,7 @@ let reportFilter = "",
 const listDefaults = {
   teams: { query: "", category: "" },
   players: { query: "", team: "", position: "", reserve: "" },
-  matches: { query: "", sport: "", group: "active", status: "" },
+  matches: { query: "", sport: "", group: "active", status: "", championshipId: "" },
 };
 const listFilters = Object.fromEntries(Object.entries(listDefaults).map(([k, v]) => [k, { ...v }]));
 const finalStatuses = ["Encerrada", "Homologada", "Cancelada"];
@@ -54,7 +54,7 @@ function filteredRecords(kind) {
   return state[kind].filter((r) => {
     if (kind === "teams") return (!q || searchText([r.name, r.short, r.coach].join(" ")).includes(q)) && (!f.category || (r.category || "") === f.category);
     if (kind === "players") return (!q || searchText([r.name, r.number].join(" ")).includes(q)) && (!f.team || r.team === f.team) && (!f.position || (r.position || "") === f.position) && (!f.reserve || String(Boolean(r.reserve)) === f.reserve);
-    return (!q || searchText([name(r.home), name(r.away), r.competition, r.place].join(" ")).includes(q)) && (!f.sport || r.sport === f.sport) && (!f.status || r.status === f.status) && (f.group === "all" || (f.group === "finished" ? finalStatuses.includes(r.status) : !finalStatuses.includes(r.status)));
+    return (!q || searchText([name(r.home), name(r.away), r.competition, r.place].join(" ")).includes(q)) && (!f.championshipId || (f.championshipId === "__unlinked" ? !r.championshipId : r.championshipId === f.championshipId)) && (!f.sport || r.sport === f.sport) && (!f.status || r.status === f.status) && (f.group === "all" || (f.group === "finished" ? finalStatuses.includes(r.status) : !finalStatuses.includes(r.status)));
   }).sort(kind === "matches" ? (a, b) => {
     // Ao vivo primeiro; próximas em ordem de data, finalizadas mais recentes primeiro.
     if (f.group !== "finished") {
@@ -79,7 +79,7 @@ function listPanel(kind) {
   let controls = `<label class="list-search">${kind === "matches" ? "Buscar equipe, competição ou local" : kind === "players" ? "Buscar nome ou número" : "Buscar equipe, sigla ou técnico"}<input type="search" data-list-filter="${kind}" data-filter-key="query" value="${esc(f.query)}" placeholder="Digite para buscar…" autocomplete="off"></label>`;
   if (kind === "teams") controls += filterSelect(kind, "category", "Categoria", unique(state.teams, "category"), "Todas as categorias");
   if (kind === "players") controls += filterSelect(kind, "team", "Equipe", state.teams.slice().sort(alphabetical).map((t) => [t.id, t.name]), "Todas as equipes") + filterSelect(kind, "position", "Posição", unique(state.players, "position"), "Todas as posições") + filterSelect(kind, "reserve", "Escalação", [["false", "Titular"], ["true", "Reserva / banco"]], "Todos");
-  if (kind === "matches") controls += filterSelect(kind, "sport", "Modalidade", D.SPORTS, "Todas as modalidades") + filterSelect(kind, "status", "Situação específica", matchStatuses, "Todas as situações");
+  if (kind === "matches") controls += filterSelect(kind, "sport", "Modalidade", D.SPORTS, "Todas as modalidades") + filterSelect(kind, "status", "Situação específica", matchStatuses, "Todas as situações") + filterSelect(kind, "championshipId", "Campeonato / temporada", championshipFilterOptions(), "Todos os campeonatos");
   const groups = kind === "matches" ? `<div class="list-groups" aria-label="Visualização das partidas">${[["active", "Em andamento e próximas"], ["finished", "Finalizadas"], ["all", "Todas"]].map(([v, title]) => `<button type="button" data-list-group="${v}" aria-pressed="${f.group === v}" class="${f.group === v ? "primary" : ""}">${title}</button>`).join("")}</div>` : "";
   return `<section class="card list-filters" aria-label="Filtros de ${titles[kind]}"><h2>${titles[kind]}</h2>${groups}<div class="list-controls">${controls}<button type="button" data-list-reset="${kind}">Limpar filtros</button></div><p class="muted list-count" id="list-count-${kind}" role="status">${listCount(kind)}</p>${kind === "matches" ? '<small>Finalizadas inclui encerradas, homologadas e canceladas. Adiadas e suspensas continuam em andamento e próximas.</small>' : ""}</section><div id="list-results-${kind}" class="${kind === "players" ? "card" : "grid"}">${listResults(kind)}</div>`;
 }
@@ -116,9 +116,59 @@ function handleListFilter(e) {
 document.addEventListener("input", (e) => { if (e.target.matches('[data-list-filter][type="search"]')) handleListFilter(e); });
 document.addEventListener("change", (e) => { if (e.target.matches('select[data-list-filter]')) handleListFilter(e); });
 
+
+// 2.2 — CAMPEONATOS E TEMPORADAS. Somente o administrador gerencia o cadastro.
+// Cada edição tem seu próprio ID. Não são migrados nem apagados jogos antigos.
+let editedChampionshipId = "", championshipQuery = "", championshipStatus = "";
+const championshipTitle = (c) => `${c.name} • ${c.season}`;
+function championshipFilterOptions() {
+  const choices = new Map((state.championships || []).map((c) => [c.id, championshipTitle(c) + (c.category ? " • " + c.category : "")]));
+  // Operadores usam apenas os vínculos presentes nas partidas já autorizadas.
+  for (const m of state.matches) if (m.championshipId && !choices.has(m.championshipId)) choices.set(m.championshipId, m.competition || "Campeonato vinculado");
+  return [["__unlinked", "Sem vínculo de campeonato"], ...[...choices].sort((a,b) => a[1].localeCompare(b[1], "pt-BR"))];
+}
+function championshipSelectForCreate() {
+  const rows = (state.championships || []).filter((c) => c.status !== "Encerrado").sort(alphabetical);
+  return `<label>Campeonato / temporada<select name="championshipId"><option value="">Sem vínculo — partida avulsa</option>${rows.map((c) => `<option value="${esc(c.id)}">${esc(championshipTitle(c) + " • " + c.sport + (c.category ? " • " + c.category : ""))}</option>`).join("")}</select><small>Ao escolher, a modalidade e o nome da competição são preenchidos. Cadastre edições na aba Campeonatos.</small></label>`;
+}
+function syncChampionshipDraft() {
+  const f = $("#match"); if (!f) return;
+  const c = (state.championships || []).find((c) => c.id === f.elements.championshipId.value);
+  if (c) { f.elements.sport.value = c.sport; f.elements.competition.value = championshipTitle(c); }
+  f.elements.competition.readOnly = Boolean(c);
+}
+function championshipsView() {
+  const c = (state.championships || []).find((c) => c.id === editedChampionshipId);
+  const value = (key) => esc(c?.[key] || "");
+  return `<div class="card"><h2>${c ? "Editar campeonato / temporada" : "Cadastrar campeonato / temporada"}</h2><p class="muted">Crie um cadastro para cada edição, modalidade e categoria. Equipes e jogadores continuam disponíveis nos seus cadastros.</p><form id="championship"><input type="hidden" name="recordId" value="${value("id")}"><div class="formgrid">${field("Nome do campeonato", "name", "text", `required maxlength="100" value="${value("name")}"`)}${field("Edição / temporada", "season", "text", `required maxlength="40" placeholder="Ex.: 2026 ou 2º semestre de 2026" value="${value("season")}"`)}<label>Modalidade<select name="sport" required>${D.SPORTS.map((sport) => `<option ${c?.sport === sport ? "selected" : ""} ${c && c.sport !== sport ? "disabled" : ""}>${esc(sport)}</option>`).join("")}</select><small>A modalidade fica fixa após o cadastro. Para outra modalidade, crie um novo campeonato.</small></label>${field("Categoria", "category", "text", `maxlength="150" placeholder="Ex.: Livre, Sub-17, Feminino" value="${value("category")}"`)}<label>Situação<select name="status">${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${c?.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></label></div><button class="primary">${c ? "Salvar alterações" : "Cadastrar campeonato"}</button> ${c ? '<button type="button" data-new-championship>Cancelar edição / novo cadastro</button>' : ""}</form><p class="muted">Encerrar o campeonato impede criar novas partidas vinculadas; não encerra partidas automaticamente. Alterações do nome ou da edição não reescrevem súmulas existentes.</p></div><section class="card list-filters"><h2>Campeonatos cadastrados</h2><div class="list-controls"><label class="list-search">Buscar campeonato, edição, modalidade ou categoria<input type="search" data-championship-filter="query" value="${esc(championshipQuery)}" placeholder="Digite para buscar…"></label><label>Situação<select data-championship-filter="status"><option value="">Todas as situações</option>${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${championshipStatus === status ? "selected" : ""}>${status}</option>`).join("")}</select></label><button type="button" data-clear-championship-filters>Limpar filtros</button></div><p id="championship-count" class="muted" role="status">${championshipCount()}</p></section><div class="grid" id="championship-results">${championshipCards()}</div>`;
+}
+function visibleChampionships() {
+  const q = searchText(championshipQuery);
+  return (state.championships || []).filter((c) => (!championshipStatus || c.status === championshipStatus) && (!q || searchText([c.name,c.season,c.sport,c.category].join(" ")).includes(q))).sort(alphabetical);
+}
+function championshipCount() { return `${visibleChampionships().length} de ${(state.championships || []).length} campeonatos nesta visualização`; }
+function championshipCards() {
+  return visibleChampionships().map((c) => {
+    const games = state.matches.filter((m) => m.championshipId === c.id);
+    return `<article class="card championship-card"><div class="match-top"><span class="tag">${esc(c.sport)}</span><span class="status">${esc(c.status)}</span></div><h3>${esc(c.name)}</h3><p><strong>${esc(c.season)}</strong><br><span class="muted">${esc(c.category || "Sem categoria")}</span></p><p>${games.length} partidas vinculadas • ${games.filter((m) => ["Encerrada","Homologada","Cancelada"].includes(m.status)).length} finalizadas</p><div class="toolbar"><button data-edit-championship="${esc(c.id)}">Editar campeonato</button><button data-championship-games="${esc(c.id)}">Ver partidas</button></div></article>`;
+  }).join("") || empty((state.championships || []).length ? "Nenhum campeonato corresponde aos filtros." : "Cadastre seu primeiro campeonato acima. As partidas antigas continuam na aba Partidas.");
+}
+function updateChampionshipList() {
+  if ($("#championship-results")) $("#championship-results").innerHTML = championshipCards();
+  if ($("#championship-count")) $("#championship-count").textContent = championshipCount();
+}
+function championshipLinkForm(m) {
+  const rows = (state.championships || []).filter((c) => c.sport === m.sport).sort(alphabetical);
+  return `<div class="card"><details><summary>Campeonato / temporada desta partida</summary><p class="muted">Vínculo atual: ${esc(m.championshipId ? ((state.championships || []).find((c) => c.id === m.championshipId) ? championshipTitle(state.championships.find((c) => c.id === m.championshipId)) : m.competition) : "Sem vínculo")}. O vínculo não altera placar, elenco ou cronômetro. Remover mantém o nome histórico da competição.</p><form id="championship-link"><label>Campeonato de ${esc(m.sport)}<select name="championshipId"><option value="">Sem vínculo</option>${rows.map((c) => `<option value="${esc(c.id)}" ${m.championshipId === c.id ? "selected" : ""}>${esc(championshipTitle(c) + (c.category ? " • " + c.category : "") + " — " + c.status)}</option>`).join("")}</select></label>${field("Justificativa (registrada no histórico)", "reason", "text", 'required maxlength="500"')}<p><button>Salvar vínculo com justificativa</button></p></form></details></div>`;
+}
+document.addEventListener("input", (e) => {
+  if (e.target.dataset.championshipFilter === "query") { championshipQuery = e.target.value; updateChampionshipList(); }
+});
+
 // Atualizações ao vivo preservam o formulário ainda não enviado.
 function refresh() {
   const focused = document.activeElement;
+  const championshipFocus = focused?.dataset?.championshipFilter ? { key: focused.dataset.championshipFilter, start: focused.selectionStart, end: focused.selectionEnd } : null;
   const filterFocus = focused?.dataset?.listFilter ? {
     kind: focused.dataset.listFilter, key: focused.dataset.filterKey,
     start: focused.selectionStart, end: focused.selectionEnd,
@@ -171,6 +221,10 @@ function refresh() {
     $("[name=importKind]").value = importDraft.kind;
     $("#paste").value = importDraft.paste;
     $("#preview").innerHTML = importDraft.preview;
+  }
+  if (championshipFocus) {
+    const el = document.querySelector(`[data-championship-filter="${championshipFocus.key}"]`);
+    if (el) { el.focus({preventScroll:true}); if (el.type === "search") el.setSelectionRange(championshipFocus.start, championshipFocus.end); }
   }
   if (filterFocus) {
     const el = document.querySelector(`[data-list-filter="${filterFocus.kind}"][data-filter-key="${filterFocus.key}"]`);
@@ -335,7 +389,7 @@ async function dispatch(a) {
   try {
     if (C.demo) {
       const latest = JSON.parse(localStorage.getItem(key)) || D.fresh();
-      if (!["team", "player", "match", "settings", "import"].includes(a.type)) {
+      if (!["team", "player", "match", "settings", "import", "championship"].includes(a.type)) {
         const old = latest.matches.find((m) => m.id === a.matchId);
         if (!old) throw Error("Partida não encontrada.");
         const current = {
@@ -358,7 +412,7 @@ async function dispatch(a) {
                 detail: old.events.find((e) => e.id === a.eventId),
               }
             : null;
-        const r = M.applyMatch(current, a, original),
+        const r = M.applyMatch(current, { ...a, championship: a.championshipId ? (latest.championships || []).find((c) => c.id === a.championshipId) : null }, original),
           event = {
             ...r.detail,
             id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
@@ -432,6 +486,7 @@ function render() {
   if (selected && !state.matches.some((m) => m.id === selected)) selected = "";
   const sections = [
     ["overview", "Visão geral"],
+    ["championships", "Campeonatos"],
     ["teams", "Equipes"],
     ["players", "Jogadores"],
     ["matches", "Partidas"],
@@ -474,6 +529,7 @@ function publicMatches(filter) {
     : empty("Nenhuma partida publicada para esta seleção.");
 }
 function view() {
+  if (section === "championships" && role === "admin") return championshipsView();
   if (section === "users" && role === "admin") return usersView();
   if (section === "overview")
     return `<div class="grid">${[
@@ -509,7 +565,7 @@ function view() {
   if (section === "matches")
     return selected
       ? operate()
-      : `<div class="card"><h2>Programar partida</h2><form id="match"><div class="formgrid">${select(
+      : `<div class="card"><h2>Programar partida</h2><form id="match"><div class="formgrid">${championshipSelectForCreate()}${select(
           "Modalidade",
           "sport",
           options(
@@ -517,7 +573,7 @@ function view() {
             (x) => x,
             (x) => x,
           ),
-        )}${select("Equipe da casa", "home", teamOptions())}${select("Equipe visitante", "away", teamOptions())}${field("Data e horário (horário deste computador)", "date", "datetime-local", "required")}${field("Local", "place")}${field("Competição / edição", "competition")}${field("Árbitros e mesários", "referees")}${field("Etapa inicial (ex.: 1 ou 1º quarto)", "stage", "text", 'value="1"')}</div><button class="primary" ${role === "admin" ? "" : "disabled"}>Criar partida</button></form></div>${listPanel("matches")}`;
+        )}${select("Equipe da casa", "home", teamOptions())}${select("Equipe visitante", "away", teamOptions())}${field("Data e horário (horário deste computador)", "date", "datetime-local", "required")}${field("Local", "place")}${field("Competição / edição (partida sem vínculo)", "competition", "text", 'maxlength="150"')}${field("Árbitros e mesários", "referees")}${field("Etapa inicial (ex.: 1 ou 1º quarto)", "stage", "text", 'value="1"')}</div><button class="primary" ${role === "admin" ? "" : "disabled"}>Criar partida</button></form></div>${listPanel("matches")}`;
   if (section === "imports") return importView();
   if (section === "reports") return reports();
   if (section === "settings")
@@ -593,7 +649,7 @@ function operate() {
         )}</select></label><div class="quick-buttons">${(m.sport === "Basquete" ? [1, 2, 3] : [1]).map((v) => `<button class="quick-score primary" data-quick="${v}" data-side="${side}" ${!live ? "disabled" : ""}>+${v}<small>${m.sport === "Futebol" || m.sport === "Futsal" ? "GOL" : v > 1 ? "PONTOS" : "PONTO"}</small></button>`).join("")}</div></section>`;
     })
     .join("");
-  return `<button data-back>← Voltar às partidas</button><div class="live-console"><div class="console-score">${matchCard(m)}<div class="card"><h3>Jogo e interrupções</h3><form id="interruption"><div class="formgrid"><label>Motivo de pausa / suspensão<select name="pauseReason"><option>Intervalo</option><option>Atendimento em quadra</option><option>Chuva ou condições do local</option><option>Problema técnico</option><option>Decisão da arbitragem</option><option>Outro motivo</option></select></label><label>Detalhes para o público<input name="pauseDetails" maxlength="220" placeholder="Ex.: retorno previsto em 10 minutos"></label></div><div class="toolbar">${buttons}</div></form><p class="muted">Pausar ou suspender o jogo para o cronômetro e informa o motivo ao público. O placar é preservado.</p>${!locked ? `<form id="stage" class="row"><input name="stage" aria-label="Etapa" value="${esc(m.stage)}" required style="max-width:180px"><button>Atualizar etapa</button></form>${m.sport.startsWith("Vôlei") ? "<p><button data-set>Fechar set e iniciar próximo</button></p>" : ""}<hr><h3>Cronômetro</h3><div class="toolbar"><button data-clock-command="${c.running ? "parar" : "iniciar"}" ${!c.running && !live ? "disabled" : ""}>${c.running ? "Parar somente o relógio" : "Iniciar relógio"}</button></div><details><summary>Ajustar tempo e contagem</summary><form id="clock-config"><div class="formgrid"><label>Modo<select name="clockMode"><option value="up" ${c.mode === "up" ? "selected" : ""}>Crescente (00:00 →)</option><option value="down" ${c.mode === "down" ? "selected" : ""}>Regressivo (duração → 00:00)</option></select></label>${field("Duração da etapa (min)", "durationMin", "number", `min="0" max="360" value="${Math.floor((c.durationMs || 600000) / 60000)}"`)}${field("Tempo já decorrido (min)", "elapsedMin", "number", `min="0" max="360" value="${Math.floor(M.elapsed(m) / 60000)}"`)}${field("Segundos decorridos", "elapsedSec", "number", `min="0" max="59" value="${Math.floor(M.elapsed(m) / 1000) % 60}"`)}${field("Motivo do ajuste", "clockReason", "text", 'required maxlength="300"')}</div><button ${c.running ? "disabled" : ""}>Salvar ajuste do cronômetro</button><p class="muted">Pare o relógio para ajustar. A troca de etapa não zera o tempo automaticamente. Ao chegar a zero, a contagem regressiva aguarda a decisão da arbitragem.</p></form></details>` : ""}</div></div><div class="console-actions"><div class="card quick-panel"><span class="tag">LANÇAMENTO RÁPIDO</span><h2>Marcar ponto</h2><p class="muted">Selecione o atleta, se desejar, e toque na pontuação da equipe.</p><div class="quick-grid">${quick}</div>${!live ? '<p class="public-notice">Os lançamentos ficam disponíveis quando o jogo está Ao vivo.</p>' : ""}</div><div class="card"><details><summary>Cartões, faltas, substituições e outros lances</summary>${
+  return `<button data-back>← Voltar às partidas</button><div class="live-console"><div class="console-score">${matchCard(m)}${role === "admin" ? championshipLinkForm(m) : ""}<div class="card"><h3>Jogo e interrupções</h3><form id="interruption"><div class="formgrid"><label>Motivo de pausa / suspensão<select name="pauseReason"><option>Intervalo</option><option>Atendimento em quadra</option><option>Chuva ou condições do local</option><option>Problema técnico</option><option>Decisão da arbitragem</option><option>Outro motivo</option></select></label><label>Detalhes para o público<input name="pauseDetails" maxlength="220" placeholder="Ex.: retorno previsto em 10 minutos"></label></div><div class="toolbar">${buttons}</div></form><p class="muted">Pausar ou suspender o jogo para o cronômetro e informa o motivo ao público. O placar é preservado.</p>${!locked ? `<form id="stage" class="row"><input name="stage" aria-label="Etapa" value="${esc(m.stage)}" required style="max-width:180px"><button>Atualizar etapa</button></form>${m.sport.startsWith("Vôlei") ? "<p><button data-set>Fechar set e iniciar próximo</button></p>" : ""}<hr><h3>Cronômetro</h3><div class="toolbar"><button data-clock-command="${c.running ? "parar" : "iniciar"}" ${!c.running && !live ? "disabled" : ""}>${c.running ? "Parar somente o relógio" : "Iniciar relógio"}</button></div><details><summary>Ajustar tempo e contagem</summary><form id="clock-config"><div class="formgrid"><label>Modo<select name="clockMode"><option value="up" ${c.mode === "up" ? "selected" : ""}>Crescente (00:00 →)</option><option value="down" ${c.mode === "down" ? "selected" : ""}>Regressivo (duração → 00:00)</option></select></label>${field("Duração da etapa (min)", "durationMin", "number", `min="0" max="360" value="${Math.floor((c.durationMs || 600000) / 60000)}"`)}${field("Tempo já decorrido (min)", "elapsedMin", "number", `min="0" max="360" value="${Math.floor(M.elapsed(m) / 60000)}"`)}${field("Segundos decorridos", "elapsedSec", "number", `min="0" max="59" value="${Math.floor(M.elapsed(m) / 1000) % 60}"`)}${field("Motivo do ajuste", "clockReason", "text", 'required maxlength="300"')}</div><button ${c.running ? "disabled" : ""}>Salvar ajuste do cronômetro</button><p class="muted">Pare o relógio para ajustar. A troca de etapa não zera o tempo automaticamente. Ao chegar a zero, a contagem regressiva aguarda a decisão da arbitragem.</p></form></details>` : ""}</div></div><div class="console-actions"><div class="card quick-panel"><span class="tag">LANÇAMENTO RÁPIDO</span><h2>Marcar ponto</h2><p class="muted">Selecione o atleta, se desejar, e toque na pontuação da equipe.</p><div class="quick-grid">${quick}</div>${!live ? '<p class="public-notice">Os lançamentos ficam disponíveis quando o jogo está Ao vivo.</p>' : ""}</div><div class="card"><details><summary>Cartões, faltas, substituições e outros lances</summary>${
     locked
       ? "<p>Partida bloqueada.</p>"
       : `<form id="event"><div class="formgrid">${select("Equipe", "side", `<option value="0">${esc(name(m.home))}</option><option value="1">${esc(name(m.away))}</option>`)}${select(
@@ -1042,14 +1098,17 @@ document.addEventListener("submit", async (e) => {
       });
       return;
     }
-    if (["team", "player", "match", "settings"].includes(f.id)) {
+    if (["team", "player", "match", "settings", "championship"].includes(f.id)) {
       if (f.id === "team") {
         delete d.badgeURL;
       }
       if (f.id === "player") d.reserve = d.reserve === "true";
       if (f.id === "match") d.date = new Date(d.date).toISOString();
       await dispatch({ type: f.id, data: d });
-      if (!C.demo) f.reset();
+      if (f.id === "championship") { editedChampionshipId = ""; render(); }
+      else if (!C.demo) f.reset();
+    } else if (f.id === "championship-link") {
+      await dispatch({type:"championshipLink", matchId:selected, championshipId:d.championshipId, reason:d.reason});
     } else if (f.id === "clock-config") {
       await dispatch({
         type: "clock",
@@ -1084,6 +1143,17 @@ document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
   try {
+    if (b.dataset.editChampionship) {
+      editedChampionshipId = b.dataset.editChampionship; render();
+      $("#championship")?.scrollIntoView({behavior:"smooth"}); return;
+    }
+    if (b.hasAttribute("data-new-championship")) { editedChampionshipId = ""; render(); return; }
+    if (b.hasAttribute("data-clear-championship-filters")) { championshipQuery = ""; championshipStatus = ""; refresh(); return; }
+    if (b.dataset.championshipGames) {
+      cloud?.stopHistory(); selected = ""; section = "matches";
+      listFilters.matches = { ...listDefaults.matches, group:"all", championshipId:b.dataset.championshipGames };
+      render(); $("#list-results-matches")?.scrollIntoView({behavior:"smooth"}); return;
+    }
     if (b.dataset.listReset) {
       const kind = b.dataset.listReset;
       if (!listDefaults[kind]) return;
@@ -1368,6 +1438,12 @@ document.addEventListener("click", async (e) => {
 });
 document.addEventListener("change", async (e) => {
   try {
+    if (e.target.dataset.championshipFilter === "status") {
+      championshipStatus = e.target.value; updateChampionshipList(); return;
+    }
+    if (e.target.closest("#match") && e.target.name === "championshipId") {
+      syncChampionshipDraft(); return;
+    }
     if (e.target.dataset.quickPlayer !== undefined) {
       quickPlayers[Number(e.target.dataset.quickPlayer)] = e.target.value;
       return;
