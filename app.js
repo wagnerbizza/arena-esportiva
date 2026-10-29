@@ -1672,4 +1672,90 @@ watermark.textContent = "WagnerBIZZA";
 document.body.append(watermark);
 if ($("footer"))
   $("footer").textContent = "Arena • Central esportiva • WagnerBIZZA";
+// 13 — PREFERÊNCIAS LOCAIS E AJUDA. Nunca altera placares ou permissões.
+const preferenceKey = "arena-preferencias-v1";
+const preferenceDefaults = { theme: "dark", text: "normal", contrast: false, motion: false, help: true };
+function readPreferences() {
+  try {
+    const p = JSON.parse(localStorage.getItem(preferenceKey) || "null") || {};
+    return {theme:["dark","light","auto"].includes(p.theme)?p.theme:"dark",text:["normal","large","larger"].includes(p.text)?p.text:"normal",contrast:p.contrast===true,motion:p.motion===true,help:p.help!==false};
+  } catch { return {...preferenceDefaults}; }
+}
+let preferences = readPreferences();
+const themeQuery = matchMedia("(prefers-color-scheme: dark)");
+function applyPreferences() {
+  const root = document.documentElement;
+  root.dataset.theme = preferences.theme === "auto" ? (themeQuery.matches?"dark":"light") : preferences.theme;
+  root.dataset.textSize = preferences.text;
+  root.classList.toggle("high-contrast",preferences.contrast);
+  root.classList.toggle("reduce-motion",preferences.motion);
+  root.dataset.contextHelp = String(preferences.help);
+}
+function savePreferences() {
+  applyPreferences();
+  try { localStorage.setItem(preferenceKey,JSON.stringify(preferences)); }
+  catch { toast("Preferência aplicada nesta página. O navegador não permitiu salvá-la."); }
+}
+function helpFor(el) {
+  if(el.matches("[data-quick]"))return "Acrescenta a pontuação indicada à equipe. Confira a equipe e o atleta antes de registrar.";
+  if(el.matches("[data-correct]"))return "Retira este lançamento por estorno, com justificativa, preservando a auditoria. Exclusivo do administrador principal.";
+  if(el.matches("[data-status]"))return "Altera a situação do jogo. Interrupções e reaberturas podem exigir justificativa.";
+  if(el.matches("[data-clock-command]"))return "Inicia ou para apenas o cronômetro. Os segundos na tela não geram gravações a cada segundo.";
+  if(el.matches("[data-open]"))return "Abre os controles desta partida. O acesso depende das permissões da sua conta.";
+  if(el.matches("[data-google-link]"))return "Vincula Google à conta atual, mantendo o mesmo usuário. Escolha a identidade correta na janela do Google.";
+  if(el.matches("[data-google-entry]"))return "Abre a janela do Google. Novos operadores continuam dependendo da aprovação do administrador.";
+  if(el.matches("[data-list-filter]"))return "Filtra apenas a visualização. Não altera ou exclui nenhum cadastro.";
+  if(el.matches("[data-list-group]"))return "Alterna entre partidas em andamento, finalizadas e todas. Os registros são preservados.";
+  if(el.matches("[data-backup]"))return "Baixa uma cópia JSON para consulta. Esta versão ainda não possui restauração automática.";
+  if(el.matches("[data-access-edit]"))return "Permite ao administrador aprovar, bloquear e definir as partidas deste operador.";
+  const key=el.dataset.section;
+  const sections={overview:"Resumo das equipes, jogadores e partidas disponíveis para sua conta.",championships:"Cadastro de campeonatos e temporadas. Gerenciado pelo administrador principal.",teams:"Cadastro e edição de equipes, técnicos, categorias e escudos.",players:"Cadastro do elenco, número, posição e titular ou reserva.",matches:"Programação, filtros e operação das partidas autorizadas.",imports:"Importa equipes ou jogadores por planilha ou texto, com prévia antes de confirmar.",reports:"Súmulas, PDF, Excel e cópia JSON. Acesso exclusivo do administrador principal.",settings:"Aparência pública do sistema: logo, título, cores e capa.",users:"Solicitações de acesso, aprovação, bloqueio e partidas atribuídas.",account:"Identificação da conta conectada e formas de entrada vinculadas."};
+  if(sections[key])return sections[key];
+  if(el.tagName==="INPUT"||el.tagName==="TEXTAREA"||el.tagName==="SELECT"){
+    const label=el.closest("label")?.childNodes[0]?.textContent?.trim()||el.getAttribute("aria-label")||"este campo";
+    return `${el.required?"Campo obrigatório. ":""}${label}.${el.maxLength>0?" Limite de "+el.maxLength+" caracteres.":""}`;
+  }
+  const text=el.textContent.trim();
+  const known={"Salvar aparência":"Publica a aparência na central, no cadastro e no painel público.","Estornar":"Corrige um lançamento com justificativa, preservando o histórico.","Salvar vínculo com justificativa":"Vincula a partida ao campeonato da mesma modalidade e registra a justificativa.","Limpar filtros":"Restaura os filtros iniciais desta lista. Não apaga dados.","Criar partida":"Programa uma partida com cópia do elenco cadastrado naquele momento.","Cadastrar campeonato":"Cria uma edição do campeonato. A modalidade fica fixa após salvar.","Preparar prévia":"Analisa os dados antes da importação. Confira os resultados antes de confirmar."};
+  return known[text]||"";
+}
+let helpTarget=null;
+function hideContextHelp(){
+  const tip=document.getElementById("arenaContextHelp"); if(tip)tip.hidden=true;
+  if(helpTarget){const ids=(helpTarget.getAttribute("aria-describedby")||"").split(" ").filter(id=>id&&id!=="arenaContextHelp");if(ids.length)helpTarget.setAttribute("aria-describedby",ids.join(" "));else helpTarget.removeAttribute("aria-describedby");}
+  helpTarget=null;
+}
+function showContextHelp(target){
+  hideContextHelp();if(!preferences.help||!target)return;
+  const content=helpFor(target);if(!content)return;
+  const tip=document.getElementById("arenaContextHelp");if(!tip)return;
+  helpTarget=target;tip.textContent=content;tip.hidden=false;
+  target.setAttribute("aria-describedby",[target.getAttribute("aria-describedby"),"arenaContextHelp"].filter(Boolean).join(" "));
+}
+function setupAccessibility(){
+  applyPreferences();
+  const main=document.querySelector("main");if(main){main.id="mainContent";main.tabIndex=-1;}
+  document.body.insertAdjacentHTML("afterbegin",'<a class="skip-link" href="#mainContent">Pular para o conteúdo principal</a>');
+  const region=document.createElement("section");region.className="accessibility-bar noprint";
+  region.innerHTML=`<details id="arenaPreferences"><summary>Aparência, acessibilidade e ajuda</summary><div class="preference-controls"><label>Tema<select data-pref="theme"><option value="dark">Escuro</option><option value="light">Claro</option><option value="auto">Automático — seguir dispositivo</option></select></label><label>Tamanho do texto<select data-pref="text"><option value="normal">Padrão</option><option value="large">Maior</option><option value="larger">Muito maior</option></select></label><label class="preference-check"><input type="checkbox" data-pref="contrast">Contraste reforçado</label><label class="preference-check"><input type="checkbox" data-pref="motion">Reduzir movimentos</label><label class="preference-check"><input type="checkbox" data-pref="help">Mostrar ajuda contextual</label><button type="button" data-reset-preferences>Restaurar preferências</button></div><p>Preferências deste navegador. Use Tab para navegar, Enter para ativar e Esc para fechar a ajuda. No celular, toque em Ajuda da função e depois no controle desejado.</p><button type="button" data-touch-help aria-pressed="false">Ajuda da função: desativada</button><p id="touchHelpStatus" role="status"></p></details>`;
+  document.getElementById("mode")?.after(region);
+  for(const el of region.querySelectorAll("[data-pref]")){if(el.type==="checkbox")el.checked=preferences[el.dataset.pref];else el.value=preferences[el.dataset.pref];}
+  const tip=document.createElement("div");tip.id="arenaContextHelp";tip.role="tooltip";tip.hidden=true;document.body.append(tip);
+  let touchHelp=false;
+  document.addEventListener("change",e=>{const k=e.target.dataset.pref;if(!Object.hasOwn(preferenceDefaults,k))return;preferences[k]=e.target.type==="checkbox"?e.target.checked:e.target.value;hideContextHelp();savePreferences();});
+  document.addEventListener("pointerover",e=>{if(e.pointerType!=="touch")showContextHelp(e.target.closest("button,input,select,textarea,summary"));});
+  document.addEventListener("pointerout",e=>{if(helpTarget&&!helpTarget.contains(e.relatedTarget))hideContextHelp();});
+  document.addEventListener("focusin",e=>showContextHelp(e.target));
+  document.addEventListener("focusout",hideContextHelp);
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"){hideContextHelp();touchHelp=false;const b=document.querySelector("[data-touch-help]");if(b){b.setAttribute("aria-pressed","false");b.textContent="Ajuda da função: desativada";}}});
+  document.addEventListener("click",e=>{
+    const b=e.target.closest("button,input,select,textarea");if(!b)return;
+    if(b.hasAttribute("data-touch-help")){touchHelp=!touchHelp;b.setAttribute("aria-pressed",String(touchHelp));b.textContent="Ajuda da função: "+(touchHelp?"ativada":"desativada");return;}
+    if(b.hasAttribute("data-reset-preferences")){preferences={...preferenceDefaults};savePreferences();for(const el of region.querySelectorAll("[data-pref]")){if(el.type==="checkbox")el.checked=preferences[el.dataset.pref];else el.value=preferences[el.dataset.pref];}hideContextHelp();return;}
+    if(touchHelp&&!b.closest(".accessibility-bar")){e.preventDefault();e.stopImmediatePropagation();document.getElementById("touchHelpStatus").textContent=helpFor(b)||"Este controle não possui uma explicação adicional.";showContextHelp(b);}
+  },true);
+  themeQuery.addEventListener("change",()=>{if(preferences.theme==="auto")applyPreferences();});
+}
+setupAccessibility();
+
 boot();

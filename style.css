@@ -1031,3 +1031,46 @@ hr {
 .google-account { margin-top: 24px; border-top: 1px solid #34434d; padding-top: 12px; }
 .google-account p { overflow-wrap: anywhere; }
 @media (max-width:600px) { .google-account .google-button { width:100%; white-space:normal; } }
+
+/* 13 — Temas e acessibilidade. Preferências são individuais por navegador. */
+:root { color-scheme: dark; --text: #eef3f6; --control: #24313b; --input: #0c131a; --focus: #ffdc66; }
+:root[data-theme="light"] { color-scheme: light; --bg:#f2f5f8; --panel:#fff; --line:#aab6c2; --muted:#425266; --text:#172534; --control:#e3eaf0; --input:#fff; --focus:#174bba; }
+body { color:var(--text); }
+button,a.button { background:var(--control); color:var(--text); min-height:44px; }
+input,select,textarea { background:var(--input); color:var(--text); border-color:var(--line); }
+:root[data-theme="light"] .brand b,:root[data-theme="light"] .tag,:root[data-theme="light"] a:not(.button),:root[data-theme="light"] .live { color:#365d00; }
+:root[data-theme="light"] .status,:root[data-theme="light"] .crest { background:#e1e8ee; color:#172534; }
+:root[data-theme="light"] .banner { background:#e8f0dc; color:#273a11; }
+:root[data-theme="light"] .quick-team,:root[data-theme="light"] .game-clock,:root[data-theme="light"] .clock-panel { background:#f0f4f8; color:#172534; }
+:root[data-theme="light"] .public-notice { background:#fff6d8; color:#422f00; border-color:#987211; }
+:root[data-theme="light"] .game-clock strong { color:#365d00; }
+:root[data-theme="light"] .hero[style] { color:white; }
+:root[data-theme="light"] .hero[style] .muted { color:#e1e9f0; }
+:root[data-theme="light"] button.primary,:root[data-theme="light"] nav button.active { background:var(--accent); color:#10150a; }
+:root[data-theme="light"] .google-button { background:#fff; color:#1f2933; }
+:root[data-text-size="large"] body { font-size:17px; }
+:root[data-text-size="larger"] body { font-size:20px; }
+:root[data-text-size="large"] small,:root[data-text-size="larger"] small { font-size:.85em; }
+:where(button,a,input,select,textarea,summary,[tabindex]):focus-visible { outline:3px solid var(--focus); outline-offset:4px; }
+.skip-link { position:fixed; top:8px; left:8px; z-index:10000; padding:14px; background:var(--panel); color:var(--text); transform:translateY(-180%); }
+.skip-link:focus { transform:none; }
+.accessibility-bar { margin:12px 5%; padding:12px 16px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
+.accessibility-bar summary { cursor:pointer; padding:8px 0; font-weight:600; }
+.preference-controls { display:flex; flex-wrap:wrap; gap:16px; align-items:end; margin:16px 0; }
+.preference-controls > label { flex:1 1 190px; }
+.preference-controls .preference-check { flex-direction:row; align-items:center; min-height:44px; }
+.preference-check input { width:22px; height:22px; flex-shrink:0; }
+#arenaContextHelp { position:fixed; z-index:9999; bottom:16px; left:50%; transform:translateX(-50%); width:max-content; max-width:min(92vw,650px); border:2px solid var(--focus); background:var(--panel); color:var(--text); padding:16px; border-radius:10px; box-shadow:0 4px 20px #0005; pointer-events:none; line-height:1.6; }
+#arenaContextHelp[hidden] { display:none; }
+.high-contrast { --line:#dbe7f1; --muted:#e0e8ef; }
+.high-contrast[data-theme="light"] { --line:#172534; --muted:#172534; }
+.reduce-motion *, .reduce-motion *::before,.reduce-motion *::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
+@media(max-width:600px) { .grid { grid-template-columns:minmax(0,1fr); } .card { min-width:0; } .preference-controls > label { flex-basis:100%; } .score { gap:8px; } .score strong { font-size:44px; } .account-details { grid-template-columns:minmax(0,1fr); } }
+@media print { .accessibility-bar,.skip-link,#arenaContextHelp { display:none!important; } }
+:root[data-theme="light"] summary { color:#365d00; }
+:root[data-theme="light"] .match-card { background:linear-gradient(140deg,#fff,#eaf0f5); }
+:root[data-theme="light"] .account-details dt { color:var(--muted); }
+:root[data-theme="light"] .brand-signature { color:#425266; opacity:1; }
+:root[data-theme="light"] .danger { color:#9c1515; }
+@media print { :root { --bg:#fff; --panel:#fff; --text:#111; --muted:#333; --line:#aaa; --control:#fff; --input:#fff; } body { background:white!important; color:#111!important; } }
