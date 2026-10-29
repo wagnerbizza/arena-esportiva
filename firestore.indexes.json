@@ -1,0 +1,25 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "audit",
+      "fieldPath": "before",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "audit",
+      "fieldPath": "after",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "matches",
+      "fieldPath": "roster",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "matches",
+      "fieldPath": "rosterTeams",
+      "indexes": []
+    }
+  ]
+}

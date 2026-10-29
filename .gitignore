@@ -1,0 +1,8 @@
+node_modules/
+.firebase/
+.openai/
+dist/
+*-debug.log
+serviceAccount*.json
+.env*
+testes/*under-test.mjs

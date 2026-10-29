@@ -1,0 +1,259 @@
+// PASSO 4 — Cole este arquivo INTEIRO em Firestore > Regras e publique.
+// Spark: sem funções pagas. Login sozinho NÃO basta; cada resultado é validado aqui.
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  // Administrador principal fixado pelo UID: nenhum perfil pode assumir sua autoridade.
+  // Trocar o e-mail da mesma conta não muda o UID. Não exclua essa conta no Authentication.
+  function owner() { return request.auth != null && request.auth.uid == 'mwYVHBGiEJSYfKimTiBUMzcWHhn1'; }
+  function operator() { return request.auth != null && request.auth.token.get('email_verified',false) == true && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'operator' && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('enabled',true) == true; }
+  function staff() { return owner() || operator(); }
+  function admin() { return owner(); }
+  function operatorFor(id) { return owner() || (operator() && id in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('matches',[])); }
+  function bounded(s,n) { return s is string && s.size() <= n; }
+  function nonempty(s,n) { return bounded(s,n) && s.size() > 0; }
+  function image(s) { return s is string && ((s.size() <= 1500 && (s == '' || s.matches('https://.*'))) || (s.size() <= 40000 && s.matches('data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+'))); }
+  function meta(d,id) {
+   return d.id == id && d._revision is int && d._revision > 0 && nonempty(d._audit,100)
+    && d._updatedAt == request.time && d._updatedBy == request.auth.uid;
+  }
+  function logData(d) { return getAfter(/databases/$(database)/documents/audit/$(d._audit)).data; }
+  function pair(d,entity,id,before) {
+   let a = logData(d);
+   return a.entity == entity && a.target == id && a.actor == request.auth.uid && a.at == request.time
+    && a.revision == d._revision;
+  }
+  function publicTeam(t) { return { 'id':t.id,'name':t.name,'short':t.short,'badge':t.badge,'category':t.category,'_revision':t._revision,'_updatedAt':t._updatedAt }; }
+  function publicSettings(t) { return {'id':t.id,'title':t.title,'subtitle':t.subtitle,'color':t.color,'banner':t.banner,'_revision':t._revision,'_updatedAt':t._updatedAt}; }
+  function emptyClock() { return {'baseMs':0,'mode':'up','durationMs':0,'segments':{},'current':'','running':false}; }
+  function publicMatch(m) { return {'clock':m.get('clock',emptyClock()),'publicNotice':m.get('publicNotice',''),'id':m.id,'home':m.home,'away':m.away,'sport':m.sport,'date':m.date,'place':m.place,'competition':m.competition,'stage':m.stage,'status':m.status,'sets':m.sets,'score':m.score,'_revision':m._revision,'_updatedAt':m._updatedAt}; }
+  function publishedTeam(d,id) { return getAfter(/databases/$(database)/documents/publicTeams/$(id)).data == publicTeam(d); }
+  function publishedSettings(d) { return getAfter(/databases/$(database)/documents/publicSettings/main).data == publicSettings(d); }
+  function publishedMatch(d,id) { return getAfter(/databases/$(database)/documents/publicMatches/$(id)).data == publicMatch(d); }
+  function teamSchema(d,id) {
+   return meta(d,id) && d.keys().hasOnly(['id','name','short','coach','category','badge','_revision','_audit','_updatedAt','_updatedBy'])
+    && nonempty(d.name,150) && bounded(d.short,12) && bounded(d.coach,150) && bounded(d.category,150) && image(d.badge);
+  }
+  function playerSchema(d,id) {
+   return meta(d,id) && d.keys().hasOnly(['id','name','team','number','position','reserve','_revision','_audit','_updatedAt','_updatedBy'])
+    && nonempty(d.name,150) && nonempty(d.team,100) && exists(/databases/$(database)/documents/teams/$(d.team))
+    && bounded(d.number,8) && bounded(d.position,50) && d.reserve is bool;
+  }
+  function settingsSchema(d) {
+   return meta(d,'main') && d.keys().hasOnly(['id','title','subtitle','color','banner','_revision','_audit','_updatedAt','_updatedBy'])
+    && nonempty(d.title,100) && bounded(d.subtitle,200) && d.color.matches('#[0-9a-fA-F]{6}') && image(d.banner);
+  }
+  function matchSchema(d,id) {
+   return meta(d,id) && d.keys().hasOnly(['id','home','away','sport','date','place','competition','referees','stage','status','sets','notes','roster','rosterTeams','coaches','score','clock','publicNotice','_revision','_audit','_updatedAt','_updatedBy'])
+    && nonempty(d.home,100) && nonempty(d.away,100) && d.home != d.away
+    && d.sport in ['Futebol','Futsal','Basquete','Vôlei','Vôlei de praia','Handebol'] && nonempty(d.date,150)
+    && bounded(d.place,150) && bounded(d.competition,150) && bounded(d.referees,500) && nonempty(d.stage,40)
+    && d.status in ['Agendada','Adiada','Ao vivo','Pausada','Suspensa','Cancelada','Encerrada','Homologada']
+    && d.score is list && d.score.size() == 2 && d.score[0] is int && d.score[1] is int && d.score[0] >= 0 && d.score[1] >= 0
+    && d.sets is list && d.sets.size() <= 20 && bounded(d.notes,5000)
+    && d.roster is list && d.roster.size() <= 80 && d.rosterTeams is map && d.rosterTeams.size() <= 80
+    && d.coaches is list && d.coaches.size() == 2 && d.get('clock',emptyClock()) == emptyClock() && d.get('publicNotice','') == '';
+  }
+  function detailSchema(e) {
+   return e.keys().hasAll(['type','side','value','player','stage','text','reason','correctionOf','from','to','setIndex'])
+    && e.keys().hasOnly(['type','side','value','player','stage','text','reason','correctionOf','from','to','setIndex'])
+    && bounded(e.type,40) && e.side is int && e.value is int && bounded(e.player,150) && bounded(e.stage,40)
+    && bounded(e.text,5000) && bounded(e.reason,500) && bounded(e.correctionOf,100) && bounded(e.from,100) && bounded(e.to,100)
+    && e.setIndex is int && e.setIndex >= 0;
+  }
+  function changedOnly(d,b,fields) { return d.diff(b).affectedKeys().hasOnly(fields.concat(['_revision','_audit','_updatedAt','_updatedBy'])); }
+  function unlocked(b) { return !(b.status in ['Encerrada','Homologada','Cancelada']); }
+  function stageDetail(e,b) { return e.stage == b.stage && e.setIndex == b.sets.size(); }
+  function athlete(e,b) { return e.side in [0,1] && (e.player == '' || (e.player in b.rosterTeams && b.rosterTeams[e.player] == (e.side == 0 ? b.home : b.away))); }
+  function scoreDelta(d,b,e) { return d.score == (e.side == 0 ? [b.score[0]+e.value,b.score[1]] : [b.score[0],b.score[1]+e.value]); }
+  function normalPoint(d,b,e) {
+   return e.type == 'ponto' && e.correctionOf == '' && athlete(e,b) && e.value in (b.sport == 'Basquete' ? [1,2,3] : [1])
+    && b.status == 'Ao vivo' && changedOnly(d,b,['score']) && scoreDelta(d,b,e);
+  }
+  function reversal(d,b,e) {
+   let original = get(/databases/$(database)/documents/audit/$(e.correctionOf)).data;
+   let marker = getAfter(/databases/$(database)/documents/corrections/$(e.correctionOf)).data;
+   return admin() && unlocked(b) && e.type == 'ponto' && nonempty(e.correctionOf,100) && nonempty(e.reason,500)
+    && original.entity == 'matches' && original.target == b.id && original.detail.type == 'ponto' && original.detail.value > 0
+    && original.detail.correctionOf == '' && original.detail.setIndex == b.sets.size()
+    && e.side == original.detail.side && e.value == -original.detail.value && e.player == original.detail.player
+    && marker.eventId == e.correctionOf && marker.matchId == b.id && marker.actionId == d._audit && marker.at == request.time
+    && changedOnly(d,b,['score']) && scoreDelta(d,b,e) && d.score[0] >= 0 && d.score[1] >= 0;
+  }
+  // Segmentos de tempo recebem horários DO SERVIDOR, não do computador do operador.
+  // Atualizar os segundos na tela não cria gravações ou leituras por segundo.
+  function clockFlow(c,o) {
+   return c == o || (c.diff(o).affectedKeys().hasOnly(['segments','current','running']) && (
+    (!o.running && c.running && nonempty(c.current,20) && !(c.current in o.segments)
+     && c.segments.size() == o.segments.size()+1 && c.segments.size() <= 120
+     && c.segments.diff(o.segments).affectedKeys().hasOnly([c.current])
+     && c.segments[c.current] == {'start':request.time,'end':null})
+    || (o.running && !c.running && c.current == '' && c.segments.size() == o.segments.size()
+     && c.segments.diff(o.segments).affectedKeys().hasOnly([o.current])
+     && c.segments[o.current] == {'start':o.segments[o.current].start,'end':request.time})
+   ));
+  }
+  function statusChange(d,b,e) {
+   let c=d.get('clock',emptyClock());
+   let o=b.get('clock',emptyClock());
+   let special=d.status in ['Pausada','Suspensa','Adiada','Cancelada'];
+   return e.type == 'status' && changedOnly(d,b,['status','clock','publicNotice']) && e.from == b.status && e.to == d.status
+    && clockFlow(c,o) && c.running == (d.status == 'Ao vivo' && !(b.status in ['Encerrada','Homologada','Cancelada']))
+    && d.get('publicNotice','') == (special ? e.reason : '') && (!special || nonempty(e.reason,300))
+    && ((b.status == 'Agendada' && d.status in ['Ao vivo','Adiada'])
+     || (b.status == 'Adiada' && d.status in ['Agendada','Ao vivo'])
+     || (b.status == 'Ao vivo' && d.status in ['Pausada','Suspensa','Encerrada'])
+     || (b.status in ['Pausada','Suspensa'] && d.status in ['Ao vivo','Encerrada','Suspensa'] && b.status != d.status)
+     || (admin() && b.status == 'Encerrada' && d.status == 'Homologada')
+     || (admin() && b.status in ['Encerrada','Homologada'] && d.status == 'Ao vivo' && nonempty(e.reason,300))
+     || (admin() && b.status in ['Agendada','Adiada','Suspensa'] && d.status == 'Cancelada')
+     || (admin() && b.status == 'Cancelada' && d.status == 'Agendada' && nonempty(e.reason,300)));
+  }
+  function clockCommand(d,b,e) {
+   let c=d.clock;
+   let o=b.get('clock',emptyClock());
+   return unlocked(b) && changedOnly(d,b,['clock']) && (
+    (e.from in ['iniciar','parar'] && clockFlow(c,o)
+     && ((e.from == 'iniciar' && b.status == 'Ao vivo' && !o.running && c.running)
+      || (e.from == 'parar' && o.running && !c.running)))
+    || (e.from == 'ajustar' && !o.running && nonempty(e.reason,500)
+     && c.keys().hasOnly(['baseMs','mode','durationMs','segments','current','running'])
+     && c.baseMs is int && c.baseMs >= 0 && c.baseMs <= 21600000 && c.baseMs == e.value
+     && c.durationMs is int && c.durationMs >= 0 && c.durationMs <= 21600000
+     && c.mode in ['up','down'] && (c.mode != 'down' || c.durationMs > 0)
+     && c.segments == {} && c.current == '' && c.running == false)
+   );
+  }
+  function otherEvent(d,b,e) {
+   return unlocked(b) && (
+    (e.type in ['cartão amarelo','cartão vermelho','falta','substituição','tempo','observação'] && b.status == 'Ao vivo' && athlete(e,b) && e.value == 0 && changedOnly(d,b,[]))
+    || (e.type == 'aviso' && changedOnly(d,b,['publicNotice']) && d.publicNotice == e.text && bounded(d.publicNotice,300))
+    || (e.type == 'etapa' && changedOnly(d,b,['stage']) && d.stage == e.to && d.stage == e.text && nonempty(d.stage,40))
+    || (e.type == 'súmula' && changedOnly(d,b,['notes']) && d.notes == e.text)
+    || (e.type == 'set' && b.status == 'Ao vivo' && b.sport in ['Vôlei','Vôlei de praia'] && b.score[0] != b.score[1]
+     && changedOnly(d,b,['score','sets','stage']) && d.score == [0,0]
+     && d.sets == b.sets.concat([{'score':b.score,'stage':b.stage}]) && d.sets.size() <= 20 && d.stage == e.to && nonempty(d.stage,40))
+   );
+  }
+  function validMatchUpdate(d,b) {
+   let e = logData(d).detail;
+   return stageDetail(e,b) && (e.type == 'status' ? statusChange(d,b,e) : (e.type == 'cronômetro' ? clockCommand(d,b,e) : (e.type == 'ponto' ? (e.correctionOf == '' ? normalPoint(d,b,e) : reversal(d,b,e)) : otherEvent(d,b,e))));
+  }
+  // Cadastro solicita acesso; somente o titular aprova ou bloqueia.
+  // A conta principal nunca pode ser alterada por esta coleção.
+  function userSchema(d,uid) {
+   return d.keys().hasAll(['id','name','email','role','enabled','matches','createdAt','updatedAt','revision','auditId'])
+    && d.keys().hasOnly(['id','name','email','role','enabled','matches','createdAt','updatedAt','revision','auditId'])
+    && d.id == uid && nonempty(d.name,100) && bounded(d.email,254)
+    && d.role in ['pending','operator'] && d.enabled is bool && d.matches is list && d.matches.size() <= 100
+    && d.matches.toSet().size() == d.matches.size()
+    && (d.role != 'pending' || (d.enabled == false && d.matches == []))
+    && d.createdAt is timestamp && d.updatedAt == request.time && d.revision is int && d.revision > 0
+    && nonempty(d.auditId,100);
+  }
+  function userLogPair(d,uid) {
+   let a = getAfter(/databases/$(database)/documents/accessAudit/$(d.auditId)).data;
+   return a.target == uid && a.actor == request.auth.uid && a.at == request.time && a.after == d;
+  }
+  match /users/{uid} {
+   allow get: if owner() || (request.auth != null && request.auth.uid == uid);
+   allow list: if owner();
+   allow create: if request.auth != null && !owner() && request.auth.uid == uid
+    && userSchema(request.resource.data,uid)
+    && request.resource.data.email == request.auth.token.email
+    && request.resource.data.role == 'pending' && request.resource.data.enabled == false
+    && request.resource.data.matches == [] && request.resource.data.revision == 1
+    && request.resource.data.createdAt == request.time && userLogPair(request.resource.data,uid);
+   allow update: if owner() && uid != 'mwYVHBGiEJSYfKimTiBUMzcWHhn1'
+    && userSchema(request.resource.data,uid)
+    && request.resource.data.name == resource.data.get('name','Operador cadastrado')
+    && request.resource.data.email == resource.data.get('email','')
+    && request.resource.data.createdAt == resource.data.get('createdAt',request.time)
+    && request.resource.data.revision == resource.data.get('revision',0)+1
+    && userLogPair(request.resource.data,uid);
+   allow delete: if false;
+  }
+  match /accessAudit/{id} {
+   allow read: if owner();
+   allow create: if request.auth != null
+    && request.resource.data.keys().hasAll(['actor','target','at','action','reason','before','after'])
+    && request.resource.data.keys().hasOnly(['actor','target','at','action','reason','before','after'])
+    && request.resource.data.actor == request.auth.uid && request.resource.data.at == request.time
+    && nonempty(request.resource.data.target,128) && nonempty(request.resource.data.reason,500)
+    && request.resource.data.after == getAfter(/databases/$(database)/documents/users/$(request.resource.data.target)).data
+    && request.resource.data.after.auditId == id
+    && request.resource.data.before == (exists(/databases/$(database)/documents/users/$(request.resource.data.target)) ? get(/databases/$(database)/documents/users/$(request.resource.data.target)).data : null)
+    && ((owner() && request.resource.data.target != 'mwYVHBGiEJSYfKimTiBUMzcWHhn1'
+      && request.resource.data.action in ['aprovação','bloqueio','permissões','pendente'])
+     || (!owner() && request.resource.data.target == request.auth.uid
+      && request.resource.data.action == 'cadastro' && request.resource.data.before == null
+      && request.resource.data.after.role == 'pending' && request.resource.data.after.enabled == false
+      && request.resource.data.after.matches == []));
+   allow update,delete: if false;
+  }
+  match /settings/main {
+   allow read: if admin();
+   allow create: if admin() && settingsSchema(request.resource.data) && request.resource.data._revision == 1 && pair(request.resource.data,'settings','main',null) && publishedSettings(request.resource.data);
+   allow update: if admin() && settingsSchema(request.resource.data) && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'settings','main',resource.data) && publishedSettings(request.resource.data);
+   allow delete: if false;
+  }
+  match /teams/{id} {
+   allow read: if admin();
+   allow create: if admin() && teamSchema(request.resource.data,id) && request.resource.data._revision == 1 && pair(request.resource.data,'teams',id,null) && publishedTeam(request.resource.data,id);
+   allow update: if admin() && teamSchema(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'teams',id,resource.data) && publishedTeam(request.resource.data,id);
+   allow delete: if false;
+  }
+  match /players/{id} {
+   allow read: if admin();
+   allow create: if admin() && playerSchema(request.resource.data,id) && request.resource.data._revision == 1 && pair(request.resource.data,'players',id,null);
+   allow update: if admin() && playerSchema(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'players',id,resource.data);
+   allow delete: if false;
+  }
+  match /matches/{id} {
+   allow get: if operatorFor(id);
+   allow list: if admin();
+   allow create: if admin() && matchSchema(request.resource.data,id) && request.resource.data._revision == 1
+    && exists(/databases/$(database)/documents/teams/$(request.resource.data.home)) && exists(/databases/$(database)/documents/teams/$(request.resource.data.away))
+    && request.resource.data.score == [0,0] && request.resource.data.sets == [] && request.resource.data.status == 'Agendada' && request.resource.data.notes == ''
+    && pair(request.resource.data,'matches',id,null) && publishedMatch(request.resource.data,id);
+   allow update: if operatorFor(id) && meta(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1
+    && pair(request.resource.data,'matches',id,resource.data) && publishedMatch(request.resource.data,id) && validMatchUpdate(request.resource.data,resource.data);
+   allow delete: if false;
+  }
+  match /publicSettings/main {
+   allow read: if true;
+   allow create, update: if admin() && request.resource.data == publicSettings(getAfter(/databases/$(database)/documents/settings/main).data);
+   allow delete: if false;
+  }
+  match /publicTeams/{id} {
+   allow read: if true;
+   allow create, update: if admin() && request.resource.data == publicTeam(getAfter(/databases/$(database)/documents/teams/$(id)).data);
+   allow delete: if false;
+  }
+  match /publicMatches/{id} {
+   allow read: if true;
+   allow create, update: if operatorFor(id) && request.resource.data == publicMatch(getAfter(/databases/$(database)/documents/matches/$(id)).data);
+   allow delete: if false;
+  }
+  match /audit/{id} {
+   allow read: if admin();
+   allow create: if staff() && request.resource.data.keys().hasOnly(['entity','target','actor','at','revision','detail','before','after'])
+    && request.resource.data.entity in ['settings','teams','players','matches'] && nonempty(request.resource.data.target,100)
+    && request.resource.data.actor == request.auth.uid && request.resource.data.at == request.time && detailSchema(request.resource.data.detail)
+    && request.resource.data.after == getAfter(/databases/$(database)/documents/$(request.resource.data.entity)/$(request.resource.data.target)).data
+    && request.resource.data.after._audit == id && request.resource.data.after._updatedAt == request.time
+    && request.resource.data.revision == request.resource.data.after._revision
+    && request.resource.data.before == (exists(/databases/$(database)/documents/$(request.resource.data.entity)/$(request.resource.data.target)) ? get(/databases/$(database)/documents/$(request.resource.data.entity)/$(request.resource.data.target)).data : null);
+   allow update, delete: if false;
+  }
+  match /corrections/{id} {
+   allow read: if admin();
+   allow create: if admin() && request.resource.data.keys().hasOnly(['matchId','eventId','actionId','actor','at'])
+    && request.resource.data.eventId == id && request.resource.data.actor == request.auth.uid && request.resource.data.at == request.time
+    && getAfter(/databases/$(database)/documents/audit/$(request.resource.data.actionId)).data.detail.correctionOf == id
+    && getAfter(/databases/$(database)/documents/matches/$(request.resource.data.matchId)).data._audit == request.resource.data.actionId;
+   allow update, delete: if false;
+  }
+  match /{document=**} { allow read, write: if false; }
+ }
+}
