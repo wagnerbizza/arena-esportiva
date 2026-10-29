@@ -24,9 +24,9 @@ service cloud.firestore {
     && a.revision == d._revision;
   }
   function publicTeam(t) { return { 'id':t.id,'name':t.name,'short':t.short,'badge':t.badge,'category':t.category,'_revision':t._revision,'_updatedAt':t._updatedAt }; }
-  function publicSettings(t) { return {'id':t.id,'title':t.title,'subtitle':t.subtitle,'color':t.color,'banner':t.banner,'_revision':t._revision,'_updatedAt':t._updatedAt}; }
+  function publicSettings(t) { return t.keys().hasAny(['logo']) ? {'logo':t.logo,'id':t.id,'title':t.title,'subtitle':t.subtitle,'color':t.color,'banner':t.banner,'_revision':t._revision,'_updatedAt':t._updatedAt} : {'id':t.id,'title':t.title,'subtitle':t.subtitle,'color':t.color,'banner':t.banner,'_revision':t._revision,'_updatedAt':t._updatedAt}; }
   function emptyClock() { return {'baseMs':0,'mode':'up','durationMs':0,'segments':{},'current':'','running':false}; }
-  function publicMatch(m) { return {'clock':m.get('clock',emptyClock()),'publicNotice':m.get('publicNotice',''),'id':m.id,'home':m.home,'away':m.away,'sport':m.sport,'date':m.date,'place':m.place,'competition':m.competition,'stage':m.stage,'status':m.status,'sets':m.sets,'score':m.score,'_revision':m._revision,'_updatedAt':m._updatedAt}; }
+  function publicMatch(m) { return m.keys().hasAny(['championshipId']) ? {'championshipId':m.championshipId,'clock':m.get('clock',emptyClock()),'publicNotice':m.get('publicNotice',''),'id':m.id,'home':m.home,'away':m.away,'sport':m.sport,'date':m.date,'place':m.place,'competition':m.competition,'stage':m.stage,'status':m.status,'sets':m.sets,'score':m.score,'_revision':m._revision,'_updatedAt':m._updatedAt} : {'clock':m.get('clock',emptyClock()),'publicNotice':m.get('publicNotice',''),'id':m.id,'home':m.home,'away':m.away,'sport':m.sport,'date':m.date,'place':m.place,'competition':m.competition,'stage':m.stage,'status':m.status,'sets':m.sets,'score':m.score,'_revision':m._revision,'_updatedAt':m._updatedAt}; }
   function publishedTeam(d,id) { return getAfter(/databases/$(database)/documents/publicTeams/$(id)).data == publicTeam(d); }
   function publishedSettings(d) { return getAfter(/databases/$(database)/documents/publicSettings/main).data == publicSettings(d); }
   function publishedMatch(d,id) { return getAfter(/databases/$(database)/documents/publicMatches/$(id)).data == publicMatch(d); }
@@ -40,11 +40,32 @@ service cloud.firestore {
     && bounded(d.number,8) && bounded(d.position,50) && d.reserve is bool;
   }
   function settingsSchema(d) {
-   return meta(d,'main') && d.keys().hasOnly(['id','title','subtitle','color','banner','_revision','_audit','_updatedAt','_updatedBy'])
-    && nonempty(d.title,100) && bounded(d.subtitle,200) && d.color.matches('#[0-9a-fA-F]{6}') && image(d.banner);
+   return meta(d,'main') && d.keys().hasOnly(['id','title','subtitle','color','banner','logo','_revision','_audit','_updatedAt','_updatedBy'])
+    && nonempty(d.title,100) && bounded(d.subtitle,200) && d.color.matches('#[0-9a-fA-F]{6}') && image(d.banner) && image(d.get('logo',''));
+  }
+  // 5 — Campeonatos: cadastro privado, editável apenas pelo administrador principal.
+  function championshipSchema(d,id) {
+   return meta(d,id) && d.keys().hasOnly(['id','name','season','sport','category','status','_revision','_audit','_updatedAt','_updatedBy'])
+    && nonempty(d.name,100) && nonempty(d.season,40) && bounded(d.category,150)
+    && d.sport in ['Futebol','Futsal','Basquete','Vôlei','Vôlei de praia','Handebol']
+    && d.status in ['Planejado','Em andamento','Encerrado'];
+  }
+  function championshipLink(d,creating) {
+   let id = d.get('championshipId','');
+   return bounded(id,100) && (id == '' || (exists(/databases/$(database)/documents/championships/$(id))
+    && get(/databases/$(database)/documents/championships/$(id)).data.sport == d.sport
+    && (!creating || get(/databases/$(database)/documents/championships/$(id)).data.status != 'Encerrado')
+    && d.competition == get(/databases/$(database)/documents/championships/$(id)).data.name + ' • ' + get(/databases/$(database)/documents/championships/$(id)).data.season));
+  }
+  function relinkChampionship(d,b,e) {
+   return admin() && e.type == 'campeonato' && nonempty(e.reason,500)
+    && changedOnly(d,b,['championshipId','competition']) && championshipLink(d,false)
+    && e.from == b.get('championshipId','') && e.to == d.get('championshipId','')
+    && (d.get('championshipId','') != '' || d.competition == b.competition);
   }
   function matchSchema(d,id) {
-   return meta(d,id) && d.keys().hasOnly(['id','home','away','sport','date','place','competition','referees','stage','status','sets','notes','roster','rosterTeams','coaches','score','clock','publicNotice','_revision','_audit','_updatedAt','_updatedBy'])
+   return meta(d,id) && d.keys().hasOnly(['id','home','away','sport','date','place','competition','championshipId','referees','stage','status','sets','notes','roster','rosterTeams','coaches','score','clock','publicNotice','_revision','_audit','_updatedAt','_updatedBy'])
+    && championshipLink(d,true)
     && nonempty(d.home,100) && nonempty(d.away,100) && d.home != d.away
     && d.sport in ['Futebol','Futsal','Basquete','Vôlei','Vôlei de praia','Handebol'] && nonempty(d.date,150)
     && bounded(d.place,150) && bounded(d.competition,150) && bounded(d.referees,500) && nonempty(d.stage,40)
@@ -137,7 +158,7 @@ service cloud.firestore {
   }
   function validMatchUpdate(d,b) {
    let e = logData(d).detail;
-   return stageDetail(e,b) && (e.type == 'status' ? statusChange(d,b,e) : (e.type == 'cronômetro' ? clockCommand(d,b,e) : (e.type == 'ponto' ? (e.correctionOf == '' ? normalPoint(d,b,e) : reversal(d,b,e)) : otherEvent(d,b,e))));
+   return stageDetail(e,b) && (e.type == 'campeonato' ? relinkChampionship(d,b,e) : (e.type == 'status' ? statusChange(d,b,e) : (e.type == 'cronômetro' ? clockCommand(d,b,e) : (e.type == 'ponto' ? (e.correctionOf == '' ? normalPoint(d,b,e) : reversal(d,b,e)) : otherEvent(d,b,e)))));
   }
   // Cadastro solicita acesso; somente o titular aprova ou bloqueia.
   // A conta principal nunca pode ser alterada por esta coleção.
@@ -197,6 +218,13 @@ service cloud.firestore {
    allow update: if admin() && settingsSchema(request.resource.data) && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'settings','main',resource.data) && publishedSettings(request.resource.data);
    allow delete: if false;
   }
+  match /championships/{id} {
+   allow read: if admin();
+   allow create: if admin() && championshipSchema(request.resource.data,id) && request.resource.data._revision == 1 && pair(request.resource.data,'championships',id,null);
+   allow update: if admin() && championshipSchema(request.resource.data,id) && request.resource.data.sport == resource.data.sport
+    && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'championships',id,resource.data);
+   allow delete: if false;
+  }
   match /teams/{id} {
    allow read: if admin();
    allow create: if admin() && teamSchema(request.resource.data,id) && request.resource.data._revision == 1 && pair(request.resource.data,'teams',id,null) && publishedTeam(request.resource.data,id);
@@ -238,7 +266,7 @@ service cloud.firestore {
   match /audit/{id} {
    allow read: if admin();
    allow create: if staff() && request.resource.data.keys().hasOnly(['entity','target','actor','at','revision','detail','before','after'])
-    && request.resource.data.entity in ['settings','teams','players','matches'] && nonempty(request.resource.data.target,100)
+    && request.resource.data.entity in ['settings','teams','players','matches','championships'] && nonempty(request.resource.data.target,100)
     && request.resource.data.actor == request.auth.uid && request.resource.data.at == request.time && detailSchema(request.resource.data.detail)
     && request.resource.data.after == getAfter(/databases/$(database)/documents/$(request.resource.data.entity)/$(request.resource.data.target)).data
     && request.resource.data.after._audit == id && request.resource.data.after._updatedAt == request.time
