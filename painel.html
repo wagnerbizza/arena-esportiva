@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Arena • Esporte ao vivo</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body data-admin="true">
+    <header>
+      <div class="brand">◈ <b>ARENA</b> / CENTRAL ESPORTIVA</div>
+      <div class="row">
+        <a class="button" href="index.html" target="_blank" rel="noopener"
+          >Abrir painel público ↗</a
+        ><button id="logout" class="hidden">Sair</button>
+      </div>
+    </header>
+    <div id="mode" class="banner"></div>
+    <main>
+      <div id="app"><p>Carregando…</p></div>
+    </main>
+    <div id="notice" role="status" hidden></div>
+    <footer>Arena • Gestão esportiva e acompanhamento de partidas</footer>
+    <!-- ORDEM DOS ARQUIVOS: configuração → regras → bibliotecas → aplicação. -->
+    <script src="config.js"></script>
+    <script src="domain.js"></script>
+    <script src="spark-model.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
