@@ -117,6 +117,9 @@ export async function connectSpark({
         actor: a.actor,
         at: a.at?.toDate?.().toISOString() || "",
         revision: a.revision,
+        gameMs: a.after?.clock
+          ? M.elapsed(a.after, a.at?.toMillis?.() || Date.now())
+          : null,
       }));
   async function loadHistory(ids, { live = false } = {}) {
     if (!session || !profile)
@@ -219,6 +222,8 @@ export async function connectSpark({
       }
       if (entity === "matches") {
         prepared.score = [0, 0];
+        prepared.clock = M.emptyClock();
+        prepared.publicNotice = "";
         prepared.rosterTeams = Object.fromEntries(
           prepared.roster.map((p) => [p.id, p.team]),
         );
@@ -271,7 +276,12 @@ export async function connectSpark({
           );
         } else {
           if (!before) throw Error("Partida não encontrada.");
-          const result = M.applyMatch(before, action, original);
+          const result = M.applyMatch(
+            before,
+            action,
+            original,
+            F.serverTimestamp(),
+          );
           next = result.match;
           detail = result.detail;
         }

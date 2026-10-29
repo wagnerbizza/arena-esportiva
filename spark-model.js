@@ -3,7 +3,81 @@
    Cada partida tem seu próprio documento; o histórico fica separado em audit. */
 (function (root) {
   "use strict";
-  const clone = (v) => JSON.parse(JSON.stringify(v));
+  // Preserva Timestamp do Firestore; JSON.stringify destruiria seu tipo.
+  const clone = (v) =>
+    Array.isArray(v)
+      ? v.map(clone)
+      : v && typeof v.toMillis === "function"
+        ? v
+        : v && typeof v === "object"
+          ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clone(x)]))
+          : v;
+  function millis(v) {
+    if (v == null) return null;
+    if (typeof v.toMillis === "function") return v.toMillis();
+    if (typeof v === "number") return v;
+    if (typeof v === "string") return Date.parse(v);
+    if (typeof v.seconds === "number")
+      return v.seconds * 1000 + (v.nanoseconds || 0) / 1e6;
+    return null;
+  }
+  function emptyClock() {
+    return {
+      baseMs: 0,
+      mode: "up",
+      durationMs: 0,
+      segments: {},
+      current: "",
+      running: false,
+    };
+  }
+  function elapsed(m, now = Date.now()) {
+    const c = m.clock || emptyClock();
+    let value = c.baseMs;
+    for (const segment of Object.values(c.segments)) {
+      const start = millis(segment.start),
+        end = millis(segment.end);
+      if (start != null && Number.isFinite(start))
+        value += Math.max(0, (end != null ? end : now) - start);
+    }
+    return Math.max(0, value);
+  }
+  function clockText(m, now = Date.now()) {
+    const c = m.clock || emptyClock(),
+      raw = elapsed(m, now),
+      value = c.mode === "down" ? Math.max(0, c.durationMs - raw) : raw,
+      total = Math.floor(value / 1000),
+      hours = Math.floor(total / 3600),
+      mins = Math.floor(total / 60) % 60,
+      secs = total % 60;
+    return (
+      (hours ? String(hours).padStart(2, "0") + ":" : "") +
+      String(mins).padStart(2, "0") +
+      ":" +
+      String(secs).padStart(2, "0")
+    );
+  }
+  function runClock(m, stamp) {
+    let c = clone(m.clock || emptyClock());
+    if (c.running) return;
+    m.clock = c;
+    need(
+      Object.keys(c.segments).length < 120,
+      "Limite de pausas do cronômetro atingido. Ajuste o tempo com justificativa.",
+    );
+    const key = "s" + (Object.keys(c.segments).length + 1);
+    c.segments[key] = { start: stamp, end: null };
+    c.current = key;
+    c.running = true;
+  }
+  function stopClock(m, stamp) {
+    let c = clone(m.clock || emptyClock());
+    m.clock = c;
+    if (!c.running) return;
+    c.segments[c.current] = { ...c.segments[c.current], end: stamp };
+    c.current = "";
+    c.running = false;
+  }
   const need = (ok, msg) => {
     if (!ok) throw Error(msg);
   };
@@ -26,18 +100,26 @@
       setIndex: 0,
     };
   }
-  function applyMatch(current, a, original = null) {
+  function applyMatch(
+    current,
+    a,
+    original = null,
+    stamp = new Date().toISOString(),
+  ) {
     const m = clone(current),
       e = detail("");
     delete m.events;
     e.stage = m.stage;
     e.setIndex = m.sets.length;
-    const locked = ["Encerrada", "Homologada"].includes(m.status);
+    const locked = ["Encerrada", "Homologada", "Cancelada"].includes(m.status);
     if (a.type === "status") {
       const moves = {
-        Agendada: ["Ao vivo"],
-        "Ao vivo": ["Pausada", "Encerrada"],
-        Pausada: ["Ao vivo", "Encerrada"],
+        Agendada: ["Ao vivo", "Adiada", "Cancelada"],
+        Adiada: ["Agendada", "Ao vivo", "Cancelada"],
+        Cancelada: ["Agendada"],
+        "Ao vivo": ["Pausada", "Suspensa", "Encerrada"],
+        Pausada: ["Ao vivo", "Suspensa", "Encerrada"],
+        Suspensa: ["Ao vivo", "Encerrada", "Cancelada"],
         Encerrada: ["Homologada", "Ao vivo"],
         Homologada: ["Ao vivo"],
       };
@@ -45,22 +127,76 @@
         moves[m.status]?.includes(a.status),
         "Transição de situação inválida.",
       );
-      if (locked && a.status === "Ao vivo")
+      if (
+        (locked && a.status !== "Homologada") ||
+        ["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(a.status)
+      )
         need(text(a.reason), "Informe o motivo da reabertura.");
       Object.assign(e, {
         type: "status",
         from: m.status,
         to: a.status,
-        reason: text(a.reason),
+        reason: text(a.reason, 300),
         text: m.status + " → " + a.status,
       });
+      if (a.status === "Ao vivo" && !locked) runClock(m, stamp);
+      else stopClock(m, stamp);
       m.status = a.status;
+      m.publicNotice = ["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(
+        a.status,
+      )
+        ? text(a.reason, 300)
+        : "";
     } else {
       need(
         !locked,
         "Partida encerrada. Reabertura exige administrador e justificativa.",
       );
-      if (a.type === "event") {
+      if (a.type === "clock") {
+        const c = m.clock || emptyClock();
+        e.type = "cronômetro";
+        e.reason = text(a.reason);
+        e.from = a.command;
+        if (a.command === "iniciar") {
+          need(
+            m.status === "Ao vivo" && !c.running,
+            "O cronômetro só pode iniciar em partida ao vivo.",
+          );
+          runClock(m, stamp);
+          e.text = "Cronômetro iniciado";
+        } else if (a.command === "parar") {
+          need(c.running, "O cronômetro já está parado.");
+          stopClock(m, stamp);
+          e.text = "Cronômetro parado";
+        } else if (a.command === "ajustar") {
+          need(!c.running, "Pare o cronômetro antes de ajustar.");
+          need(text(a.reason), "Informe a justificativa do ajuste.");
+          need(["up", "down"].includes(a.mode), "Modo inválido.");
+          need(
+            Number.isInteger(a.baseMs) && a.baseMs >= 0 && a.baseMs <= 21600000,
+            "Tempo decorrido inválido.",
+          );
+          need(
+            Number.isInteger(a.durationMs) &&
+              a.durationMs >= 0 &&
+              a.durationMs <= 21600000 &&
+              (a.mode !== "down" || a.durationMs > 0),
+            "Duração inválida.",
+          );
+          m.clock = {
+            ...emptyClock(),
+            baseMs: a.baseMs,
+            mode: a.mode,
+            durationMs: a.durationMs,
+          };
+          e.value = a.baseMs;
+          e.text = "Ajuste do cronômetro: " + clockText(m);
+        } else throw Error("Comando do cronômetro inválido.");
+      } else if (a.type === "notice") {
+        m.publicNotice = text(a.notice, 300);
+        e.type = "aviso";
+        e.text = m.publicNotice;
+      } else if (a.type === "event") {
         need(m.status === "Ao vivo", "Inicie ou retome a partida.");
         need(
           [
@@ -116,7 +252,7 @@
           player: original.detail.player,
           correctionOf: a.eventId,
           text: text(a.reason),
-          reason: text(a.reason),
+          reason: text(a.reason, 300),
         });
         m.score[e.side] += e.value;
         need(m.score[e.side] >= 0, "Placar inválido.");
@@ -167,6 +303,8 @@
       _updatedAt,
     } = m;
     return {
+      clock: m.clock || emptyClock(),
+      publicNotice: m.publicNotice || "",
       id,
       home,
       away,
@@ -182,7 +320,17 @@
       _updatedAt,
     };
   }
-  const api = { detail, applyMatch, publicTeam, publicSettings, publicMatch };
+  const api = {
+    detail,
+    applyMatch,
+    publicTeam,
+    publicSettings,
+    publicMatch,
+    emptyClock,
+    millis,
+    elapsed,
+    clockText,
+  };
   if (typeof module !== "undefined") module.exports = api;
   else root.SparkModel = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -43,8 +43,14 @@
     return t;
   }
   function url(v) {
-    v = str(v, 1500);
-    need(!v || /^https:\/\//i.test(v), "Use imagem com endereço HTTPS.");
+    v = String(v ?? "").trim();
+    need(
+      !v ||
+        (/^https:\/\//i.test(v) && v.length <= 1500) ||
+        (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(v) &&
+          v.length <= 40000),
+      "Use endereço HTTPS ou imagem compactada pelo painel (até 40 mil caracteres).",
+    );
     return v;
   }
   function score(m) {
