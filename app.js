@@ -28,6 +28,10 @@ let state = D.fresh(),
   busy = false,
   cloud = null,
   unsubscribe = null;
+let accessStatus = "loading",
+  authMode = new URLSearchParams(location.search).get("acesso") === "cadastro" ? "register" : "login",
+  accessBusy = false,
+  managedUserId = "";
 const key = "arena-demo-v1",
   app = $("#app");
 let reportFilter = "",
@@ -44,6 +48,7 @@ function refresh() {
       : null;
   const forms = [...app.querySelectorAll("form")].map((f) => ({
     id: f.id,
+    multi: [...f.querySelectorAll("select[multiple]")].map((e) => [e.name, [...e.selectedOptions].map((o) => o.value)]),
     values: [...f.elements]
       .filter((e) => e.name && e.type !== "password")
       .map((e) => [e.name, e.value]),
@@ -54,6 +59,10 @@ function refresh() {
     if (target)
       for (const [name, value] of f.values)
         if (target.elements[name]) target.elements[name].value = value;
+    if (target) for (const [name, values] of f.multi) {
+      const select = target.elements[name];
+      if (select) for (const option of select.options) option.selected = values.includes(option.value);
+    }
   }
   if ($("#event") && $("[name=side]")) {
     const m = state.matches.find((m) => m.id === selected),
@@ -214,7 +223,8 @@ async function boot() {
         state = s;
         refresh();
       },
-      onSession: (u, r) => {
+      onSession: (u, r, access = {}) => {
+        accessStatus = access.status || "loading";
         user = u;
         role = r;
         render();
@@ -306,7 +316,8 @@ function render() {
   document.body.classList.toggle("report-mode", admin && section === "reports");
   $("#logout")?.classList.toggle("hidden", C.demo || !user);
   if (admin && !C.demo && (!user || !role)) {
-    app.innerHTML = `<div class="card" style="max-width:440px;margin:50px auto"><span class="tag">ÁREA RESTRITA</span><h2>Entrar na organização</h2><form id="login"><div class="formgrid">${field("E-mail", "email", "email", 'required autocomplete="username"')}${field("Senha", "password", "password", 'required autocomplete="current-password"')}</div><button class="primary">Entrar</button></form><p class="muted">${user ? "Sua conta ainda precisa de autorização." : "Contas são criadas pelo responsável no Firebase."}</p></div>`;
+    app.innerHTML = accessView();
+    if (accessBusy) app.querySelectorAll("button").forEach((b) => b.disabled = true);
     return;
   }
   if (!admin) {
@@ -335,6 +346,7 @@ function render() {
     ["imports", "Importar"],
     ["reports", "Súmulas e relatórios"],
     ["settings", "Configurações"],
+    ["users", "Usuários e permissões"],
   ];
   app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">PAINEL DA ORGANIZAÇÃO</span><h2>${esc(state.settings.title)}</h2></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div><nav>${sections
     .filter(
@@ -346,7 +358,7 @@ function render() {
         `<button data-section="${id}" class="${section === id ? "active" : ""}">${label}</button>`,
     )
     .join("")}</nav><div id="view">${view()}</div>`;
-  if (busy) app.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  if (busy || accessBusy) app.querySelectorAll("button").forEach((b) => (b.disabled = true));
   if (section === "reports" && $("[name=reportMatch]")) {
     $("[name=reportMatch]").value = reportFilter;
     $("#reportOutput").innerHTML = state.matches
@@ -370,6 +382,7 @@ function publicMatches(filter) {
     : empty("Nenhuma partida publicada para esta seleção.");
 }
 function view() {
+  if (section === "users" && role === "admin") return usersView();
   if (section === "overview")
     return `<div class="grid">${[
       ["Equipes", state.teams.length],
@@ -866,6 +879,57 @@ function download(name, value) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(u), 1000);
 }
+// 7 — Acesso e aprovação. Senhas ficam somente no Firebase Authentication.
+function accessView() {
+  const wrap = (content) => `<section class="card" style="max-width:520px;margin:40px auto"><span class="tag">ACESSO À CENTRAL</span>${content}</section>`;
+  if (user) {
+    const messages = {
+      loading: "Conferindo sua autorização…",
+      incomplete: "Sua conta foi criada, mas a solicitação de acesso ainda precisa ser concluída.",
+      verify: "Confirme seu e-mail pelo link enviado pelo Firebase. A operação também depende da aprovação do administrador principal.",
+      pending: "E-mail confirmado. Sua solicitação aguarda aprovação do administrador principal.",
+      blocked: "Seu acesso está bloqueado. Procure o administrador principal.",
+      unauthorized: "Esta conta ainda não está autorizada. Procure o administrador principal."
+    };
+    return wrap(`<h2>Situação do acesso</h2><p>${esc(user.email || "")}</p><p role="status">${messages[accessStatus] || messages.unauthorized}</p>${accessStatus === "incomplete" ? `<form id="complete-access">${field("Seu nome", "name", "text", 'required maxlength="100" autocomplete="name"')}<p><button class="primary">Concluir solicitação</button></p></form>` : ""}<div class="toolbar">${!user.emailVerified && accessStatus !== "loading" ? '<button type="button" data-access-verify>Enviar confirmação de e-mail</button>' : ""}<button type="button" data-access-refresh>Já confirmei / Atualizar acesso</button><button type="button" data-access-exit>Sair desta conta</button></div><p class="muted">O cadastro não autoriza alterações de placar. A senha não é exibida para a organização.</p>`);
+  }
+  if (authMode === "register") return wrap(`<h2>Solicitar acesso</h2><p>Cadastre sua conta de operador. O administrador principal aprovará o pedido e definirá as partidas autorizadas.</p><form id="register"><div style="display:grid;gap:14px">${field("Nome completo", "name", "text", 'required maxlength="100" autocomplete="name"')}${field("E-mail", "email", "email", 'required maxlength="254" autocomplete="email"')}${field("Senha (mínimo de 8 caracteres)", "password", "password", 'required minlength="8" autocomplete="new-password"')}${field("Confirmar senha", "confirmPassword", "password", 'required minlength="8" autocomplete="new-password"')}</div><p><button class="primary">Criar conta e solicitar acesso</button></p></form><button type="button" data-access-mode="login">Já tenho conta — entrar</button>`);
+  if (authMode === "recover") return wrap(`<h2>Recuperar senha</h2><p>Informe seu e-mail para receber as instruções do Firebase.</p><form id="recover">${field("E-mail", "email", "email", 'required autocomplete="email"')}<p><button class="primary">Enviar instruções</button></p></form><button type="button" data-access-mode="login">Voltar para entrar</button>`);
+  return wrap(`<h2>Entrar na organização</h2><form id="login"><div style="display:grid;gap:14px">${field("E-mail", "email", "email", 'required autocomplete="username"')}${field("Senha", "password", "password", 'required autocomplete="current-password"')}</div><p><button class="primary">Entrar</button></p></form><div class="toolbar"><button type="button" data-access-mode="register">Solicitar acesso</button><button type="button" data-access-mode="recover">Esqueci minha senha</button></div>`);
+}
+function accessError(e) {
+  return ({
+    "auth/invalid-credential": "E-mail ou senha inválidos.",
+    "auth/wrong-password": "E-mail ou senha inválidos.",
+    "auth/user-not-found": "E-mail ou senha inválidos.",
+    "auth/email-already-in-use": "Este e-mail já tem conta. Entre ou use Esqueci minha senha.",
+    "auth/invalid-email": "Confira o endereço de e-mail.",
+    "auth/weak-password": "A senha não atende aos requisitos do Firebase. Use uma senha mais forte.",
+    "auth/too-many-requests": "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.",
+    "auth/network-request-failed": "Sem conexão com o Firebase. Confira sua internet.",
+    "auth/user-disabled": "Esta conta foi desativada. Procure o administrador principal."
+  })[e.code] || e.message;
+}
+async function accessAction(action) {
+  if (accessBusy) return;
+  accessBusy = true;
+  app.querySelectorAll("button").forEach((b) => b.disabled = true);
+  try { await action(); }
+  catch (e) { toast(accessError(e), true); }
+  finally { accessBusy = false; render(); }
+}
+function usersView() {
+  if (C.demo) return `<div class="card"><h2>Usuários e permissões</h2><p>Esta função utiliza as contas reais do Firebase e não está disponível na demonstração local.</p></div>`;
+  const owner = cloud?.mainUID;
+  const users = (state.users || []).filter((u) => u.id !== owner).slice().sort((a,b) =>
+    Number(b.role === "pending") - Number(a.role === "pending") || (a.name || a.email || a.id).localeCompare(b.name || b.email || b.id));
+  const label = (u) => u.role === "pending" ? "Aguardando aprovação" : u.role === "operator" ? u.enabled === false ? "Bloqueado" : "Operador aprovado" : "Perfil antigo — revisar";
+  const link = new URL("painel.html", location.href);
+  link.search = "?acesso=cadastro";
+  const editing = users.find((u) => u.id === managedUserId);
+  const editor = editing ? `<section class="card"><h3>Permissões de ${esc(editing.name || editing.email || "Operador cadastrado")}</h3><p>${esc(editing.email || "E-mail não registrado no perfil antigo")}<br><small>UID: ${esc(editing.id)}</small></p><form id="access-user"><input type="hidden" name="userId" value="${esc(editing.id)}"><label>Situação do acesso<select name="access"><option value="pending" ${editing.role === "pending" ? "selected" : ""}>Aguardando aprovação</option><option value="active" ${editing.role === "operator" && editing.enabled !== false ? "selected" : ""}>Aprovar / manter operador ativo</option><option value="blocked" ${editing.role === "operator" && editing.enabled === false ? "selected" : ""}>Bloquear acesso</option></select></label><p class="muted">Mesmo aprovado, o operador precisa confirmar o e-mail. Nenhum operador pode promover usuários ou acessar seus relatórios.</p><label>Partidas autorizadas (Ctrl+clique para selecionar várias)<select name="assignedMatches" multiple size="6" style="width:100%;min-height:150px">${state.matches.map((m) => `<option value="${esc(m.id)}" ${(editing.matches || []).includes(m.id) ? "selected" : ""}>${esc(m.sport + " • " + name(m.home) + " × " + name(m.away) + " • " + (m.competition || format(m.date)))}</option>`).join("")}</select></label><p class="muted">Sem seleção, o operador não recebe nenhuma partida. Voltar para pendente remove as atribuições.</p><label>Motivo da alteração<textarea name="reason" required maxlength="500" placeholder="Ex.: operador responsável pelos jogos da quadra 1"></textarea></label><p><button class="primary">Salvar permissões</button> <button type="button" data-access-cancel>Fechar edição</button></p></form></section>` : "";
+  return `<section class="card"><h2>Usuários e permissões</h2><p><strong>Administrador principal: ${esc(user?.email || "Wagner")}</strong><br>Sua conta é protegida. Esta tela não permite alterar, bloquear ou remover sua autoridade.</p><label>Link para solicitar acesso<input readonly value="${esc(link.href)}"></label><p><button type="button" data-access-copy>Copiar link de cadastro</button></p><p class="muted">Envie esse link ao novo operador. Para testar outra conta neste computador, use uma janela anônima.</p></section><section class="card"><h3>Solicitações e operadores</h3>${table(["Pessoa", "Situação", "Partidas", "Ação"], users.map((u) => `<tr><td>${esc(u.name || "Operador cadastrado")}<br><small>${esc(u.email || u.id)}</small></td><td>${esc(label(u))}</td><td>${(u.matches || []).length}</td><td><button type="button" data-access-edit="${esc(u.id)}">Revisar permissões</button></td></tr>`))}${users.length ? "" : empty("Nenhuma solicitação recebida ainda.")}</section>${editor}<section class="card"><h3>Últimos 50 registros de permissões</h3>${(state.accessAudit || []).map((a) => `<div class="event"><b>${esc(a.action)}</b><p>${esc(a.after?.name || a.target)} — ${esc(a.reason)}</p><small>${esc(a.at?.toDate ? a.at.toDate().toLocaleString("pt-BR") : "Aguardando confirmação do servidor")} • ${esc(a.after?.enabled ? "Ativo" : "Sem acesso ativo")} • ${(a.after?.matches || []).length} partida(s)</small></div>`).join("") || empty("Nenhuma alteração de permissão registrada nesta versão.")}</section>`;
+}
 // EVENTOS DE INTERFACE — um único ponto de entrada para cada ação.
 document.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -876,12 +940,28 @@ document.addEventListener("submit", async (e) => {
       d.id = d.recordId;
       delete d.recordId;
     }
-    if (f.id === "login") {
-      await cloud.auth.signInWithEmailAndPassword(
-        cloud.authentication,
-        d.email,
-        d.password,
-      );
+    if (["login", "register", "recover", "complete-access", "access-user"].includes(f.id)) {
+      await accessAction(async () => {
+        if (f.id === "login") {
+          await cloud.auth.signInWithEmailAndPassword(cloud.authentication, d.email.trim(), d.password);
+        } else if (f.id === "register") {
+          if (d.password !== d.confirmPassword) throw Error("As duas senhas precisam ser iguais.");
+          await cloud.register(d);
+          toast("Conta criada. Confira seu e-mail, inclusive a pasta de spam, para confirmar o endereço.");
+        } else if (f.id === "recover") {
+          await cloud.recoverPassword(d.email);
+          toast("Se houver uma conta para esse endereço, você receberá as instruções. Confira também o spam.");
+        } else if (f.id === "complete-access") {
+          await cloud.requestAccess(d.name);
+          await cloud.resendVerification();
+          toast("Solicitação registrada. Confira a confirmação enviada ao seu e-mail.");
+        } else {
+          await cloud.manageUser({userId:d.userId, access:d.access,
+            matches: new FormData(f).getAll("assignedMatches"), reason:d.reason});
+          managedUserId = "";
+          toast("Permissões salvas e registradas no histórico.");
+        }
+      });
       return;
     }
     if (["team", "player", "match", "settings"].includes(f.id)) {
@@ -926,6 +1006,31 @@ document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
   try {
+    if (b.dataset.accessMode) {
+      authMode = b.dataset.accessMode;
+      render();
+      return;
+    }
+    if (b.hasAttribute("data-access-refresh")) {
+      await accessAction(async () => { await cloud.refreshAccess(); toast("Acesso atualizado."); });
+      return;
+    }
+    if (b.hasAttribute("data-access-verify")) {
+      await accessAction(async () => { await cloud.resendVerification(); toast("Confira a confirmação no seu e-mail, inclusive no spam."); });
+      return;
+    }
+    if (b.hasAttribute("data-access-exit")) {
+      await cloud.auth.signOut(cloud.authentication);
+      authMode = "login"; render(); return;
+    }
+    if (b.dataset.accessEdit) { managedUserId = b.dataset.accessEdit; render(); return; }
+    if (b.hasAttribute("data-access-cancel")) { managedUserId = ""; render(); return; }
+    if (b.hasAttribute("data-access-copy")) {
+      const url = new URL("painel.html?acesso=cadastro", location.href).href;
+      try { await navigator.clipboard.writeText(url); toast("Link copiado."); }
+      catch { toast("Selecione e copie o endereço exibido no campo Link para solicitar acesso."); }
+      return;
+    }
     if (b.dataset.quick) {
       await dispatch({
         type: "event",

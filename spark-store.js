@@ -12,7 +12,7 @@ export async function connectSpark({
   // A mesma identidade está protegida nas regras do Firestore.
   const OWNER_UID = "mwYVHBGiEJSYfKimTiBUMzcWHhn1";
   const isOwner = () => session?.uid === OWNER_UID;
-  const authorized = () => isOwner() || (profile?.role === "operator" && profile.enabled !== false);
+  const authorized = () => isOwner() || (profile?.role === "operator" && profile.enabled !== false && session?.emailVerified === true);
   const version = "11.0.2";
   const [fb, auth, F] = await Promise.all([
     import(`https://www.gstatic.com/firebasejs/${version}/firebase-app.js`),
@@ -26,6 +26,7 @@ export async function connectSpark({
     authentication = auth.getAuth(app),
     M = window.SparkModel,
     D = window.Domain;
+  authentication.languageCode = "pt-BR";
   const emulator = config.emulators;
   if (emulator?.enabled) {
     F.connectFirestoreEmulator(
@@ -91,14 +92,14 @@ export async function connectSpark({
       ),
     );
   }
-  function watchCollection(name, assign) {
+  function watchCollection(name, assign, constraints = []) {
     const epoch = dataEpoch;
     stops.push(
       F.onSnapshot(
-        F.collection(database, name),
+        constraints.length ? F.query(F.collection(database, name), ...constraints) : F.collection(database, name),
         (snap) => {
           if (epoch !== dataEpoch) return;
-          assign(snap.docs.map((d) => d.data()));
+          assign(snap.docs.map((d) => ({ ...d.data(), id: d.id })));
           publish();
         },
         message,
@@ -114,6 +115,8 @@ export async function connectSpark({
     if (ownerView) {
       watchCollection("players", (d) => (state.players = d));
       watchCollection("matches", (d) => (state.matches = d));
+      watchCollection("users", (d) => (state.users = d));
+      watchCollection("accessAudit", (d) => (state.accessAudit = d), [F.orderBy("at", "desc"), F.limit(50)]);
     } else if (!full) {
       watchCollection("publicMatches", (d) => (state.matches = d));
     } else {
@@ -368,8 +371,85 @@ export async function connectSpark({
       }
     }
   }
+  // 7 — Cadastro e permissões: nenhuma senha é gravada no Firestore.
+  const mainUID = OWNER_UID;
+  async function requestAccess(name) {
+    const u = authentication.currentUser;
+    if (!u || u.uid === OWNER_UID) throw Error("Use uma conta de operador para solicitar acesso.");
+    name = String(name || u.displayName || "").trim();
+    if (!name || name.length > 100) throw Error("Informe seu nome, com até 100 caracteres.");
+    const ref = F.doc(database, "users", u.uid);
+    const aid = uid();
+    await F.runTransaction(database, async (tx) => {
+      const existing = await tx.get(ref);
+      if (existing.exists()) return;
+      const after = { id: u.uid, name, email: u.email || "", role: "pending",
+        enabled: false, matches: [], createdAt: F.serverTimestamp(),
+        updatedAt: F.serverTimestamp(), revision: 1, auditId: aid };
+      tx.set(ref, after);
+      tx.set(F.doc(database, "accessAudit", aid), { actor: u.uid, target: u.uid,
+        at: F.serverTimestamp(), action: "cadastro", reason: "Solicitação de acesso pelo próprio usuário",
+        before: null, after });
+    });
+  }
+  async function register({name, email, password}) {
+    if (authentication.currentUser) throw Error("Saia da conta atual antes de criar outra conta.");
+    name = String(name || "").trim();
+    email = String(email || "").trim();
+    if (!name || name.length > 100) throw Error("Informe seu nome, com até 100 caracteres.");
+    if (String(password || "").length < 8) throw Error("Use uma senha com pelo menos 8 caracteres.");
+    const {user: u} = await auth.createUserWithEmailAndPassword(authentication, email, password);
+    // Se uma etapa falhar, o usuário pode entrar e concluir seu pedido sem criar outra conta.
+    await auth.updateProfile(u, { displayName: name });
+    await requestAccess(name);
+    await auth.sendEmailVerification(u);
+  }
+  async function resendVerification() {
+    const u = authentication.currentUser;
+    if (!u) throw Error("Entre com seu e-mail e senha.");
+    await auth.reload(u);
+    if (u.emailVerified) return;
+    await auth.sendEmailVerification(u);
+  }
+  async function refreshAccess() {
+    const u = authentication.currentUser;
+    if (!u) throw Error("Entre com seu e-mail e senha.");
+    await auth.reload(u);
+    await auth.getIdToken(u, true);
+  }
+  async function recoverPassword(email) {
+    email = String(email || "").trim();
+    if (!email) throw Error("Informe seu e-mail.");
+    try { await auth.sendPasswordResetEmail(authentication, email); }
+    catch (e) { if (e.code !== "auth/user-not-found") throw e; }
+  }
+  async function manageUser({ userId, access, matches, reason }) {
+    if (!isOwner()) throw Error("Somente o administrador principal gerencia usuários.");
+    if (userId === OWNER_UID) throw Error("A conta principal está protegida e não pode ser alterada.");
+    if (!["active", "blocked", "pending"].includes(access)) throw Error("Situação de acesso inválida.");
+    reason = String(reason || "").trim();
+    if (!reason || reason.length > 500) throw Error("Informe o motivo, com até 500 caracteres.");
+    matches = access === "pending" ? [] : [...new Set(matches || [])];
+    if (matches.length > 100 || matches.some((id) => !state.matches.some((m) => m.id === id)))
+      throw Error("Selecione até 100 partidas existentes.");
+    const ref = F.doc(database, "users", userId), aid = uid();
+    await F.runTransaction(database, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw Error("Solicitação não encontrada.");
+      const before = snap.data();
+      const after = { id: userId, name: before.name || "Operador cadastrado", email: before.email || "",
+        role: access === "pending" ? "pending" : "operator", enabled: access === "active", matches,
+        createdAt: before.createdAt || F.serverTimestamp(), updatedAt: F.serverTimestamp(),
+        revision: (before.revision || 0) + 1, auditId: aid };
+      const action = access === "blocked" ? "bloqueio" : access === "pending" ? "pendente" :
+        before.role !== "operator" || before.enabled === false ? "aprovação" : "permissões";
+      tx.set(ref, after);
+      tx.set(F.doc(database, "accessAudit", aid), { actor: session.uid, target: userId,
+        at: F.serverTimestamp(), action, reason, before, after });
+    });
+  }
   if (!privateView) listen(false);
-  else authStop = auth.onAuthStateChanged(authentication, (u) => {
+  else authStop = auth.onIdTokenChanged(authentication, (u) => {
     const current = ++generation;
     profileStop();
     profileStop = () => {};
@@ -377,12 +457,12 @@ export async function connectSpark({
     session = u;
     profile = null;
     state = D.fresh();
-    onSession(u, "");
+    onSession(u, "", {status: "loading"});
     onData(state);
-    if (!u) return;
+    if (!u) { onConnection("FIREBASE SPARK • pronto para entrar"); return; }
     if (u.uid === OWNER_UID) {
       // O titular não depende de um campo editável no documento users.
-      onSession(u, "admin");
+      onSession(u, "admin", {status: "owner"});
       listen(true);
       return;
     }
@@ -391,14 +471,17 @@ export async function connectSpark({
       stop();
       state = D.fresh();
       profile = snap.exists() ? snap.data() : null;
+      onConnection(snap.metadata.fromCache ? "FIREBASE SPARK • aguardando confirmação do servidor" : "FIREBASE SPARK • conectado");
       const ids = profile?.matches;
-      const valid = profile?.role === "operator" && profile.enabled !== false &&
+      const valid = u.emailVerified === true && profile?.role === "operator" && profile.enabled !== false &&
         (ids === undefined || (Array.isArray(ids) && ids.every((id) =>
           typeof id === "string" && id.length > 0 && !id.includes("/"))));
-      onSession(u, valid ? "operator" : "");
+      const status = !profile ? "incomplete" : profile.role === "operator" && profile.enabled === false ? "blocked" :
+        !u.emailVerified ? "verify" : profile.role === "pending" ? "pending" : valid ? "operator" : "unauthorized";
+      onSession(u, valid ? "operator" : "", {status});
       onData(state);
       if (valid) listen(true);
-      else onError(Error("Conta sem autorização de operador. Procure o administrador principal."));
+
     }, (e) => {
       if (current !== generation) return;
       stop();
@@ -415,6 +498,13 @@ export async function connectSpark({
     database,
     F,
     send,
+    mainUID,
+    register,
+    requestAccess,
+    resendVerification,
+    refreshAccess,
+    recoverPassword,
+    manageUser,
     loadHistory,
     stopHistory,
     auditRows,
