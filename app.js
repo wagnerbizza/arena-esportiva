@@ -521,7 +521,7 @@ function render() {
       D.SPORTS,
       (x) => x,
       (x) => x,
-    )}</select></div><div id="publicMatches" class="grid">${publicMatches(publicFilter)}</div>`;
+    )}</select></div><div id="publicMatches" class="grid">${publicMatches(publicFilter)}</div>${standingsPanel()}`;
     $("#filter").value = publicFilter;
     if (state.settings.banner)
       $("#hero").style.backgroundImage =
@@ -537,6 +537,7 @@ function render() {
   const sections = [
     ["overview", "Visão geral"],
     ["championships", "Campeonatos"],
+    ["standings", "Classificação"],
     ["teams", "Equipes"],
     ["players", "Jogadores"],
     ["matches", "Partidas"],
@@ -580,6 +581,7 @@ function publicMatches(filter) {
     : empty("Nenhuma partida publicada para esta seleção.");
 }
 function view() {
+  if (section === "standings" && role === "admin") return standingsPanel();
   if (section === "account") return accountView();
   if (section === "championships" && role === "admin") return championshipsView();
   if (section === "users" && role === "admin") return usersView();
@@ -1714,7 +1716,7 @@ function helpFor(el) {
   if(el.matches("[data-backup]"))return "Baixa uma cópia JSON para consulta. Esta versão ainda não possui restauração automática.";
   if(el.matches("[data-access-edit]"))return "Permite ao administrador aprovar, bloquear e definir as partidas deste operador.";
   const key=el.dataset.section;
-  const sections={overview:"Resumo das equipes, jogadores e partidas disponíveis para sua conta.",championships:"Cadastro de campeonatos e temporadas. Gerenciado pelo administrador principal.",teams:"Cadastro e edição de equipes, técnicos, categorias e escudos.",players:"Cadastro do elenco, número, posição e titular ou reserva.",matches:"Programação, filtros e operação das partidas autorizadas.",imports:"Importa equipes ou jogadores por planilha ou texto, com prévia antes de confirmar.",reports:"Súmulas, PDF, Excel e cópia JSON. Acesso exclusivo do administrador principal.",settings:"Aparência pública do sistema: logo, título, cores e capa.",users:"Solicitações de acesso, aprovação, bloqueio e partidas atribuídas.",account:"Identificação da conta conectada e formas de entrada vinculadas."};
+  const sections={standings:"Classificação do futebol calculada pelos jogos encerrados ou homologados de cada campeonato.",overview:"Resumo das equipes, jogadores e partidas disponíveis para sua conta.",championships:"Cadastro de campeonatos e temporadas. Gerenciado pelo administrador principal.",teams:"Cadastro e edição de equipes, técnicos, categorias e escudos.",players:"Cadastro do elenco, número, posição e titular ou reserva.",matches:"Programação, filtros e operação das partidas autorizadas.",imports:"Importa equipes ou jogadores por planilha ou texto, com prévia antes de confirmar.",reports:"Súmulas, PDF, Excel e cópia JSON. Acesso exclusivo do administrador principal.",settings:"Aparência pública do sistema: logo, título, cores e capa.",users:"Solicitações de acesso, aprovação, bloqueio e partidas atribuídas.",account:"Identificação da conta conectada e formas de entrada vinculadas."};
   if(sections[key])return sections[key];
   if(el.tagName==="INPUT"||el.tagName==="TEXTAREA"||el.tagName==="SELECT"){
     const label=el.closest("label")?.childNodes[0]?.textContent?.trim()||el.getAttribute("aria-label")||"este campo";
@@ -1798,7 +1800,7 @@ function tutorialSteps() {
     ["Relatórios e cópia dos dados", "Em Súmulas e relatórios, selecione a partida e exporte PDF ou Excel. A auditoria preserva as correções. Baixar cópia JSON gera uma cópia para consulta; ainda não existe restauração automática nesta versão."],
     ["Operadores e permissões", "Em Usuários e permissões, copie o link de cadastro, revise o pedido, aprove e atribua somente os jogos necessários. Bloquear retira o acesso operacional. Operadores não recebem sua autoridade de administrador principal."],
     ["Logo, conta e leitura", "Configurações publica logo, título, cor e capa. Minha conta mostra sua identidade e permite vincular Google. Tema e acessibilidade são preferências deste navegador e não mudam as escolhas dos outros usuários."],
-    ["Antes de usar em um evento", "Confira equipes, elenco, campeonato e permissões. Teste um lançamento e a atualização do painel público. A demonstração interativa usa dados fictícios em outra aba. Idiomas, classificação e limpeza dos testes ainda estão em preparação nesta etapa."]
+    ["Antes de usar em um evento", "Confira equipes, elenco, campeonato e permissões. Teste um lançamento e a atualização do painel público. A demonstração interativa usa dados fictícios em outra aba. A classificação do futebol está disponível na central e no painel público. Idiomas e limpeza dos testes ainda estão em preparação nesta etapa."]
   ];
 }
 function drawTutorial() {
@@ -1864,5 +1866,64 @@ function setupTraining() {
   });
 }
 setupTraining();
+
+// 16 — CLASSIFICAÇÃO DO FUTEBOL. Calculada sem novas gravações no Firebase.
+// Critérios desta versão: pontos, vitórias, saldo de gols e gols pró.
+let standingChampionship = "";
+function footballTable(matches) {
+  const teams = new Map();
+  const ensure=id=>{if(!teams.has(id))teams.set(id,{id,points:0,played:0,wins:0,draws:0,losses:0,gf:0,ga:0,gd:0});return teams.get(id);};
+  let counted=0,invalid=0;
+  for(const m of matches){
+    if(m.sport!=="Futebol"||m.status==="Cancelada"||!m.home||!m.away||m.home===m.away)continue;
+    const home=ensure(m.home),away=ensure(m.away);
+    if(!["Encerrada","Homologada"].includes(m.status))continue;
+    const score=D.score(m);
+    if(score.length!==2||!score.every(n=>Number.isInteger(n)&&n>=0)){invalid++;continue;}
+    counted++;
+    for(const [t,gf,ga] of [[home,score[0],score[1]],[away,score[1],score[0]]]){
+      t.played++;t.gf+=gf;t.ga+=ga;t.gd=t.gf-t.ga;
+      if(gf>ga){t.wins++;t.points+=3;}else if(gf===ga){t.draws++;t.points++;}else t.losses++;
+    }
+  }
+  const comparison=(a,b)=>b.points-a.points||b.wins-a.wins||b.gd-a.gd||b.gf-a.gf;
+  const rows=[...teams.values()].sort((a,b)=>comparison(a,b)||name(a.id).localeCompare(name(b.id),"pt-BR"));
+  rows.forEach((r,i)=>{r.position=i&&comparison(r,rows[i-1])===0?rows[i-1].position:i+1;r.tied=rows.some(other=>other!==r&&comparison(r,other)===0);});
+  return {rows,counted,invalid};
+}
+function standingChampionships(){
+  const choices=new Map();
+  if(role==="admin") for(const c of state.championships||[])if(c.sport==="Futebol")choices.set(c.id,championshipTitle(c)+(c.category?" • "+c.category:""));
+  // Público usa somente identificadores e resultados já publicados.
+  for(const m of state.matches)if(m.sport==="Futebol"&&m.championshipId&&!choices.has(m.championshipId))choices.set(m.championshipId,m.competition||"Campeonato de futebol");
+  return [...choices].sort((a,b)=>a[1].localeCompare(b[1],"pt-BR"));
+}
+function selectedStanding(){
+  const choices=standingChampionships();
+  if(!choices.some(([id])=>id===standingChampionship))standingChampionship=choices[0]?.[0]||"";
+  return footballTable(standingChampionship?state.matches.filter(m=>m.championshipId===standingChampionship):[]);
+}
+function standingOutput(){
+  const {rows,counted,invalid}=selectedStanding();
+  return `<p class="muted" role="status">${counted} partida(s) computada(s). ${rows.length} equipe(s) identificada(s) nas partidas não canceladas deste campeonato.</p>${invalid?'<p class="public-notice">Há resultado inválido fora do cálculo. O administrador deve conferir os registros.</p>':""}${rows.length?table(["Posição","Equipe","Pontos","Jogos","Vitórias","Empates","Derrotas","Gols pró","Gols contra","Saldo"],rows.map(r=>tr([r.position+"º"+(r.tied?" (empate)":""),name(r.id),r.points,r.played,r.wins,r.draws,r.losses,r.gf,r.ga,r.gd]))):empty("Ainda não há equipes em partidas deste campeonato. Programe uma partida e vincule ao campeonato de futebol.")}`;
+}
+function standingsPanel(){
+  const choices=standingChampionships();
+  if(!admin&&!choices.length)return "";
+  selectedStanding();
+  return `<section class="card"><h2>Classificação — Futebol</h2><p>Vitória: 3 pontos • Empate: 1 ponto • Derrota: 0 ponto.</p><label>Campeonato de futebol<select id="standingChampionship" ${!choices.length?"disabled":""}>${choices.map(([id,title])=>`<option value="${esc(id)}" ${id===standingChampionship?"selected":""}>${esc(title)}</option>`).join("")||'<option>Nenhum campeonato de futebol disponível</option>'}</select></label><p class="muted">Contam somente partidas Encerradas ou Homologadas. Partidas canceladas, ao vivo, pausadas, suspensas, adiadas ou agendadas não somam resultados. A reabertura retira o jogo do cálculo até ser encerrado novamente.</p><div id="standingOutput">${standingOutput()}</div><p class="muted">Desempate: pontos, vitórias, saldo de gols e gols pró. Se todos forem iguais, a posição é compartilhada; a ordem alfabética serve apenas para exibir as equipes. Não há confronto direto, punições, W.O., pênaltis ou grupos automáticos nesta versão.</p>${admin&&role==="admin"&&choices.length?'<button type="button" data-standing-excel>Exportar classificação em Excel</button>':""}</section>`;
+}
+document.addEventListener("change",e=>{if(e.target.id!=="standingChampionship")return;standingChampionship=e.target.value;$("#standingOutput").innerHTML=standingOutput();});
+document.addEventListener("click",e=>{
+  if(!e.target.closest("[data-standing-excel]"))return;
+  try{
+    if(role!=="admin")throw Error("Exportação exclusiva do administrador.");sheetReady();
+    const {rows,counted}=selectedStanding();const title=standingChampionships().find(([id])=>id===standingChampionship)?.[1]||"Futebol";
+    const data=rows.map(r=>({Posição:r.position,Equipe:name(r.id),Pontos:r.points,Jogos:r.played,Vitórias:r.wins,Empates:r.draws,Derrotas:r.losses,"Gols pró":r.gf,"Gols contra":r.ga,Saldo:r.gd,"Empate técnico":r.tied?"Sim":"Não"}));
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),"Classificação");
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([["Campeonato",title],["Partidas computadas",counted],["Pontuação","Vitória 3; empate 1; derrota 0"],["Situações","Encerrada e Homologada"],["Desempate","Pontos, vitórias, saldo e gols pró. Igualdade mantém empate técnico."],["Gerado em",new Date().toLocaleString("pt-BR")]]),"Critérios");
+    XLSX.writeFile(wb,"classificacao-futebol.xlsx");
+  }catch(error){toast(error.message,true);}
+});
 
 boot();
