@@ -40,6 +40,8 @@ export async function connectSpark({
       { disableWarnings: true },
     );
   }
+  let publicBranding = null;
+  let brandingStop = () => {};
   let authStop = () => {};
   let profileStop = () => {};
   let dataEpoch = 0;
@@ -108,6 +110,7 @@ export async function connectSpark({
   }
   function listen(full) {
     state = D.fresh();
+    if (publicBranding) state.settings = publicBranding;
     const ownerView = full && isOwner();
     watchDoc(ownerView ? "settings/main" : "publicSettings/main",
       (d) => (state.settings = d || D.fresh().settings));
@@ -517,6 +520,7 @@ export async function connectSpark({
     session = u;
     profile = null;
     state = D.fresh();
+    if (publicBranding) state.settings = publicBranding;
     onSession(u, "", {status: "loading"});
     onData(state);
     if (!u) { onConnection("FIREBASE SPARK • pronto para entrar"); return; }
@@ -530,6 +534,7 @@ export async function connectSpark({
       if (current !== generation) return;
       stop();
       state = D.fresh();
+    if (publicBranding) state.settings = publicBranding;
       profile = snap.exists() ? snap.data() : null;
       onConnection(snap.metadata.fromCache ? "FIREBASE SPARK • aguardando confirmação do servidor" : "FIREBASE SPARK • conectado");
       const ids = profile?.matches;
@@ -547,11 +552,17 @@ export async function connectSpark({
       stop();
       profile = null;
       state = D.fresh();
+    if (publicBranding) state.settings = publicBranding;
       onSession(u, "");
       onData(state);
       message(e);
     });
   });
+  // Aparência pública também nas telas de entrada e cadastro.
+  if (privateView) brandingStop = F.onSnapshot(F.doc(database, "publicSettings", "main"), (snap) => {
+    publicBranding = snap.exists() ? snap.data() : D.fresh().settings;
+    if (!isOwner()) { state.settings = publicBranding; publish(); }
+  }, message);
   return {
     auth,
     authentication,
@@ -576,6 +587,7 @@ export async function connectSpark({
       stop();
       profileStop();
       authStop();
+      brandingStop();
     },
   };
 }
