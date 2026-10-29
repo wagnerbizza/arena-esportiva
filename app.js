@@ -36,8 +36,93 @@ const key = "arena-demo-v1",
   app = $("#app");
 let reportFilter = "",
   publicFilter = "";
+
+// 2.1 — FILTROS DA CENTRAL. Apenas consulta: não altera cadastros nem permissões.
+// Para mudar a visualização inicial de partidas, altere group: "active" abaixo.
+const listDefaults = {
+  teams: { query: "", category: "" },
+  players: { query: "", team: "", position: "", reserve: "" },
+  matches: { query: "", sport: "", group: "active", status: "" },
+};
+const listFilters = Object.fromEntries(Object.entries(listDefaults).map(([k, v]) => [k, { ...v }]));
+const finalStatuses = ["Encerrada", "Homologada", "Cancelada"];
+const matchStatuses = ["Agendada", "Adiada", "Ao vivo", "Pausada", "Suspensa", ...finalStatuses];
+const searchText = (v) => String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
+const alphabetical = (a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", { numeric: true });
+function filteredRecords(kind) {
+  const f = listFilters[kind], q = searchText(f.query);
+  return state[kind].filter((r) => {
+    if (kind === "teams") return (!q || searchText([r.name, r.short, r.coach].join(" ")).includes(q)) && (!f.category || (r.category || "") === f.category);
+    if (kind === "players") return (!q || searchText([r.name, r.number].join(" ")).includes(q)) && (!f.team || r.team === f.team) && (!f.position || (r.position || "") === f.position) && (!f.reserve || String(Boolean(r.reserve)) === f.reserve);
+    return (!q || searchText([name(r.home), name(r.away), r.competition, r.place].join(" ")).includes(q)) && (!f.sport || r.sport === f.sport) && (!f.status || r.status === f.status) && (f.group === "all" || (f.group === "finished" ? finalStatuses.includes(r.status) : !finalStatuses.includes(r.status)));
+  }).sort(kind === "matches" ? (a, b) => {
+    // Ao vivo primeiro; próximas em ordem de data, finalizadas mais recentes primeiro.
+    if (f.group !== "finished") {
+      const priority = (m) => m.status === "Ao vivo" ? 0 : m.status === "Pausada" ? 1 : 2;
+      if (priority(a) !== priority(b)) return priority(a) - priority(b);
+    }
+    const date = (m) => Number(new Date(m.date)) || 0;
+    return f.group === "finished" ? date(b) - date(a) : date(a) - date(b);
+  } : alphabetical);
+}
+function filterSelect(kind, key, label, values, allLabel) {
+  const f = listFilters[kind];
+  const entries = values.map((v) => Array.isArray(v) ? v : [v, v]);
+  // Preserva o filtro se um cadastro for alterado enquanto a lista está aberta.
+  if (f[key] && !entries.some(([v]) => v === f[key])) entries.push([f[key], f[key]]);
+  return `<label>${label}<select data-list-filter="${kind}" data-filter-key="${key}">${[["", allLabel], ...entries].map(([v, title]) => `<option value="${esc(v)}" ${f[key] === v ? "selected" : ""}>${esc(title)}</option>`).join("")}</select></label>`;
+}
+function listPanel(kind) {
+  const unique = (rows, key) => [...new Set(rows.map((r) => r[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const f = listFilters[kind];
+  const titles = { teams: "Equipes cadastradas", players: "Jogadores cadastrados", matches: role === "admin" ? "Partidas cadastradas" : "Partidas atribuídas" };
+  let controls = `<label class="list-search">${kind === "matches" ? "Buscar equipe, competição ou local" : kind === "players" ? "Buscar nome ou número" : "Buscar equipe, sigla ou técnico"}<input type="search" data-list-filter="${kind}" data-filter-key="query" value="${esc(f.query)}" placeholder="Digite para buscar…" autocomplete="off"></label>`;
+  if (kind === "teams") controls += filterSelect(kind, "category", "Categoria", unique(state.teams, "category"), "Todas as categorias");
+  if (kind === "players") controls += filterSelect(kind, "team", "Equipe", state.teams.slice().sort(alphabetical).map((t) => [t.id, t.name]), "Todas as equipes") + filterSelect(kind, "position", "Posição", unique(state.players, "position"), "Todas as posições") + filterSelect(kind, "reserve", "Escalação", [["false", "Titular"], ["true", "Reserva / banco"]], "Todos");
+  if (kind === "matches") controls += filterSelect(kind, "sport", "Modalidade", D.SPORTS, "Todas as modalidades") + filterSelect(kind, "status", "Situação específica", matchStatuses, "Todas as situações");
+  const groups = kind === "matches" ? `<div class="list-groups" aria-label="Visualização das partidas">${[["active", "Em andamento e próximas"], ["finished", "Finalizadas"], ["all", "Todas"]].map(([v, title]) => `<button type="button" data-list-group="${v}" aria-pressed="${f.group === v}" class="${f.group === v ? "primary" : ""}">${title}</button>`).join("")}</div>` : "";
+  return `<section class="card list-filters" aria-label="Filtros de ${titles[kind]}"><h2>${titles[kind]}</h2>${groups}<div class="list-controls">${controls}<button type="button" data-list-reset="${kind}">Limpar filtros</button></div><p class="muted list-count" id="list-count-${kind}" role="status">${listCount(kind)}</p>${kind === "matches" ? '<small>Finalizadas inclui encerradas, homologadas e canceladas. Adiadas e suspensas continuam em andamento e próximas.</small>' : ""}</section><div id="list-results-${kind}" class="${kind === "players" ? "card" : "grid"}">${listResults(kind)}</div>`;
+}
+function listCount(kind) {
+  return `${filteredRecords(kind).length} de ${state[kind].length} ${ { teams: "equipes", players: "jogadores", matches: "partidas" }[kind]} nesta visualização`;
+}
+function listResults(kind) {
+  const rows = filteredRecords(kind);
+  if (!rows.length) return empty(state[kind].length ? "Nenhum resultado com estes filtros. Use Limpar filtros ou, em Partidas, selecione Todas." : { teams: "Nenhuma equipe cadastrada.", players: "Nenhum jogador cadastrado.", matches: "Nenhuma partida disponível para sua conta." }[kind]);
+  if (kind === "matches") return rows.map((m) => matchCard(m, true)).join("");
+  if (kind === "teams") return rows.map((t) => `<div class="card">${badge(t)}<h3>${esc(t.name)}</h3><p class="muted">${esc(t.category || "Sem categoria")}<br>Técnico: ${esc(t.coach || "Não informado")}</p><button data-edit-team="${esc(t.id)}">Editar equipe / escudo</button></div>`).join("");
+  return table(["Nome", "Equipe", "Número", "Posição", "Escalação", "Ação"], rows.map((p) => tr([p.name, name(p.team), p.number, p.position, p.reserve ? "Reserva" : "Titular"]).replace("</tr>", `<td><button data-edit-player="${esc(p.id)}">Editar</button></td></tr>`)));
+}
+function updateList(kind) {
+  const results = document.getElementById(`list-results-${kind}`);
+  if (results) results.innerHTML = listResults(kind);
+  const count = document.getElementById(`list-count-${kind}`);
+  if (count) count.textContent = listCount(kind);
+}
+function handleListFilter(e) {
+  const el = e.target, kind = el.dataset?.listFilter, key = el.dataset?.filterKey;
+  if (!listFilters[kind] || !Object.hasOwn(listFilters[kind], key)) return;
+  listFilters[kind][key] = el.value;
+  // Uma situação específica também abre o grupo correspondente automaticamente.
+  if (kind === "matches" && key === "status" && el.value) {
+    listFilters.matches.group = finalStatuses.includes(el.value) ? "finished" : "active";
+    document.querySelectorAll("[data-list-group]").forEach((b) => {
+      const active = b.dataset.listGroup === listFilters.matches.group;
+      b.classList.toggle("primary", active); b.setAttribute("aria-pressed", String(active));
+    });
+  }
+  updateList(kind);
+}
+document.addEventListener("input", (e) => { if (e.target.matches('[data-list-filter][type="search"]')) handleListFilter(e); });
+document.addEventListener("change", (e) => { if (e.target.matches('select[data-list-filter]')) handleListFilter(e); });
+
 // Atualizações ao vivo preservam o formulário ainda não enviado.
 function refresh() {
+  const focused = document.activeElement;
+  const filterFocus = focused?.dataset?.listFilter ? {
+    kind: focused.dataset.listFilter, key: focused.dataset.filterKey,
+    start: focused.selectionStart, end: focused.selectionEnd,
+  } : null;
   const importDraft =
     section === "imports" && $("#preview")
       ? {
@@ -86,6 +171,13 @@ function refresh() {
     $("[name=importKind]").value = importDraft.kind;
     $("#paste").value = importDraft.paste;
     $("#preview").innerHTML = importDraft.preview;
+  }
+  if (filterFocus) {
+    const el = document.querySelector(`[data-list-filter="${filterFocus.kind}"][data-filter-key="${filterFocus.key}"]`);
+    if (el) {
+      el.focus({ preventScroll: true });
+      if (el.type === "search") el.setSelectionRange(filterFocus.start, filterFocus.end);
+    }
   }
 }
 function toast(t, error = false) {
@@ -408,25 +500,11 @@ function view() {
           )
     }</div>`;
   if (section === "teams")
-    return `<div class="card"><h2>Cadastrar equipe</h2><form id="team"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome da equipe", "name", "text", 'required maxlength="150"')}${field("Sigla", "short", "text", 'maxlength="12"')}${field("Técnico(a)", "coach")}${field("Categoria", "category")}<input name="badge" type="hidden"><label>Imagem do escudo / bandeira<input id="badgeFile" type="file" accept="image/png,image/jpeg,image/webp"><small>Escolha uma imagem do computador. O painel reduz seu tamanho automaticamente.</small></label><label>Ou endereço HTTPS da imagem<input name="badgeURL" type="url" placeholder="https://..."></label><div class="logo-preview" id="badgePreview">${badge({ name: "Time", short: "TIME", badge: "" })}<button type="button" data-remove-badge>Remover imagem</button></div></div><button class="primary">Salvar equipe</button> <button type="button" data-section="imports">Importar equipes</button></form></div><div class="grid">${state.teams.map((t) => `<div class="card">${badge(t)}<h3>${esc(t.name)}</h3><p class="muted">${esc(t.category)}<br>Técnico: ${esc(t.coach || "Não informado")}</p><button data-edit-team="${t.id}">Editar equipe / escudo</button></div>`).join("")}</div>`;
+    return `<div class="card"><h2>Cadastrar equipe</h2><form id="team"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome da equipe", "name", "text", 'required maxlength="150"')}${field("Sigla", "short", "text", 'maxlength="12"')}${field("Técnico(a)", "coach")}${field("Categoria", "category")}<input name="badge" type="hidden"><label>Imagem do escudo / bandeira<input id="badgeFile" type="file" accept="image/png,image/jpeg,image/webp"><small>Escolha uma imagem do computador. O painel reduz seu tamanho automaticamente.</small></label><label>Ou endereço HTTPS da imagem<input name="badgeURL" type="url" placeholder="https://..."></label><div class="logo-preview" id="badgePreview">${badge({ name: "Time", short: "TIME", badge: "" })}<button type="button" data-remove-badge>Remover imagem</button></div></div><button class="primary">Salvar equipe</button> <button type="button" data-section="imports">Importar equipes</button></form></div>${listPanel("teams")}`;
   if (section === "players")
-    return `<div class="card"><h2>Cadastrar jogador</h2><p class="muted">Cadastre o elenco antes de criar a partida. A súmula preserva uma cópia do elenco daquela data.</p><form id="player"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome", "name", "text", "required")}${select("Equipe", "team", teamOptions())}${field("Número", "number")}${field("Posição", "position")}${select("Escalação", "reserve", '<option value="false">Titular</option><option value="true">Reserva / banco</option>')}</div><button class="primary">Salvar jogador</button> <button type="button" data-section="imports">Importar jogadores</button></form></div><div class="card">${table(
-      ["Nome", "Equipe", "Número", "Posição", "Escalação", "Ação"],
-      state.players.map((p) =>
-        tr([
-          p.name,
-          name(p.team),
-          p.number,
-          p.position,
-          p.reserve ? "Reserva" : "Titular",
-        ]).replace(
-          "</tr>",
-          `<td><button data-edit-player="${p.id}">Editar</button></td></tr>`,
-        ),
-      ),
-    )}</div>`;
+    return `<div class="card"><h2>Cadastrar jogador</h2><p class="muted">Cadastre o elenco antes de criar a partida. A súmula preserva uma cópia do elenco daquela data.</p><form id="player"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome", "name", "text", "required")}${select("Equipe", "team", teamOptions())}${field("Número", "number")}${field("Posição", "position")}${select("Escalação", "reserve", '<option value="false">Titular</option><option value="true">Reserva / banco</option>')}</div><button class="primary">Salvar jogador</button> <button type="button" data-section="imports">Importar jogadores</button></form></div>${listPanel("players")}`;
   if (section === "matches" && role !== "admin" && !selected) {
-    return `<div class="card"><h2>Minhas partidas</h2><p>Você pode operar somente as partidas atribuídas pelo administrador principal. Histórico, relatórios e auditoria são exclusivos dele.</p></div><div class="grid">${state.matches.map((m) => matchCard(m, true)).join("") || empty("Nenhuma partida atribuída à sua conta.")}</div>`;
+    return `<div class="card"><h2>Minhas partidas</h2><p>Você pode operar somente as partidas atribuídas pelo administrador principal. Histórico, relatórios e auditoria são exclusivos dele.</p></div>${listPanel("matches")}`;
   }
   if (section === "matches")
     return selected
@@ -439,7 +517,7 @@ function view() {
             (x) => x,
             (x) => x,
           ),
-        )}${select("Equipe da casa", "home", teamOptions())}${select("Equipe visitante", "away", teamOptions())}${field("Data e horário (horário deste computador)", "date", "datetime-local", "required")}${field("Local", "place")}${field("Competição / edição", "competition")}${field("Árbitros e mesários", "referees")}${field("Etapa inicial (ex.: 1 ou 1º quarto)", "stage", "text", 'value="1"')}</div><button class="primary" ${role === "admin" ? "" : "disabled"}>Criar partida</button></form></div><div class="grid">${state.matches.map((m) => matchCard(m, true)).join("")}</div>`;
+        )}${select("Equipe da casa", "home", teamOptions())}${select("Equipe visitante", "away", teamOptions())}${field("Data e horário (horário deste computador)", "date", "datetime-local", "required")}${field("Local", "place")}${field("Competição / edição", "competition")}${field("Árbitros e mesários", "referees")}${field("Etapa inicial (ex.: 1 ou 1º quarto)", "stage", "text", 'value="1"')}</div><button class="primary" ${role === "admin" ? "" : "disabled"}>Criar partida</button></form></div>${listPanel("matches")}`;
   if (section === "imports") return importView();
   if (section === "reports") return reports();
   if (section === "settings")
@@ -1006,6 +1084,17 @@ document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
   try {
+    if (b.dataset.listReset) {
+      const kind = b.dataset.listReset;
+      if (!listDefaults[kind]) return;
+      listFilters[kind] = { ...listDefaults[kind] };
+      refresh(); return;
+    }
+    if (b.dataset.listGroup) {
+      listFilters.matches.group = b.dataset.listGroup;
+      listFilters.matches.status = "";
+      refresh(); return;
+    }
     if (b.dataset.accessMode) {
       authMode = b.dataset.accessMode;
       render();
