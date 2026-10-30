@@ -190,9 +190,45 @@ export async function connectSpark({
   async function auditRows() {
     if (!isOwner()) throw Error("Auditoria exclusiva do administrador principal.");
     const snap = await F.getDocsFromServer(F.collection(database, "audit"));
-    return snap.docs
-      .map((d) => ({ ID: d.id, ...d.data() }))
+    const removed=await F.getDocsFromServer(F.collection(database,"cleanupAudit"));
+    return [...snap.docs.map(d=>({ID:d.id,...d.data()})),...removed.docs.map(d=>{
+      const r=d.data();return {ID:"limpeza-"+d.id,...r,revision:(r.before._revision||0)+1,
+        detail:{type:"exclusão de teste",text:"Partida removida da central e do público. Histórico preservado.",reason:r.reason}};
+    })]
       .sort((a, b) => (a.at?.toMillis?.() || 0) - (b.at?.toMillis?.() || 0));
+  }
+  // 17 — Limpeza de UMA partida, com cópia e log imutável na mesma transação.
+  const cleanupBlocked = m => ["Ao vivo","Pausada","Suspensa"].includes(m.status) || m.clock?.running;
+  async function previewCleanup(matchId) {
+    if (!isOwner()) throw Error("Limpeza exclusiva do administrador principal.");
+    const snap = await F.getDocFromServer(F.doc(database,"matches",matchId));
+    if (!snap.exists()) throw Error("A partida já não existe. Atualize a lista.");
+    const before=snap.data();
+    if(cleanupBlocked(before))throw Error("Encerre ou cancele a partida antes da limpeza.");
+    const history=await F.getDocsFromServer(F.query(F.collection(database,"audit"),F.where("target","==",matchId)));
+    return {matchId,revision:before._revision,before,createdAt:Date.now(),
+      backup:{format:"arena-limpeza-partida-v1",exportedAt:new Date().toISOString(),
+        match:before,teams:state.teams.filter(t=>[before.home,before.away].includes(t.id)),
+        players:state.players.filter(p=>[before.home,before.away].includes(p.team)),
+        audit:history.docs.map(d=>({ID:d.id,...d.data()}))}};
+  }
+  async function deleteTestMatch(plan,reason,confirmation) {
+    if(!isOwner())throw Error("Limpeza exclusiva do administrador principal.");
+    reason=String(reason||"").trim();
+    if(confirmation!=="EXCLUIR"||reason.length<5||reason.length>500)throw Error("Digite EXCLUIR e informe um motivo de 5 a 500 caracteres.");
+    if(!plan||Date.now()-plan.createdAt>600000)throw Error("Prévia expirada. Gere uma nova prévia e cópia.");
+    const ref=F.doc(database,"matches",plan.matchId), log=F.doc(database,"cleanupAudit",plan.matchId);
+    await F.runTransaction(database,async tx=>{
+      const snap=await tx.get(ref),oldLog=await tx.get(log);
+      if(!snap.exists())throw Error("Partida já excluída. Nenhuma outra partida foi alterada.");
+      const before=snap.data();
+      if(oldLog.exists())throw Error("Este identificador já tem registro de limpeza.");
+      if(before._revision!==plan.revision||JSON.stringify(before)!==JSON.stringify(plan.before))throw Error("A partida mudou após a prévia. Gere nova prévia e cópia antes de excluir.");
+      if(cleanupBlocked(before))throw Error("Partida em operação. Limpeza bloqueada.");
+      tx.set(log,{target:plan.matchId,entity:"matches",actor:session.uid,at:F.serverTimestamp(),reason,before,after:null});
+      tx.delete(ref);tx.delete(F.doc(database,"publicMatches",plan.matchId));
+    });
+    cache.delete(plan.matchId);
   }
   const uid = () =>
     crypto.randomUUID
@@ -581,6 +617,13 @@ export async function connectSpark({
     loadHistory,
     stopHistory,
     auditRows,
+    cleanupHistory: async () => {
+      if(!isOwner())throw Error("Histórico exclusivo do administrador principal.");
+      const snap=await F.getDocsFromServer(F.collection(database,"cleanupAudit"));
+      return snap.docs.map(d=>({ID:d.id,...d.data()}));
+    },
+    previewCleanup,
+    deleteTestMatch,
     canOperate: (id) =>
       isOwner() || (authorized() && profile?.matches?.includes(id)),
     close: () => {

@@ -543,6 +543,7 @@ function render() {
     ["matches", "Partidas"],
     ["imports", "Importar"],
     ["reports", "Súmulas e relatórios"],
+    ["cleanup", "Limpeza de testes"],
     ["settings", "Configurações"],
     ["users", "Usuários e permissões"],
     ["account", "Minha conta"],
@@ -581,6 +582,7 @@ function publicMatches(filter) {
     : empty("Nenhuma partida publicada para esta seleção.");
 }
 function view() {
+  if (section === "cleanup" && role === "admin") return cleanupPanel();
   if (section === "standings" && role === "admin") return standingsPanel();
   if (section === "account") return accountView();
   if (section === "championships" && role === "admin") return championshipsView();
@@ -1716,7 +1718,7 @@ function helpFor(el) {
   if(el.matches("[data-backup]"))return "Baixa uma cópia JSON para consulta. Esta versão ainda não possui restauração automática.";
   if(el.matches("[data-access-edit]"))return "Permite ao administrador aprovar, bloquear e definir as partidas deste operador.";
   const key=el.dataset.section;
-  const sections={standings:"Classificação do futebol calculada pelos jogos encerrados ou homologados de cada campeonato.",overview:"Resumo das equipes, jogadores e partidas disponíveis para sua conta.",championships:"Cadastro de campeonatos e temporadas. Gerenciado pelo administrador principal.",teams:"Cadastro e edição de equipes, técnicos, categorias e escudos.",players:"Cadastro do elenco, número, posição e titular ou reserva.",matches:"Programação, filtros e operação das partidas autorizadas.",imports:"Importa equipes ou jogadores por planilha ou texto, com prévia antes de confirmar.",reports:"Súmulas, PDF, Excel e cópia JSON. Acesso exclusivo do administrador principal.",settings:"Aparência pública do sistema: logo, título, cores e capa.",users:"Solicitações de acesso, aprovação, bloqueio e partidas atribuídas.",account:"Identificação da conta conectada e formas de entrada vinculadas."};
+  const sections={cleanup:"Prévia, cópia e exclusão de partidas de teste. Exclusivo do administrador principal.",standings:"Classificação do futebol calculada pelos jogos encerrados ou homologados de cada campeonato.",overview:"Resumo das equipes, jogadores e partidas disponíveis para sua conta.",championships:"Cadastro de campeonatos e temporadas. Gerenciado pelo administrador principal.",teams:"Cadastro e edição de equipes, técnicos, categorias e escudos.",players:"Cadastro do elenco, número, posição e titular ou reserva.",matches:"Programação, filtros e operação das partidas autorizadas.",imports:"Importa equipes ou jogadores por planilha ou texto, com prévia antes de confirmar.",reports:"Súmulas, PDF, Excel e cópia JSON. Acesso exclusivo do administrador principal.",settings:"Aparência pública do sistema: logo, título, cores e capa.",users:"Solicitações de acesso, aprovação, bloqueio e partidas atribuídas.",account:"Identificação da conta conectada e formas de entrada vinculadas."};
   if(sections[key])return sections[key];
   if(el.tagName==="INPUT"||el.tagName==="TEXTAREA"||el.tagName==="SELECT"){
     const label=el.closest("label")?.childNodes[0]?.textContent?.trim()||el.getAttribute("aria-label")||"este campo";
@@ -1924,6 +1926,56 @@ document.addEventListener("click",e=>{
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([["Campeonato",title],["Partidas computadas",counted],["Pontuação","Vitória 3; empate 1; derrota 0"],["Situações","Encerrada e Homologada"],["Desempate","Pontos, vitórias, saldo e gols pró. Igualdade mantém empate técnico."],["Gerado em",new Date().toLocaleString("pt-BR")]]),"Critérios");
     XLSX.writeFile(wb,"classificacao-futebol.xlsx");
   }catch(error){toast(error.message,true);}
+});
+
+// 17 — Limpeza de partidas de teste: prévia, cópia e confirmação explícita.
+let cleanupPlan=null,cleanupBusy=false,cleanupCopied=false;
+function cleanupPanel(){
+ const eligible=state.matches.filter(m=>!["Ao vivo","Pausada","Suspensa"].includes(m.status)&&!m.clock?.running);
+ const p=cleanupPlan,m=p?.before;
+ return `<section class="card"><h2>Limpeza de partidas de teste</h2><p>Remove uma partida da central, do painel público e da classificação. Equipes, jogadores, campeonatos, contas, logo, configurações e auditoria permanecem.</p><p><strong>A exclusão é permanente. A cópia é para consulta e não possui restauração automática.</strong> Partidas ao vivo, pausadas, suspensas ou com relógio rodando não podem ser removidas.</p><label>Partida para conferir<select id="cleanupMatch">${eligible.map(m=>`<option value="${esc(m.id)}" ${p?.matchId===m.id?"selected":""}>${esc(name(m.home)+" × "+name(m.away)+" • "+m.sport+" • "+format(m.date)+" • "+m.status)}</option>`).join("")||'<option value="">Nenhuma partida disponível</option>'}</select></label><button type="button" data-cleanup-preview ${cleanupBusy||!eligible.length?"disabled":""}>Conferir partida antes de excluir</button>${m?`<div class="public-notice"><h3>Prévia da exclusão</h3><p>${esc(name(m.home))} × ${esc(name(m.away))}<br>${esc(m.sport)} • ${esc(format(m.date))} • ${esc(m.status)}<br>${esc(m.competition||"Sem campeonato")}<br>Placar: ${esc(D.score(m).join(" × "))}<br>ID: ${esc(m.id)}</p><p>Será removida somente esta partida e sua publicação. O registro completo da exclusão ficará privado para o administrador principal.</p><button type="button" data-cleanup-copy ${cleanupBusy?"disabled":""}>Baixar cópia desta partida</button><form id="cleanupConfirm"><label>Motivo da limpeza<textarea name="cleanupReason" minlength="5" maxlength="500" required></textarea></label><label>Digite EXCLUIR para confirmar<input name="cleanupWord" autocomplete="off" required></label><label><input type="checkbox" name="cleanupSaved" required> Abri e conferi a cópia baixada e reconheço que não há restauração automática.</label><button type="submit" ${cleanupBusy||!cleanupCopied?"disabled":""}>Excluir somente a partida conferida</button></form><button type="button" data-cleanup-cancel ${cleanupBusy?"disabled":""}>Cancelar prévia</button></div>`:""}<hr><button type="button" data-cleanup-history>Baixar histórico de exclusões (JSON)</button><p class="muted">Exclusões também aparecem em Exportar auditoria completa. A primeira versão limpa partidas; não exclui cadastros de equipes, jogadores ou campeonatos.</p></section>`;
+}
+document.addEventListener("click",async e=>{
+ const b=e.target.closest("[data-cleanup-preview],[data-cleanup-copy],[data-cleanup-cancel],[data-cleanup-history]");
+ if(!b||cleanupBusy)return;
+ try{
+  if(role!=="admin")throw Error("Limpeza exclusiva do administrador principal.");
+  if(b.hasAttribute("data-cleanup-cancel")){cleanupPlan=null;cleanupCopied=false;render();return;}
+  if(b.hasAttribute("data-cleanup-copy")){
+   if(!cleanupPlan)throw Error("Gere uma prévia primeiro.");
+   download("arena-copia-partida-"+cleanupPlan.matchId+".json",JSON.stringify(cleanupPlan.backup,null,2));
+   cleanupCopied=true;render();toast("Confira o arquivo baixado antes de confirmar a exclusão.");return;
+  }
+  if(b.hasAttribute("data-cleanup-history")){
+   const logs=C.demo?(state.cleanupAudit||[]):await cloud.cleanupHistory();
+   download("arena-historico-exclusoes.json",JSON.stringify(logs,null,2));return;
+  }
+  const id=$("#cleanupMatch").value;if(!id)throw Error("Escolha uma partida.");
+  cleanupBusy=true;cleanupPlan=null;cleanupCopied=false;
+  if(C.demo){
+   const m=state.matches.find(m=>m.id===id);if(!m)throw Error("Partida indisponível.");
+   if(["Ao vivo","Pausada","Suspensa"].includes(m.status)||m.clock?.running)throw Error("Encerre ou cancele antes de limpar.");
+   const before=JSON.parse(JSON.stringify(m));cleanupPlan={matchId:id,before,createdAt:Date.now(),backup:{format:"arena-demonstracao-partida-v1",match:before}};
+  }else cleanupPlan=await cloud.previewCleanup(id);
+ }catch(error){toast(error.message,true);}finally{cleanupBusy=false;render();}
+});
+document.addEventListener("submit",async e=>{
+ if(e.target.id!=="cleanupConfirm")return;e.preventDefault();if(cleanupBusy)return;
+ try{
+  if(role!=="admin"||!cleanupPlan||!cleanupCopied)throw Error("Gere uma prévia e confira a cópia antes de excluir.");
+  const f=e.target,reason=f.elements.cleanupReason.value.trim(),word=f.elements.cleanupWord.value;
+  if(!f.elements.cleanupSaved.checked||word!=="EXCLUIR"||reason.length<5||reason.length>500)throw Error("Confira a cópia, preencha o motivo e digite EXCLUIR exatamente.");
+  cleanupBusy=true;const plan=cleanupPlan;
+  if(C.demo){
+   const m=state.matches.find(m=>m.id===plan.matchId);
+   if(!m||JSON.stringify(m)!==JSON.stringify(plan.before)||Date.now()-plan.createdAt>600000)throw Error("A partida mudou ou a prévia expirou. Gere uma nova prévia.");
+   state.cleanupAudit=state.cleanupAudit||[];state.cleanupAudit.push({target:m.id,reason,before:m,after:null,at:new Date().toISOString(),actor:"demonstração"});
+   state.matches=state.matches.filter(x=>x.id!==m.id);
+   if(trainingMode)trainingStore(state);else localStorage.setItem(key,JSON.stringify(state));
+   render();
+  }else await cloud.deleteTestMatch(plan,reason,word);
+  cleanupPlan=null;cleanupCopied=false;selected="";toast("Partida removida. Equipes, contas e histórico preservados.");
+ }catch(error){toast(error.message,true);}finally{cleanupBusy=false;render();}
 });
 
 boot();
