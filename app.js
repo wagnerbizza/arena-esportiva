@@ -42,7 +42,7 @@ let reportFilter = "",
 // 2.1 — FILTROS DA CENTRAL. Apenas consulta: não altera cadastros nem permissões.
 // Para mudar a visualização inicial de partidas, altere group: "active" abaixo.
 const listDefaults = {
-  teams: { query: "", category: "" },
+  teams: { query: "", category: "", sport:"",status:"active" },
   players: { query: "", team: "", position: "", reserve: "" },
   matches: { query: "", sport: "", group: "active", status: "", championshipId: "" },
 };
@@ -54,7 +54,7 @@ const alphabetical = (a, b) => String(a.name || "").localeCompare(String(b.name 
 function filteredRecords(kind) {
   const f = listFilters[kind], q = searchText(f.query);
   return state[kind].filter((r) => {
-    if (kind === "teams") return (!q || searchText([r.name, r.short, r.coach].join(" ")).includes(q)) && (!f.category || (r.category || "") === f.category);
+    if (kind === "teams") return (!f.sport||teamSports(r).includes(f.sport))&&(!f.status||(f.status==="archived"?r.archived===true:r.archived!==true))&&(!q || searchText([r.name, r.short, r.coach].join(" ")).includes(q)) && (!f.category || (r.category || "") === f.category);
     if (kind === "players") return (!q || searchText([r.name, r.number].join(" ")).includes(q)) && (!f.team || r.team === f.team) && (!f.position || (r.position || "") === f.position) && (!f.reserve || String(Boolean(r.reserve)) === f.reserve);
     return (!q || searchText([name(r.home), name(r.away), r.competition, r.place].join(" ")).includes(q)) && (!f.championshipId || (f.championshipId === "__unlinked" ? !r.championshipId : r.championshipId === f.championshipId)) && (!f.sport || r.sport === f.sport) && (!f.status || r.status === f.status) && (f.group === "all" || (f.group === "finished" ? finalStatuses.includes(r.status) : !finalStatuses.includes(r.status)));
   }).sort(kind === "matches" ? (a, b) => {
@@ -79,7 +79,7 @@ function listPanel(kind) {
   const f = listFilters[kind];
   const titles = { teams: "Equipes cadastradas", players: "Jogadores cadastrados", matches: role === "admin" ? "Partidas cadastradas" : "Partidas atribuídas" };
   let controls = `<label class="list-search">${kind === "matches" ? "Buscar equipe, competição ou local" : kind === "players" ? "Buscar nome ou número" : "Buscar equipe, sigla ou técnico"}<input type="search" data-list-filter="${kind}" data-filter-key="query" value="${esc(f.query)}" placeholder="Digite para buscar…" autocomplete="off"></label>`;
-  if (kind === "teams") controls += filterSelect(kind, "category", "Categoria", unique(state.teams, "category"), "Todas as categorias");
+  if (kind === "teams") controls += filterSelect(kind, "category", "Categoria", unique(state.teams, "category"), "Todas as categorias")+filterSelect(kind,"sport","Modalidade",D.SPORTS,"Todas as modalidades")+filterSelect(kind,"status","Situação da equipe",[["active","Ativas"],["archived","Arquivadas"]],"Todas as equipes");
   if (kind === "players") controls += filterSelect(kind, "team", "Equipe", state.teams.slice().sort(alphabetical).map((t) => [t.id, t.name]), "Todas as equipes") + filterSelect(kind, "position", "Posição", unique(state.players, "position"), "Todas as posições") + filterSelect(kind, "reserve", "Escalação", [["false", "Titular"], ["true", "Reserva / banco"]], "Todos");
   if (kind === "matches") controls += filterSelect(kind, "sport", "Modalidade", D.SPORTS, "Todas as modalidades") + filterSelect(kind, "status", "Situação específica", matchStatuses, "Todas as situações") + filterSelect(kind, "championshipId", "Campeonato / temporada", championshipFilterOptions(), "Todos os campeonatos");
   const groups = kind === "matches" ? `<div class="list-groups" aria-label="Visualização das partidas">${[["active", "Em andamento e próximas"], ["finished", "Finalizadas"], ["all", "Todas"]].map(([v, title]) => `<button type="button" data-list-group="${v}" aria-pressed="${f.group === v}" class="${f.group === v ? "primary" : ""}">${title}</button>`).join("")}</div>` : "";
@@ -92,7 +92,7 @@ function listResults(kind) {
   const rows = filteredRecords(kind);
   if (!rows.length) return empty(state[kind].length ? "Nenhum resultado com estes filtros. Use Limpar filtros ou, em Partidas, selecione Todas." : { teams: "Nenhuma equipe cadastrada.", players: "Nenhum jogador cadastrado.", matches: "Nenhuma partida disponível para sua conta." }[kind]);
   if (kind === "matches") return rows.map((m) => matchCard(m, true)).join("");
-  if (kind === "teams") return rows.map((t) => `<div class="card">${badge(t)}<h3>${esc(t.name)}</h3><p class="muted">${esc(t.category || "Sem categoria")}<br>Técnico: ${esc(t.coach || "Não informado")}</p><button data-edit-team="${esc(t.id)}">Editar equipe / escudo</button></div>`).join("");
+  if (kind === "teams") return rows.map((t) => `<div class="card">${badge(t)}<h3>${esc(t.name)}</h3><p class="muted">${esc(t.category || "Sem categoria")}<br>Técnico: ${esc(t.coach || "Não informado")}<br>${esc(teamSports(t).join(" • ")||"Modalidade não informada")}<br>${t.archived?"Arquivada":"Ativa"}</p><button type="button" data-team-profile="${esc(t.id)}">Abrir ficha da equipe</button> <button data-edit-team="${esc(t.id)}">Editar equipe / escudo</button></div>`).join("");
   return table(["Nome", "Equipe", "Número", "Posição", "Escalação", "Ação"], rows.map((p) => tr([p.name, name(p.team), p.number, p.position, p.reserve ? "Reserva" : "Titular"]).replace("</tr>", `<td><button data-edit-player="${esc(p.id)}">Editar</button></td></tr>`)));
 }
 function updateList(kind) {
@@ -306,7 +306,7 @@ const options = (arr, value, label) =>
     .join("");
 const teamOptions = () =>
   options(
-    state.teams,
+    state.teams.filter(t=>!t.archived),
     (x) => x.id,
     (x) => x.name,
   );
@@ -447,9 +447,9 @@ async function dispatch(a) {
   app.querySelectorAll("button").forEach((b) => (b.disabled = true));
   try {
     if (C.demo) {
-      if (trainingMode && role === "operator" && !(canManageRosters()&&(["team","player"].includes(a.type)||(a.type==="import"&&["team","player"].includes(a.kind)))) && ["team","player","match","settings","import","championship","championshipLink","correct"].includes(a.type)) throw Error("Esta ação é do administrador na simulação. Troque o perfil para treinar essa função.");
+      if (trainingMode && role === "operator" && !(canManageRosters()&&(["team","player"].includes(a.type)||(a.type==="import"&&["team","player"].includes(a.kind)))) && ["team","player","match","settings","import","championship","championshipLink","correct","teamArchive"].includes(a.type)) throw Error("Esta ação é do administrador na simulação. Troque o perfil para treinar essa função.");
       const latest = JSON.parse(localStorage.getItem(key)) || D.fresh();
-      if (!["team", "player", "match", "settings", "import", "championship"].includes(a.type)) {
+      if (!["team", "player", "match", "settings", "import", "championship","teamArchive"].includes(a.type)) {
         const old = latest.matches.find((m) => m.id === a.matchId);
         if (!old) throw Error("Partida não encontrada.");
         const current = {
@@ -486,6 +486,10 @@ async function dispatch(a) {
         state = latest;
       } else {
         state = D.reduce(latest, a, "demo");
+        if(["team","player","teamArchive"].includes(a.type)){
+          const entity=a.type==="player"?"players":"teams",target=a.teamId||a.data?.id||state[entity].at(-1)?.id;
+          state.teamLocalAudit=state.teamLocalAudit||[];state.teamLocalAudit.push({ID:crypto.randomUUID?crypto.randomUUID():"local-"+Date.now()+"-"+Math.random().toString(36).slice(2),entity,target,actor:"demonstração",at:new Date().toISOString(),before:latest[entity].find(r=>r.id===target)||null,after:state[entity].find(r=>r.id===target),detail:{type:a.type==="teamArchive"?(a.archived?"arquivamento":"reativação"):"cadastro / edição",reason:a.reason||"",text:"Alteração na demonstração"}});
+        }
         if (a.type === "match") {
           const m = state.matches[state.matches.length - 1];
           m.clock = M.emptyClock();
@@ -517,6 +521,7 @@ function matchCard(m, button = false) {
 }
 
 function render() {
+  resetTeamProfileContext();
   resetRemovedContext();
   hideContextHelp();
   document.documentElement.style.setProperty("--accent", state.settings.color);
@@ -589,6 +594,7 @@ function publicMatches(filter) {
     : empty("Nenhuma partida publicada para esta seleção.");
 }
 function view() {
+  if(section==="teams"&&selectedTeamId&&canManageRosters())return teamProfileView();
   if(section==="documentation")return documentationView();
   if(section==="monitor"&&role==="admin")return operatorMonitor();
   if (section === "cleanup" && role === "admin") return cleanupPanel();
@@ -621,7 +627,7 @@ function view() {
           )
     }</div>`;
   if (section === "teams")
-    return `<div class="card"><h2>Cadastrar equipe</h2><form id="team"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome da equipe", "name", "text", 'required maxlength="150"')}${field("Sigla", "short", "text", 'maxlength="12"')}${field("Técnico(a)", "coach")}${field("Categoria", "category")}<input name="badge" type="hidden"><label>Imagem do escudo / bandeira<input id="badgeFile" type="file" accept="image/png,image/jpeg,image/webp"><small>Escolha uma imagem do computador. O painel reduz seu tamanho automaticamente.</small></label><label>Ou endereço HTTPS da imagem<input name="badgeURL" type="url" placeholder="https://..."></label><div class="logo-preview" id="badgePreview">${badge({ name: "Time", short: "TIME", badge: "" })}<button type="button" data-remove-badge>Remover imagem</button></div></div><button class="primary">Salvar equipe</button> <button type="button" data-section="imports">Importar equipes</button></form></div>${listPanel("teams")}`;
+    return `<div class="card"><h2>Cadastrar equipe</h2><form id="team"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome da equipe", "name", "text", 'required maxlength="150"')}${field("Sigla", "short", "text", 'maxlength="12"')}${field("Técnico(a)", "coach")}${field("Categoria", "category")}<label>Modalidades da equipe (Ctrl+clique para várias)<select name="sports" multiple size="6">${D.SPORTS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select><small>Cadastro da equipe. Não altera a modalidade das partidas existentes.</small></label><input name="badge" type="hidden"><label>Imagem do escudo / bandeira<input id="badgeFile" type="file" accept="image/png,image/jpeg,image/webp"><small>Escolha uma imagem do computador. O painel reduz seu tamanho automaticamente.</small></label><label>Ou endereço HTTPS da imagem<input name="badgeURL" type="url" placeholder="https://..."></label><div class="logo-preview" id="badgePreview">${badge({ name: "Time", short: "TIME", badge: "" })}<button type="button" data-remove-badge>Remover imagem</button></div></div><button class="primary">Salvar equipe</button> <button type="button" data-section="imports">Importar equipes</button></form></div>${listPanel("teams")}`;
   if (section === "players")
     return `<div class="card"><h2>Cadastrar jogador</h2><p class="muted">Cadastre o elenco antes de criar a partida. A súmula preserva uma cópia do elenco daquela data.</p><form id="player"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome", "name", "text", "required")}${select("Equipe", "team", teamOptions())}${field("Número", "number")}${field("Posição", "position")}${select("Escalação", "reserve", '<option value="false">Titular</option><option value="true">Reserva / banco</option>')}</div><button class="primary">Salvar jogador</button> <button type="button" data-section="imports">Importar jogadores</button></form></div>${listPanel("players")}`;
   if (section === "matches" && role !== "admin" && !selected) {
@@ -1178,6 +1184,7 @@ document.addEventListener("submit", async (e) => {
       }
       if (f.id === "team") {
         delete d.badgeURL;
+        d.sports=new FormData(f).getAll("sports");
       }
       if (f.id === "player") d.reserve = d.reserve === "true";
       if (f.id === "match") d.date = new Date(d.date).toISOString();
@@ -1316,7 +1323,8 @@ document.addEventListener("click", async (e) => {
       });
     } else if (b.hasAttribute("data-remove-badge")) {
       setBadgeDraft("");
-    } else if (b.dataset.editTeam || b.dataset.editPlayer) {
+    } else if(b.dataset.editTeam){openTeamEditor(b.dataset.editTeam);return;
+    } else if (b.dataset.editPlayer) {
       const kind = b.dataset.editTeam ? "team" : "player",
         item = (kind === "team" ? state.teams : state.players).find(
           (x) => x.id === (b.dataset.editTeam || b.dataset.editPlayer),
@@ -2167,5 +2175,99 @@ document.addEventListener("click",e=>{
  if(answer&&sportChallengeAnswer===""){sportChallengeAnswer=answer.dataset.sportAnswer;const out=$("#publicHubContent");if(out)out.innerHTML=publicChallenge();return;}
  if(e.target.closest("[data-sport-next]")){sportChallengeIndex++;sportChallengeAnswer="";const out=$("#publicHubContent");if(out)out.innerHTML=publicChallenge();}
 });
+
+// 24 — Ficha da equipe. Dados atuais, partidas e lances têm escopos separados.
+let teamProfileContext="";
+function resetTeamProfileContext(){const current=(C.demo?"demo":user?.uid||"anônimo")+":"+role+":"+canManageRosters();if(current===teamProfileContext)return;teamProfileContext=current;selectedTeamId="";teamHistoryRows=[];teamHistoryLoaded=false;teamEventsKey="";teamProfileRequest++;teamProfileBusy=false;}
+let selectedTeamId="",teamProfileTab="data",teamProfileSport="",teamProfileChamp="",teamHistoryRows=[],teamHistoryLoaded=false,teamProfileBusy=false,teamEventsKey="",teamProfileRequest=0;
+function teamSports(t){return [...new Set([...(t.sports||[]),...state.matches.filter(m=>[m.home,m.away].includes(t.id)).map(m=>m.sport)])].sort();}
+function teamMatches(){return state.matches.filter(m=>[m.home,m.away].includes(selectedTeamId)&&(!teamProfileSport||m.sport===teamProfileSport)&&(!teamProfileChamp||(m.championshipId||"__unlinked__")===teamProfileChamp));}
+function teamMatchKey(){return teamMatches().map(m=>m.id+":"+(m._revision||m.events?.length||0)).sort().join("|");}
+function teamStatistics(matches,teamId){
+ const groups=new Map();
+ for(const m of matches){if(!["Encerrada","Homologada"].includes(m.status))continue;
+  const score=gameResult(m),side=m.home===teamId?0:1;
+  if(!Array.isArray(score)||score.length!==2||!score.every(n=>Number.isInteger(n)&&n>=0))continue;
+  if(!groups.has(m.sport))groups.set(m.sport,{sport:m.sport,games:0,wins:0,draws:0,losses:0,for:0,against:0});
+  const r=groups.get(m.sport),a=score[side],b=score[1-side];r.games++;r.for+=a;r.against+=b;if(a>b)r.wins++;else if(a===b)r.draws++;else r.losses++;
+ }
+ return [...groups.values()].sort((a,b)=>a.sport.localeCompare(b.sport,"pt-BR"));
+}
+function teamAthleteEvents(matches,teamId){
+ const rows=new Map();
+ for(const m of matches){if(m.status==="Cancelada")continue;const side=m.home===teamId?0:1;
+  for(const e of m.events||[]){if(e.side!==side||!["ponto","cartão amarelo","cartão vermelho","falta"].includes(e.type))continue;
+   const player=e.player||"",key=m.sport+":"+player;
+   if(!rows.has(key))rows.set(key,{sport:m.sport,player:player?(m.roster||[]).find(p=>p.id===player)?.name||state.players.find(p=>p.id===player)?.name||player:"Sem atleta informado",points:0,yellow:0,red:0,fouls:0});
+   const r=rows.get(key);if(e.type==="ponto")r.points+=Number(e.value)||0;if(e.type==="cartão amarelo")r.yellow++;if(e.type==="cartão vermelho")r.red++;if(e.type==="falta")r.fouls++;
+  }
+ }
+ return [...rows.values()];
+}
+function teamHistoryOutput(){
+ if(!teamHistoryLoaded)return empty("Clique em Carregar histórico para consultar as alterações registradas da equipe e de seus jogadores.");
+ const labels={name:"Nome",short:"Sigla",coach:"Técnico(a)",category:"Categoria",badge:"Escudo",sports:"Modalidades",archived:"Arquivada",team:"Equipe",number:"Número",position:"Posição",reserve:"Reserva"};
+ return teamHistoryRows.map(r=>{
+  const changes=Object.entries(labels).filter(([key])=>JSON.stringify(r.before?.[key]??null)!==JSON.stringify(r.after?.[key]??null)).map(([key,label])=>{
+   const show=v=>key==="badge"?(v?"Imagem cadastrada":"Sem imagem"):Array.isArray(v)?v.join(", "):typeof v==="boolean"?(v?"Sim":"Não"):v??"—";
+   return tr([label,show(r.before?.[key]),show(r.after?.[key])]);
+  });
+  return `<details class="event"><summary>${esc(r.entity==="teams"?"Equipe":"Jogador")} • ${esc(r.after?.name||r.before?.name||r.target)} • ${esc(r.detail?.type||"Alteração")} • ${esc(removedDate(r.at))}</summary><p>Responsável: ${esc(r.actor||"Não informado")}<br>Motivo/registro: ${esc(r.detail?.reason||r.detail?.text||"Não informado")}<br>ID: ${esc(r.ID||r.id||r.target)}</p>${table(["Campo","Antes","Depois"],changes)}</details>`;
+ }).join("")||empty("Não há alterações registradas para esta equipe ou seu elenco nesta versão.");
+}
+function teamProfileView(){
+ const t=state.teams.find(t=>t.id===selectedTeamId);if(!t||!canManageRosters()){selectedTeamId="";return empty("Equipe indisponível para esta conta.");}
+ const roster=state.players.filter(p=>p.team===t.id).slice().sort(alphabetical),games=teamMatches();
+ const tabs=[["data","Dados da equipe"],["roster","Elenco"],["games","Partidas"],...(role==="admin"?[["stats","Estatísticas"],["history","Histórico"]]:[])];
+ if(!tabs.some(([id])=>id===teamProfileTab))teamProfileTab="data";
+ const championships=[...new Map(state.matches.filter(m=>[m.home,m.away].includes(t.id)).map(m=>[m.championshipId||"__unlinked__",m.championshipId?(m.competition||"Campeonato"):"Sem vínculo com campeonato"])).entries()];
+ let content="";
+ if(teamProfileTab==="data")content=`<section class="card"><h3>Cadastro atual</h3><dl class="account-details"><div><dt>Nome</dt><dd>${esc(t.name)}</dd></div><div><dt>Sigla</dt><dd>${esc(t.short||"Não informada")}</dd></div><div><dt>Técnico(a)</dt><dd>${esc(t.coach||"Não informado")}</dd></div><div><dt>Categoria</dt><dd>${esc(t.category||"Não informada")}</dd></div><div><dt>Modalidades cadastradas</dt><dd>${esc((t.sports||[]).join(", ")||"Ainda não informadas")}</dd></div><div><dt>Situação</dt><dd>${t.archived?"Arquivada":"Ativa"}</dd></div></dl><p class="muted">O cadastro atual não reescreve os elencos e técnicos congelados nas súmulas das partidas já criadas.</p><button type="button" data-profile-edit>Editar dados e modalidades</button>${role==="admin"?` <button type="button" data-profile-archive ${teamProfileBusy?"disabled":""}>${t.archived?"Reativar equipe":"Arquivar equipe"}</button><p class="muted">Arquivar preserva nome, jogadores, resultados e histórico. A equipe sai das opções de novos jogos e novos jogadores, e pode ser reativada.</p>`:""}</section>`;
+ if(teamProfileTab==="roster")content=`<section class="card"><h3>Elenco atual • ${roster.length} jogador(es)</h3>${!t.archived?'<button type="button" data-profile-new-player>Adicionar jogador nesta equipe</button>':'<p>Reative a equipe antes de alterar o elenco.</p>'}${roster.length?table(["Nome","Número","Posição","Escalação","Ação"],roster.map(p=>tr([p.name,p.number,p.position,p.reserve?"Reserva / banco":"Titular"]).replace("</tr>",`<td>${!t.archived?`<button type="button" data-profile-player="${esc(p.id)}">Editar jogador</button>`:"—"}</td></tr>`))):empty("Nenhum jogador cadastrado nesta equipe.")}<p class="muted">Cartões, faltas e pontos são registrados na partida. Consulte Estatísticas para os lances dos jogos selecionados.</p></section>`;
+ if(teamProfileTab==="games")content=`<div class="grid">${games.map(m=>matchCard(m,true)).join("")||empty("Nenhuma partida corresponde a esta equipe e aos filtros.")}</div>${role!=="admin"?'<p>Esta conta vê somente suas partidas atribuídas.</p>':""}`;
+ if(teamProfileTab==="stats"){
+  const stats=teamStatistics(games,t.id),ready=C.demo||teamEventsKey===teamMatchKey(),events=ready?teamAthleteEvents(games,t.id):[];
+  content=`<section class="card"><h3>Resultados por modalidade</h3><p>Somente partidas encerradas ou homologadas. No vôlei, o resultado conta sets; nas demais modalidades, o placar. As modalidades não são somadas entre si.</p>${stats.length?table(["Modalidade","Jogos","Vitórias","Empates","Derrotas","A favor","Contra"],stats.map(r=>tr([r.sport,r.games,r.wins,r.draws,r.losses,r.for,r.against]))):empty("Ainda não há partidas concluídas nesta seleção.")}</section><section class="card"><h3>Jogadores, cartões e faltas</h3><p>Lances dos jogos selecionados, incluindo jogos em andamento e excluindo cancelados. Pontos/gols dos lances consideram os estornos registrados. Lances sem atleta ficam em uma linha própria.</p>${!C.demo?`<button type="button" data-profile-events ${teamProfileBusy?"disabled":""}>${teamProfileBusy?"Carregando…":"Carregar / atualizar lances"}</button>`:""}${ready?(events.length?table(["Modalidade","Jogador","Pontos/gols dos lances","Amarelos","Vermelhos","Faltas"],events.map(r=>tr([r.sport,r.player,r.points,r.yellow,r.red,r.fouls]))):empty("Nenhum lance correspondente carregado.")):empty("Carregue os lances para consultar cartões, faltas e pontuação individual.")}</section>`;
+ }
+ if(teamProfileTab==="history")content=`<section class="card"><h3>Alterações da equipe e elenco</h3><button type="button" data-profile-history ${teamProfileBusy?"disabled":""}>${teamProfileBusy?"Consultando…":"Carregar / atualizar histórico"}</button><p class="muted">Consulta sob demanda, exclusiva do administrador principal. Datas em horário de Brasília.</p>${teamHistoryOutput()}</section>`;
+ return `<section class="card team-profile-heading"><button type="button" data-profile-back>← Voltar às equipes</button><div class="team-profile-title">${badge(t)}<div><span class="tag">FICHA DA EQUIPE • ${t.archived?"ARQUIVADA":"ATIVA"}</span><h2>${esc(t.name)}</h2><p>Técnico(a): ${esc(t.coach||"Não informado")}</p></div></div><nav aria-label="Ficha da equipe">${tabs.map(([id,label])=>`<button type="button" data-profile-tab="${id}" class="${id===teamProfileTab?"active":""}">${label}</button>`).join("")}</nav>${["games","stats"].includes(teamProfileTab)?`<div class="formgrid"><label>Modalidade na ficha<select data-profile-sport><option value="">Todas as modalidades</option>${D.SPORTS.map(s=>`<option ${s===teamProfileSport?"selected":""}>${esc(s)}</option>`).join("")}</select></label><label>Campeonato / temporada<select data-profile-champ><option value="">Todos os campeonatos</option>${championships.map(([id,label])=>`<option value="${esc(id)}" ${id===teamProfileChamp?"selected":""}>${esc(label)}</option>`).join("")}</select></label></div>`:""}</section>${content}`;
+}
+function openTeamEditor(id){
+ if(!canManageRosters())return;const t=state.teams.find(t=>t.id===id);if(!t)return;
+ selectedTeamId="";teamProfileBusy=false;teamProfileRequest++;section="teams";render();const f=$("#team");if(!f)return;
+ for(const key of ["name","short","coach","category"]){f.elements[key].value=t[key]||"";}f.elements.recordId.value=t.id;
+ for(const o of f.elements.sports.options)o.selected=(t.sports||[]).includes(o.value);
+ setBadgeDraft(t.badge||"");f.scrollIntoView({block:"start"});f.elements.name.focus({preventScroll:true});toast("Altere os dados e clique em Salvar equipe.");
+}
+document.addEventListener("click",async e=>{
+ const b=e.target.closest("[data-team-profile],[data-profile-back],[data-profile-tab],[data-profile-edit],[data-profile-archive],[data-profile-new-player],[data-profile-player],[data-profile-events],[data-profile-history]");if(!b)return;
+ try{
+  if(!canManageRosters())throw Error("Conta sem acesso aos cadastros.");
+  if(b.dataset.teamProfile){teamProfileBusy=false;selectedTeamId=b.dataset.teamProfile;teamProfileTab="data";teamProfileSport="";teamProfileChamp="";teamHistoryRows=[];teamHistoryLoaded=false;teamEventsKey="";teamProfileRequest++;section="teams";render();return;}
+  if(b.hasAttribute("data-profile-back")){selectedTeamId="";teamProfileBusy=false;teamProfileRequest++;render();return;}
+  if(b.dataset.profileTab){if(["stats","history"].includes(b.dataset.profileTab)&&role!=="admin")return;teamProfileTab=b.dataset.profileTab;render();return;}
+  if(b.hasAttribute("data-profile-edit")){openTeamEditor(selectedTeamId);return;}
+  const teamId=selectedTeamId,t=state.teams.find(t=>t.id===teamId);if(!t)return;
+  if(b.hasAttribute("data-profile-archive")){
+   if(role!=="admin")throw Error("Exclusivo do administrador principal.");
+   const reason=prompt((t.archived?"Motivo para reativar ":"Motivo para arquivar ")+t.name+" (5 a 500 caracteres):");if(reason===null)return;
+   await dispatch({type:"teamArchive",teamId,archived:!t.archived,reason});teamHistoryLoaded=false;return;
+  }
+  if(b.hasAttribute("data-profile-new-player")||b.dataset.profilePlayer){
+   if(t.archived)throw Error("Reative a equipe antes de alterar seu elenco.");
+   selectedTeamId="";section="players";listFilters.players={...listDefaults.players,team:teamId};render();
+   if(b.dataset.profilePlayer)document.querySelector(`[data-edit-player="${CSS.escape(b.dataset.profilePlayer)}"]`)?.click();else{$("#player").elements.team.value=teamId;$("#player").scrollIntoView({block:"start"});}return;
+  }
+  if(role!=="admin"||teamProfileBusy)return;
+  const request=++teamProfileRequest;teamProfileBusy=true;refresh();
+  try{
+   if(b.hasAttribute("data-profile-history")){
+    const rows=C.demo?(state.teamLocalAudit||[]).filter(r=>(r.entity==="teams"&&r.target===teamId)||(r.entity==="players"&&(r.before?.team===teamId||r.after?.team===teamId))).slice().reverse():await cloud.teamHistory(teamId);
+    if(request!==teamProfileRequest||role!=="admin"||selectedTeamId!==teamId)return;teamHistoryRows=rows;teamHistoryLoaded=true;
+   }else{const fingerprint=teamMatchKey();if(!C.demo)await cloud.loadHistory(teamMatches().map(m=>m.id));if(request===teamProfileRequest&&role==="admin"&&selectedTeamId===teamId)teamEventsKey=fingerprint;}
+  }finally{if(request===teamProfileRequest){teamProfileBusy=false;render();}}
+ }catch(error){teamProfileBusy=false;toast(error.message,true);render();}
+});
+document.addEventListener("change",e=>{if(!canManageRosters())return;if(e.target.hasAttribute("data-profile-sport")){teamProfileSport=e.target.value;render();}if(e.target.hasAttribute("data-profile-champ")){teamProfileChamp=e.target.value;render();}});
 
 boot();

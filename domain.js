@@ -111,11 +111,22 @@
         category: str(d.category),
         badge: url(d.badge),
       };
+      const prior=s.teams.find(t=>t.id===d.id);
+      if(Object.hasOwn(d,"sports")||Object.hasOwn(prior||{},"sports")){
+        const sports=d.sports??prior?.sports??[];
+        need(Array.isArray(sports)&&sports.every(x=>SPORTS.includes(x)),"Selecione modalidades válidas.");
+        updated.sports=[...new Set(sports)];
+      }
+      if(Object.hasOwn(prior||{},"archived"))updated.archived=prior.archived;
       if (d.id) s.teams[s.teams.findIndex((t) => t.id === d.id)] = updated;
       else s.teams.push(updated);
+    } else if(a.type==="teamArchive"){
+      const t=team(s,a.teamId);need(typeof a.archived==="boolean","Situação inválida.");
+      need(String(a.reason||"").trim().length>=5&&String(a.reason||"").trim().length<=500,"Informe o motivo (5 a 500 caracteres).");
+      t.archived=a.archived;
     } else if (a.type === "player") {
       const d = a.data;
-      team(s, d.team);
+      need(!team(s, d.team).archived,"Reative a equipe antes de alterar seu elenco.");
       need(str(d.name), "Informe o nome do jogador.");
       need(
         !s.players.some(
@@ -143,8 +154,7 @@
       else s.players.push(updated);
     } else if (a.type === "match") {
       const d = a.data;
-      team(s, d.home);
-      team(s, d.away);
+      need(!team(s, d.home).archived&&!team(s, d.away).archived,"Reative as equipes antes de criar uma partida.");
       need(d.home !== d.away, "Escolha equipes diferentes.");
       need(SPORTS.includes(d.sport), "Modalidade inválida.");
       need(

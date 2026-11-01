@@ -159,12 +159,14 @@ export async function connectSpark({
     historyStop?.();
     historyStop = null;
     historyId = "";
+    const epoch=generation;
     for (const id of ids) {
       const q = F.query(
         F.collection(database, "audit"),
         F.where("target", "==", id),
       );
       const snap = await F.getDocsFromServer(q);
+      if(!isOwner()||epoch!==generation)return;
       cache.set(id, events(snap));
     }
     publish();
@@ -240,7 +242,7 @@ export async function connectSpark({
   async function send(action) {
     if (!session || !authorized()) throw Error("Faça login com uma conta autorizada.");
     const rosterAction=canManageRosters()&&(["team","player"].includes(action.type)||(action.type==="import"&&["team","player"].includes(action.kind)));
-    if (!isOwner() && !rosterAction && (["team", "player", "settings", "match", "import", "correct", "championship", "championshipLink"].includes(action.type) ||
+    if (!isOwner() && !rosterAction && (["team", "player", "settings", "match", "import", "correct", "championship", "championshipLink","teamArchive"].includes(action.type) ||
       !profile?.matches?.includes(action.matchId))) {
       throw Error("Sua conta não tem permissão para esta ação ou partida.");
     }
@@ -304,6 +306,10 @@ export async function connectSpark({
         );
         delete prepared.events;
       }
+    } else if(action.type==="teamArchive"){
+      if(!isOwner())throw Error("Somente o administrador principal arquiva ou reativa equipes.");
+      if(typeof action.archived!=="boolean"||String(action.reason||"").trim().length<5||String(action.reason||"").trim().length>500)throw Error("Informe o motivo (5 a 500 caracteres).");
+      entity="teams";target=action.teamId;
     } else {
       entity = "matches";
       target = action.matchId;
@@ -361,6 +367,10 @@ export async function connectSpark({
             0,
             500,
           );
+        } else if(action.type==="teamArchive"){
+          if(!before)throw Error("Equipe não encontrada.");
+          if((before.archived||false)===action.archived)throw Error("A equipe já está nesta situação.");
+          next={...before,archived:action.archived};detail=M.detail(action.archived?"arquivamento":"reativação");detail.reason=String(action.reason).trim();detail.text=action.archived?"Equipe retirada de novos cadastros e jogos":"Equipe disponível novamente";
         } else {
           if (!before) throw Error("Partida não encontrada.");
           const result = M.applyMatch(
@@ -624,6 +634,16 @@ export async function connectSpark({
     loadHistory,
     stopHistory,
     auditRows,
+    teamHistory: async teamId => {
+      if(!isOwner())throw Error("Histórico exclusivo do administrador principal.");
+      const epoch=generation;
+      const snapshots=await Promise.all([
+        F.getDocsFromServer(F.query(F.collection(database,"audit"),F.where("target","==",teamId))),
+        F.getDocsFromServer(F.query(F.collection(database,"audit"),F.where("entity","==","players")))
+      ]);
+      if(!isOwner()||epoch!==generation)throw Error("A sessão mudou. Consulte novamente.");
+      return [...new Map(snapshots.flatMap(s=>s.docs.map(d=>({ID:d.id,...d.data()}))).map(r=>[r.ID,r])).values()].filter(r=>(r.entity==="teams"&&r.target===teamId)||(r.entity==="players"&&(r.before?.team===teamId||r.after?.team===teamId))).sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
+    },
     cleanupHistory: async () => {
       if(!isOwner())throw Error("Histórico exclusivo do administrador principal.");
       const snap=await F.getDocsFromServer(F.collection(database,"cleanupAudit"));
