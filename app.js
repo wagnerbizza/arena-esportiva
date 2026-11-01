@@ -1839,7 +1839,7 @@ function setupTutorial() {
   dialog.style.cssText="width:min(92vw,650px);max-height:85vh;overflow:auto;background:var(--panel);color:var(--text);border:2px solid var(--line);border-radius:12px;padding:24px";
   dialog.innerHTML='<p id="arenaTutorialProgress" class="muted" aria-live="polite"></p><h2 id="arenaTutorialTitle" tabindex="-1"></h2><p id="arenaTutorialBody"></p><p class="muted">Este guia apenas orienta: não cria nem altera registros.</p><div class="toolbar"><button type="button" id="arenaTutorialPrevious">Anterior</button><button type="button" id="arenaTutorialNext" class="primary">Próximo</button><button type="button" id="arenaTutorialClose">Fechar guia</button></div>';
   document.body.append(dialog);
-  open.addEventListener("click",()=>{hideContextHelp();tutorialReturnFocus=document.body.classList.contains("has-account-menu")?$("#accountMenuToggle"):document.activeElement;tutorialIndex=0;drawTutorial();dialog.showModal();document.getElementById("arenaTutorialTitle").focus();});
+  open.addEventListener("click",()=>{hideContextHelp();tutorialReturnFocus=document.body.classList.contains("has-account-menu")?$("#accountMenuToggle"):document.activeElement?.closest("#publicTools")?$("#publicTools > summary"):document.activeElement;tutorialIndex=0;drawTutorial();dialog.showModal();document.getElementById("arenaTutorialTitle").focus();});
   document.getElementById("arenaTutorialPrevious").addEventListener("click",()=>{tutorialIndex--;drawTutorial();document.getElementById("arenaTutorialTitle").focus();});
   document.getElementById("arenaTutorialNext").addEventListener("click",()=>{if(tutorialIndex>=tutorialSteps().length-1)dialog.close();else{tutorialIndex++;drawTutorial();document.getElementById("arenaTutorialTitle").focus();}});
   document.getElementById("arenaTutorialClose").addEventListener("click",()=>dialog.close());
@@ -2085,7 +2085,7 @@ function setupAccountTools(){
  const icon='<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><circle cx="12" cy="4" r="2"/><path d="M3 8h18M12 7v7m0 0-5 7m5-7 5 7"/></svg>';
  region.insertAdjacentHTML("afterbegin",`<button type="button" class="preferences-entry" data-open-accessibility>${icon}<span>Preferências de leitura</span></button><button type="button" class="accessibility-float" data-open-accessibility aria-label="Abrir opções de acessibilidade" title="Acessibilidade">${icon}</button>`);
  let returnFocus=null;
- const openPreferences=source=>{hideContextHelp();closeAccountMenu();returnFocus=source?.closest("#accountPopover")?$("#accountMenuToggle"):source; if(!dialog.open)dialog.showModal();$("#arenaPreferencesTitle").focus();};
+ const openPreferences=source=>{hideContextHelp();closeAccountMenu();returnFocus=source?.closest("#accountPopover")?$("#accountMenuToggle"):source?.closest("#publicTools")?$("#publicTools > summary"):source; if(!dialog.open)dialog.showModal();$("#arenaPreferencesTitle").focus();};
  dialog.addEventListener("close",()=>{hideContextHelp();if(returnFocus?.isConnected)returnFocus.focus();});
  document.addEventListener("click",e=>{
   const toggle=e.target.closest("[data-account-menu-toggle]");
@@ -2495,3 +2495,20 @@ document.addEventListener('click',event=>{
   revealNavigationDestination(selector);
  });
 },true);
+
+// 31 — Público: preferências e ajuda agrupadas; acessibilidade sempre à mão.
+function setupPublicTools(){
+ if(admin)return;
+ const bar=document.querySelector('.accessibility-bar');if(!bar)return;
+ const tools=document.createElement('details');tools.id='publicTools';tools.className='public-tools';
+ const summary=document.createElement('summary');summary.textContent='Preferências e ajuda';
+ const controls=document.createElement('div');controls.className='public-tools-options';
+ tools.append(summary,controls);
+ for(const item of bar.querySelectorAll(':scope > .preferences-entry,:scope > [data-open-tutorial],:scope > [data-training-entry]'))controls.append(item);
+ bar.prepend(tools);
+ document.addEventListener('click',event=>{
+  if(event.target.closest('#publicTools button,#publicTools a')||!event.target.closest('#publicTools'))tools.open=false;
+ });
+ tools.addEventListener('keydown',event=>{if(event.key==='Escape'){tools.open=false;summary.focus();}});
+}
+setupPublicTools();

@@ -1329,3 +1329,13 @@ button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,s
 @media(max-width:380px){
  .workspace-disclosures > details > summary {min-height:0;}
 }
+
+/* 36 — Entrada compacta de preferências e ajuda no painel público. */
+.public-tools {position:relative;margin:0;padding:0;border:0;background:transparent;}
+.public-tools > summary {cursor:pointer;list-style:none;display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font-size:.9rem;}
+.public-tools > summary::after {content:'+';font-size:1.2rem;}
+.public-tools[open] > summary::after {content:'−';}
+.public-tools > summary::-webkit-details-marker {display:none;}
+.public-tools-options {position:absolute;left:0;top:calc(100% + 8px);z-index:510;display:grid;gap:8px;width:320px;max-width:calc(100vw - 40px);padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:0 8px 24px #0005;box-sizing:border-box;}
+.public-tools-options > button,.public-tools-options > a {width:100%;margin:0!important;text-align:left;white-space:normal;box-sizing:border-box;}
+body:not([data-admin="true"]) .hero {padding-top:12px;padding-bottom:16px;}
