@@ -1344,3 +1344,15 @@ body:not([data-admin="true"]) .hero {padding-top:12px;padding-bottom:16px;}
 body:not([data-admin="true"]) .accessibility-bar {justify-content:center;}
 body:not([data-admin="true"]) .public-tools {flex:0 1 auto;max-width:100%;}
 body:not([data-admin="true"]) .public-tools-options {left:50%;right:auto;transform:translateX(-50%);}
+
+/* 38 — Ajuda discreta ao lado do acesso da organização. */
+body:not([data-admin="true"]) .public-header-actions {display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px;min-width:0;}
+body:not([data-admin="true"]) header .public-tools > summary {min-height:44px;box-sizing:border-box;padding:9px 12px;font-size:.85rem;font-weight:500;border:1px solid var(--line);border-left:2px solid var(--accent);background:transparent;color:var(--text);}
+body:not([data-admin="true"]) header .public-tools > summary:hover {background:var(--panel);}
+body:not([data-admin="true"]) header .public-tools > summary:focus-visible {outline:3px solid var(--accent);outline-offset:3px;}
+body:not([data-admin="true"]) header .public-tools-options {left:auto;right:0;transform:none;}
+body:not([data-admin="true"]) .accessibility-bar {margin:0;padding:0;min-height:0;border:0;}
+@media(max-width:600px){
+ body:not([data-admin="true"]) .public-header-actions {justify-content:flex-start;}
+ body:not([data-admin="true"]) header .public-tools-options {left:0;right:auto;max-width:calc(100vw - 40px);}
+}

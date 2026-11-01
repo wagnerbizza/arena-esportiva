@@ -2505,7 +2505,10 @@ function setupPublicTools(){
  const controls=document.createElement('div');controls.className='public-tools-options';
  tools.append(summary,controls);
  for(const item of bar.querySelectorAll(':scope > .preferences-entry,:scope > [data-open-tutorial],:scope > [data-training-entry]'))controls.append(item);
- bar.prepend(tools);
+ const organizationLink=document.querySelector('header a[href*="painel.html"]');
+ const actions=organizationLink?.parentElement;
+ if(actions){actions.classList.add('public-header-actions');actions.insertBefore(tools,organizationLink);}
+ else bar.prepend(tools);
  document.addEventListener('click',event=>{
   if(event.target.closest('#publicTools button,#publicTools a')||!event.target.closest('#publicTools'))tools.open=false;
  });
