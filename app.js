@@ -175,6 +175,7 @@ const canManageRosters = () => role === "admin" || (role === "operator" && opera
 const accountRole = () => C.demo ? "Demonstração local" : role === "admin" ? "Administrador principal" : role === "operator" ? "Operador" : "Aguardando autorização";
 const accountName = () => user?.displayName || (state.users || []).find((p) => p.id === user?.uid)?.name || user?.email?.split("@")[0] || "Conta conectada";
 function renderBrandAndIdentity() {
+  updateArenaFavicon();
   const brand = $("#systemBrand");
   if (brand) brand.innerHTML = `<span class="system-logo">${state.settings.logo ? `<img src="${esc(state.settings.logo)}" alt="Logo da organização" onerror="this.hidden=true">` : '<span aria-hidden="true">◈</span>'}</span><span class="brand-copy"><b>${esc(state.settings.title || "ARENA")}</b><small>CENTRAL ESPORTIVA</small></span>`;
   const identity = $("#sessionIdentity");
@@ -186,7 +187,7 @@ function renderBrandAndIdentity() {
 }
 function settingsView() {
   const s = state.settings;
-  return `<div class="card"><h2>Identidade visual e configurações</h2><p class="muted">A aparência é compartilhada pelo painel público e pela central. Somente o administrador principal pode alterá-la.</p><form id="settings"><div class="formgrid">${field("Título do sistema", "title", "text", `value="${esc(s.title)}" required maxlength="100"`)}${field("Subtítulo", "subtitle", "text", `value="${esc(s.subtitle)}" maxlength="200"`)}${field("Cor de destaque", "color", "color", `value="${esc(s.color)}"`)}${field("Endereço HTTPS da imagem de capa", "banner", "url", `value="${esc(s.banner)}" maxlength="1500"`)}<label>Logo do sistema (PNG, JPG ou WebP)<input id="systemLogoFile" type="file" accept="image/png,image/jpeg,image/webp"><small>Escolha uma imagem de até 5 MB. Ela será reduzida automaticamente.</small></label><label>Ou endereço HTTPS do logo<input name="logoURL" type="url" maxlength="1500" placeholder="https://..." value="${esc(s.logo?.startsWith("https://") ? s.logo : "")}"></label><input type="hidden" name="logo" value="${esc(s.logo || "")}"><div class="system-logo-preview" id="systemLogoPreview">${systemLogoPreview(s.logo || "")}</div></div><p><button class="primary">Salvar aparência</button></p></form><p class="muted">Escolher ou remover uma imagem só muda a prévia. Clique em Salvar aparência para publicar. Os escudos dos times são alterados na aba Equipes. A assinatura WagnerBIZZA é preservada.</p></div>`;
+  return `<div class="card"><h2>Identidade visual e configurações</h2><p class="muted">A aparência é compartilhada pelo painel público e pela central. Somente o administrador principal pode alterá-la.</p><form id="settings"><div class="formgrid">${field("Título do sistema", "title", "text", `value="${esc(s.title)}" required maxlength="100"`)}${field("Subtítulo", "subtitle", "text", `value="${esc(s.subtitle)}" maxlength="200"`)}${field("Cor de destaque", "color", "color", `value="${esc(s.color)}"`)}${field("Endereço HTTPS da imagem de capa", "banner", "url", `value="${esc(s.banner)}" maxlength="1500"`)}<label>Logo do sistema (PNG, JPG ou WebP)<input id="systemLogoFile" type="file" accept="image/png,image/jpeg,image/webp"><small>Escolha uma imagem de até 5 MB. Ela será reduzida automaticamente.</small></label><label>Ou endereço HTTPS do logo<input name="logoURL" type="url" maxlength="1500" placeholder="https://..." value="${esc(s.logo?.startsWith("https://") ? s.logo : "")}"></label><input type="hidden" name="logo" value="${esc(s.logo || "")}"><div class="system-logo-preview" id="systemLogoPreview">${systemLogoPreview(s.logo || "")}</div></div><p><button class="primary">Salvar aparência</button></p></form><p class="muted">Escolher ou remover uma imagem só muda a prévia. Clique em Salvar aparência para publicar. O logo salvo também será usado como ícone da aba do navegador. Os escudos dos times são alterados na aba Equipes. A assinatura WagnerBIZZA é preservada.</p></div>`;
 }
 function systemLogoPreview(value) {
   return `<div class="system-logo-sample">${value ? `<img src="${esc(value)}" alt="Prévia do logo do sistema" onerror="this.hidden=true">` : '<span class="muted">Sem logo personalizado</span>'}</div><button type="button" data-remove-system-logo>Remover logo</button>`;
@@ -662,12 +663,12 @@ function operate() {
     c = m.clock || M.emptyClock();
   const moves = {
     Agendada: [
-      ["Ao vivo", "Iniciar jogo"],
+      ["Ao vivo", "Iniciar jogo e cronômetro"],
       ["Adiada", "Adiar"],
       ["Cancelada", "Cancelar"],
     ],
     Adiada: [
-      ["Ao vivo", "Iniciar jogo"],
+      ["Ao vivo", "Iniciar jogo e cronômetro"],
       ["Agendada", "Voltar a agendada"],
       ["Cancelada", "Cancelar"],
     ],
@@ -696,8 +697,8 @@ function operate() {
   const buttons = (moves[m.status] || [])
     .filter(
       ([status]) =>
-        role === "admin" ||
-        (!["Cancelada", "Homologada"].includes(status) && !locked),
+        (status !== "Ao vivo" || locked) && (role === "admin" ||
+        (!["Cancelada", "Homologada"].includes(status) && !locked)),
     )
     .map(
       ([status, label]) =>
@@ -718,7 +719,7 @@ function operate() {
         )}</select></label><div class="quick-buttons">${(m.sport === "Basquete" ? [1, 2, 3] : [1]).map((v) => `<button class="quick-score primary" data-quick="${v}" data-side="${side}" ${!live ? "disabled" : ""}>+${v}<small>${m.sport === "Futebol" || m.sport === "Futsal" ? "GOL" : v > 1 ? "PONTOS" : "PONTO"}</small></button>`).join("")}</div></section>`;
     })
     .join("");
-  return `<button data-back>← Voltar às partidas</button><div class="live-console"><div class="console-score">${matchCard(m)}${role === "admin" ? championshipLinkForm(m) : ""}<div class="card"><h3>Jogo e interrupções</h3><form id="interruption"><div class="formgrid"><label>Motivo de pausa / suspensão<select name="pauseReason"><option>Intervalo</option><option>Atendimento em quadra</option><option>Chuva ou condições do local</option><option>Problema técnico</option><option>Decisão da arbitragem</option><option>Outro motivo</option></select></label><label>Detalhes para o público<input name="pauseDetails" maxlength="220" placeholder="Ex.: retorno previsto em 10 minutos"></label></div><div class="toolbar">${buttons}</div></form><p class="muted">Pausar ou suspender o jogo para o cronômetro e informa o motivo ao público. O placar é preservado.</p>${!locked ? `<form id="stage" class="row"><input name="stage" aria-label="Etapa" value="${esc(m.stage)}" required style="max-width:180px"><button>Atualizar etapa</button></form>${m.sport.startsWith("Vôlei") ? "<p><button data-set>Fechar set e iniciar próximo</button></p>" : ""}<hr><h3>Cronômetro</h3><div class="toolbar"><button data-clock-command="${c.running ? "parar" : "iniciar"}" ${!c.running && !live ? "disabled" : ""}>${c.running ? "Parar somente o relógio" : "Iniciar relógio"}</button></div><details><summary>Ajustar tempo e contagem</summary><form id="clock-config"><div class="formgrid"><label>Modo<select name="clockMode"><option value="up" ${c.mode === "up" ? "selected" : ""}>Crescente (00:00 →)</option><option value="down" ${c.mode === "down" ? "selected" : ""}>Regressivo (duração → 00:00)</option></select></label>${field("Duração da etapa (min)", "durationMin", "number", `min="0" max="360" value="${Math.floor((c.durationMs || 600000) / 60000)}"`)}${field("Tempo já decorrido (min)", "elapsedMin", "number", `min="0" max="360" value="${Math.floor(M.elapsed(m) / 60000)}"`)}${field("Segundos decorridos", "elapsedSec", "number", `min="0" max="59" value="${Math.floor(M.elapsed(m) / 1000) % 60}"`)}${field("Motivo do ajuste", "clockReason", "text", 'required maxlength="300"')}</div><button ${c.running ? "disabled" : ""}>Salvar ajuste do cronômetro</button><p class="muted">Pare o relógio para ajustar. A troca de etapa não zera o tempo automaticamente. Ao chegar a zero, a contagem regressiva aguarda a decisão da arbitragem.</p></form></details>` : ""}</div></div><div class="console-actions"><div class="card quick-panel"><span class="tag">LANÇAMENTO RÁPIDO</span><h2>Marcar ponto</h2><p class="muted">Selecione o atleta, se desejar, e toque na pontuação da equipe.</p><div class="quick-grid">${quick}</div>${!live ? '<p class="public-notice">Os lançamentos ficam disponíveis quando o jogo está Ao vivo.</p>' : ""}</div><div class="card"><details><summary>Cartões, faltas, substituições e outros lances</summary>${
+  return `<button data-back>← Voltar às partidas</button><div class="live-console"><div class="console-score">${matchCard(m)}${matchStartGuide(m)}${role === "admin" ? championshipLinkForm(m) : ""}<div class="card"><h3>Jogo e interrupções</h3><form id="interruption"><div class="formgrid"><label>Motivo de pausa / suspensão<select name="pauseReason"><option>Intervalo</option><option>Atendimento em quadra</option><option>Chuva ou condições do local</option><option>Problema técnico</option><option>Decisão da arbitragem</option><option>Outro motivo</option></select></label><label>Detalhes para o público<input name="pauseDetails" maxlength="220" placeholder="Ex.: retorno previsto em 10 minutos"></label></div><div class="toolbar">${buttons}</div></form><p class="muted">Pausar ou suspender o jogo para o cronômetro e informa o motivo ao público. O placar é preservado.</p>${!locked ? `<form id="stage" class="row"><input name="stage" aria-label="Etapa" value="${esc(m.stage)}" required style="max-width:180px"><button>Atualizar etapa</button></form>${m.sport.startsWith("Vôlei") ? "<p><button data-set>Fechar set e iniciar próximo</button></p>" : ""}<hr><h3>Cronômetro</h3><div class="toolbar"><button data-clock-command="${c.running ? "parar" : "iniciar"}" ${!c.running && !live ? "disabled" : ""}>${c.running ? "Parar somente o relógio" : "Iniciar relógio"}</button></div><details id="clockSettings"><summary>Configurar duração e ajustar cronômetro</summary><p>Escolha um atalho ou preencha os tempos abaixo conforme o regulamento do seu evento. O atalho apenas preenche; clique em Salvar ajuste para aplicar.</p><div class="toolbar">${[10,20,45].map(n=>`<button type="button" data-clock-preset="${n}" ${c.running?"disabled":""}>${n} minutos</button>`).join("")}</div><form id="clock-config"><div class="formgrid"><label>Modo<select name="clockMode"><option value="up" ${c.mode === "up" ? "selected" : ""}>Crescente (00:00 →)</option><option value="down" ${c.mode === "down" ? "selected" : ""}>Regressivo (duração → 00:00)</option></select></label>${field("Duração da etapa (min)", "durationMin", "number", `min="0" max="360" value="${Math.floor((c.durationMs || 600000) / 60000)}"`)}${field("Tempo já decorrido (min)", "elapsedMin", "number", `min="0" max="360" value="${Math.floor(M.elapsed(m) / 60000)}"`)}${field("Segundos decorridos", "elapsedSec", "number", `min="0" max="59" value="${Math.floor(M.elapsed(m) / 1000) % 60}"`)}${field("Motivo do ajuste", "clockReason", "text", 'required maxlength="300"')}</div><button ${c.running ? "disabled" : ""}>Salvar ajuste do cronômetro</button><p class="muted">Pare o relógio para ajustar. A troca de etapa não zera o tempo automaticamente. Ao chegar a zero, a contagem regressiva aguarda a decisão da arbitragem.</p></form></details>` : ""}</div></div><div class="console-actions"><div class="card quick-panel"><span class="tag">LANÇAMENTO RÁPIDO</span><h2>Marcar ponto</h2><p class="muted">Selecione o atleta, se desejar, e toque na pontuação da equipe.</p><div class="quick-grid">${quick}</div>${!live ? '<p class="public-notice">Os lançamentos ficam disponíveis quando o jogo está Ao vivo.</p>' : ""}</div><div class="card"><details><summary>Cartões, faltas, substituições e outros lances</summary>${
     locked
       ? "<p>Partida bloqueada.</p>"
       : `<form id="event"><div class="formgrid">${select("Equipe", "side", `<option value="0">${esc(name(m.home))}</option><option value="1">${esc(name(m.away))}</option>`)}${select(
@@ -2156,8 +2157,11 @@ document.addEventListener("click",e=>{
 });
 
 // 22 — Painel público: estatísticas dos jogos publicados e diversão apenas local.
-let publicArea="all",sportChallengeIndex=0,sportChallengeAnswer="";
+let publicArea="all",sportChallengeIndex=0,sportChallengeAnswer="",quizHits=0,quizAttempts=0;
 const sportChallenges=[
+ {question:"O placar estava 2 × 1 e a equipe visitante marcou. Como fica?",answers:["3 × 1","2 × 2","2 × 1"],correct:1,explanation:"O gol visitante acrescenta um ao segundo número: 2 × 2."},
+ {question:"Um time marcou 3 gols e sofreu 1. Qual é o saldo de gols?",answers:["+2","+4","−2"],correct:0,explanation:"Saldo é gols marcados menos sofridos: 3 − 1 = +2."},
+ {question:"O relógio marca 12:45. Após 15 segundos, qual será o tempo?",answers:["12:60","13:15","13:00"],correct:2,explanation:"Quinze segundos completam o minuto: 13:00."},
  {question:"Qual jogador tem a função de proteger o gol no futebol?",answers:["Goleiro","Levantador","Pivô"],correct:0,explanation:"O goleiro atua na defesa do gol."},
  {question:"Em qual modalidade a cesta é usada para pontuar?",answers:["Vôlei","Basquete","Futebol"],correct:1,explanation:"A cesta faz parte do basquete."},
  {question:"Qual destas modalidades tem uma rede dividindo a quadra?",answers:["Futebol","Basquete","Vôlei"],correct:2,explanation:"No vôlei, a rede separa os dois lados da quadra."}
@@ -2169,14 +2173,14 @@ function publicStatistics(){
 }
 function publicChallenge(){
  const q=sportChallenges[sportChallengeIndex%sportChallenges.length],answered=sportChallengeAnswer!=="";
- return `<section class="card sport-challenge"><span class="tag">INTERVALO ESPORTIVO</span><h2>Desafio rápido</h2><p>Uma brincadeira para aprender enquanto acompanha as partidas. Suas respostas ficam apenas nesta página.</p><h3>${esc(q.question)}</h3><div class="toolbar">${q.answers.map((a,i)=>`<button type="button" data-sport-answer="${i}" ${answered?"disabled":""}>${esc(a)}</button>`).join("")}</div>${answered?`<p role="status"><strong>${Number(sportChallengeAnswer)===q.correct?"Acertou!":"Vamos aprender!"}</strong> ${esc(q.explanation)}</p><button type="button" data-sport-next>Próximo desafio</button>`:""}</section>`;
+ return `<section class="card sport-challenge"><span class="tag">INTERVALO ESPORTIVO</span><h2>Desafio rápido</h2><p>Uma brincadeira para aprender enquanto acompanha as partidas. Suas respostas ficam apenas nesta página.</p><p class="quiz-score">Seu placar: <strong>${quizHits} acerto(s) em ${quizAttempts} resposta(s)</strong></p><h3>${esc(q.question)}</h3><div class="toolbar">${q.answers.map((a,i)=>`<button type="button" data-sport-answer="${i}" ${answered?"disabled":""}>${esc(a)}</button>`).join("")}</div>${answered?`<p role="status"><strong>${Number(sportChallengeAnswer)===q.correct?"Acertou!":"Vamos aprender!"}</strong> ${esc(q.explanation)}</p><button type="button" data-sport-next>Próximo desafio</button>`:""}</section>`;
 }
 function publicHub(){
  const tabs=[["all","Todos os jogos"],["live","Ao vivo"],["schedule","Agenda"],["results","Resultados"],["standings","Classificação"],["fun","Diversão"]];
- return `${publicStatistics()}<nav class="public-navigation" aria-label="Conteúdo do painel público">${tabs.map(([id,label])=>`<button type="button" data-public-area="${id}" class="${id===publicArea?"active":""}" ${id===publicArea?'aria-current="page"':""}>${label}</button>`).join("")}</nav><div id="publicHubContent">${publicHubContent()}</div>`;
+ return `${publicStatistics()}${publicSportSummary()}<nav class="public-navigation" aria-label="Conteúdo do painel público">${tabs.map(([id,label])=>`<button type="button" data-public-area="${id}" class="${id===publicArea?"active":""}" ${id===publicArea?'aria-current="page"':""}>${label}</button>`).join("")}</nav><div id="publicHubContent">${publicHubContent()}</div>`;
 }
 function publicHubContent(){
- if(publicArea==="fun")return publicChallenge();
+ if(publicArea==="fun")return fanZone();
  if(publicArea==="standings")return standingsPanel()||empty("A classificação estará disponível quando houver partidas vinculadas a um campeonato de futebol.");
  return `<div id="publicMatches" class="grid">${publicMatches(publicFilter)}</div>${publicArea==="all"?'<section class="card public-locations"><h2>Esporte em diferentes locais</h2><p>Veja o local informado em cada partida. Use a modalidade, a agenda e os jogos ao vivo para acompanhar os eventos publicados pela organização.</p></section>':""}`;
 }
@@ -2186,8 +2190,8 @@ document.addEventListener("click",e=>{
  const area=e.target.closest("[data-public-area]");
  if(area){publicArea=area.dataset.publicArea;render();return;}
  const answer=e.target.closest("[data-sport-answer]");
- if(answer&&sportChallengeAnswer===""){sportChallengeAnswer=answer.dataset.sportAnswer;const out=$("#publicHubContent");if(out)out.innerHTML=publicChallenge();return;}
- if(e.target.closest("[data-sport-next]")){sportChallengeIndex++;sportChallengeAnswer="";const out=$("#publicHubContent");if(out)out.innerHTML=publicChallenge();}
+ if(answer&&sportChallengeAnswer===""){sportChallengeAnswer=answer.dataset.sportAnswer;quizAttempts++;if(Number(sportChallengeAnswer)===sportChallenges[sportChallengeIndex%sportChallenges.length].correct)quizHits++;const out=$("#publicHubContent");if(out)out.innerHTML=fanZone();return;}
+ if(e.target.closest("[data-sport-next]")){sportChallengeIndex++;sportChallengeAnswer="";const out=$("#publicHubContent");if(out)out.innerHTML=fanZone();}
 });
 
 // 24 — Ficha da equipe. Dados atuais, partidas e lances têm escopos separados.
@@ -2322,5 +2326,61 @@ function teamPlayerEditor(t){
  return `<section class="team-player-editor" aria-labelledby="teamPlayerTitle"><h4 id="teamPlayerTitle">${p.id?"Editar jogador":"Novo jogador"} • ${esc(t.name)}</h4><form id="team-player"><div class="formgrid"><label>Nome do jogador<input name="name" required maxlength="150" value="${v("name")}" autocomplete="off"></label><label>Número da camisa<input name="number" maxlength="8" value="${v("number")}"></label><label>Posição<input name="position" maxlength="50" value="${v("position")}" placeholder="Ex.: goleiro, zagueiro, atacante"></label><label>Escalação no cadastro<select name="reserve"><option value="false" ${!p.reserve?"selected":""}>Titular</option><option value="true" ${p.reserve?"selected":""}>Reserva / banco</option></select></label></div><p class="muted">Salva no elenco atual de ${esc(t.name)}. Não altera jogadores ou escalações das súmulas já criadas. O administrador principal pode consultar a alteração em Histórico de alterações.</p><div class="toolbar"><button class="primary">${p.id?"Salvar alterações do jogador":"Salvar jogador nesta equipe"}</button><button type="button" data-player-editor-cancel>Cancelar edição</button></div></form></section>`;
 }
 document.addEventListener("click",e=>{if(e.target.closest("[data-player-editor-cancel]")){teamPlayerDraft=null;render();}});
+
+// 27 — Operação guiada. A transição para Ao vivo já inicia o relógio no modelo auditado.
+// Se o jogo já estiver Ao vivo, o atalho envia apenas a ação de iniciar o relógio.
+let guidedStartBusy=false;
+function matchStartGuide(m){
+ const ended=["Encerrada","Homologada","Cancelada"].includes(m.status),running=!!m.clock?.running,live=m.status==="Ao vivo";
+ const label=live?(running?"Jogo ao vivo e relógio em andamento":"Jogo ao vivo • relógio parado"):ended?"Partida finalizada ou bloqueada":["Pausada","Suspensa"].includes(m.status)?"Partida interrompida":"Prepare o início da partida";
+ return `<section class="card match-guide"><span class="tag">MESA DE OPERAÇÃO</span><h3>${label}</h3><p>${ended?"Confira a súmula e o histórico. Reabrir exige administrador e justificativa.":running?"Use os botões de pontuação para registrar os lances. Pausar o jogo também para o cronômetro.":"Confira as equipes e a etapa. Você pode configurar o tempo antes de começar ou usar o relógio atual."}</p>${!ended?`<div class="toolbar">${!running?`<button type="button" class="primary" data-guided-start ${guidedStartBusy?"disabled":""}>${live?"Iniciar cronômetro":["Pausada","Suspensa"].includes(m.status)?"Retomar jogo e cronômetro":"Iniciar jogo e cronômetro"}</button><button type="button" data-open-clock>Configurar tempo</button>`:""}</div><small>Iniciar/retomar preserva o tempo acumulado. Ajustes e mudanças de etapa continuam disponíveis abaixo.</small>`:""}</section>`;
+}
+function updateArenaFavicon(){
+ const logo=state.settings.logo||"";
+ const safe=/^https:\/\//i.test(logo)||/^data:image\/(png|jpeg|webp);base64,/i.test(logo);
+ const url=safe?logo:"data:image/svg+xml,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#111c24"/><text x="32" y="46" text-anchor="middle" font-size="44" fill="#baff55" font-family="Arial">A</text></svg>');
+ let icon=document.getElementById("arenaFavicon");
+ if(!icon){icon=document.createElement("link");icon.id="arenaFavicon";icon.rel="icon";document.head.appendChild(icon);}
+ if(icon.getAttribute("href")!==url){icon.removeAttribute("type");icon.href=url;}
+}
+document.addEventListener("click",async e=>{
+ const b=e.target.closest("[data-guided-start],[data-open-clock],[data-clock-preset]");if(!b||!admin||!selected)return;
+ const m=state.matches.find(m=>m.id===selected);if(!m)return;
+ try{
+  if(b.hasAttribute("data-open-clock")){const d=$("#clockSettings");if(d){d.open=true;d.scrollIntoView({block:"center"});}return;}
+  if(b.dataset.clockPreset){if(m.clock?.running)throw Error("Pare o relógio antes de configurar.");const f=$("#clock-config");f.elements.durationMin.value=b.dataset.clockPreset;f.elements.clockReason.value="Configuração de duração da etapa: "+b.dataset.clockPreset+" minutos";toast("Duração preenchida. Confira o modo e clique em Salvar ajuste do cronômetro.");return;}
+  if(guidedStartBusy||busy)return;
+  if(!["Agendada","Adiada","Pausada","Suspensa","Ao vivo"].includes(m.status))throw Error("Esta partida não pode iniciar por este atalho.");
+  const matchId=m.id;guidedStartBusy=true;b.disabled=true;
+  if(m.status!=="Ao vivo")await dispatch({type:"status",matchId,status:"Ao vivo",reason:["Pausada","Suspensa"].includes(m.status)?"Retomada pela mesa de operação":"Início pela mesa de operação"});
+  else await dispatch({type:"clock",matchId,command:"iniciar"});
+  toast("Partida ao vivo com cronômetro iniciado.");
+ }catch(error){toast(error.message,true);}finally{if(guidedStartBusy){guidedStartBusy=false;render();}}
+});
+function publicSportSummary(){
+ const matches=state.matches.filter(m=>(!publicFilter||m.sport===publicFilter)&&["Encerrada","Homologada"].includes(m.status));
+ if(!matches.length)return "";
+ const groups=new Map();
+ for(const m of matches){const score=gameResult(m);if(!Array.isArray(score)||!score.every(n=>Number.isInteger(n)&&n>=0))continue;const r=groups.get(m.sport)||{games:0,total:0};r.games++;r.total+=score[0]+score[1];groups.set(m.sport,r);}
+ if(!groups.size)return "";
+ return `<details class="card public-sport-summary"><summary>Estatísticas por modalidade • jogos concluídos</summary><p>Somente partidas encerradas ou homologadas nesta seleção. No vôlei, contamos sets vencidos; as modalidades ficam separadas.</p>${table(["Modalidade","Jogos","Total","Média por jogo"],[...groups].sort(([a],[b])=>a.localeCompare(b,"pt-BR")).map(([sport,r])=>tr([sport,r.games,r.total+" "+(sport.startsWith("Vôlei")?"sets":sport==="Futebol"||sport==="Futsal"||sport==="Handebol"?"gols":"pontos"),(r.total/r.games).toLocaleString("pt-BR",{maximumFractionDigits:1})])))}</details>`;
+}
+// Jogos do público são locais: nenhuma resposta escreve resultados no Firebase.
+let fanActivity="quiz",memoryDeck=[],memoryOpen=[],memoryMatched=[],memoryMoves=0;
+const memorySymbols=["⚽","🏀","🏐","🏆","🥇","🎯"];
+function resetMemory(){memoryDeck=memorySymbols.flatMap((symbol,pair)=>[{symbol,pair},{symbol,pair}]);for(let i=memoryDeck.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[memoryDeck[i],memoryDeck[j]]=[memoryDeck[j],memoryDeck[i]];}memoryOpen=[];memoryMatched=[];memoryMoves=0;}
+function fanZone(){
+ if(!memoryDeck.length)resetMemory();
+ const memory=`<section class="card"><span class="tag">JOGO DA MEMÓRIA</span><h2>Encontre os pares esportivos</h2><p>Abra duas cartas. Quando forem diferentes, clique em Virar novamente para continuar.</p><p role="status">${memoryMatched.length/2} de 6 pares • ${memoryMoves} tentativa(s)${memoryMatched.length===12?" • Parabéns, você completou!":""}</p><div class="memory-grid">${memoryDeck.map((card,i)=>{const show=memoryOpen.includes(i)||memoryMatched.includes(i);return `<button type="button" data-memory-card="${i}" aria-label="${show?card.symbol:"Carta "+(i+1)+", fechada"}" ${show||memoryOpen.length===2?"disabled":""}>${show?card.symbol:"?"}</button>`;}).join("")}</div><div class="toolbar">${memoryOpen.length===2?'<button type="button" data-memory-turn>Virar novamente</button>':""}<button type="button" data-memory-reset>Reiniciar memória</button></div></section>`;
+ return `<section class="card fan-welcome"><span class="tag">ARQUIBANCADA INTERATIVA</span><h2>Torça, acompanhe e divirta-se</h2><p>Os jogos continuam nas abas Ao vivo e Agenda. As brincadeiras são individuais e não alteram placares nem criam rankings públicos.</p><nav class="toolbar" aria-label="Brincadeiras"><button type="button" data-fan-activity="quiz" aria-pressed="${fanActivity==="quiz"}">Quiz esportivo</button><button type="button" data-fan-activity="memory" aria-pressed="${fanActivity==="memory"}">Memória esportiva</button></nav></section>${fanActivity==="memory"?memory:publicChallenge()}`;
+}
+document.addEventListener("click",e=>{
+ if(admin)return;const b=e.target.closest("[data-fan-activity],[data-memory-card],[data-memory-turn],[data-memory-reset]");if(!b)return;
+ if(b.dataset.fanActivity)fanActivity=b.dataset.fanActivity;
+ if(b.hasAttribute("data-memory-reset"))resetMemory();
+ if(b.hasAttribute("data-memory-turn"))memoryOpen=[];
+ if(b.hasAttribute("data-memory-card")){const i=Number(b.dataset.memoryCard);if(!Number.isInteger(i)||!memoryDeck[i]||memoryOpen.length===2||memoryOpen.includes(i)||memoryMatched.includes(i))return;memoryOpen.push(i);if(memoryOpen.length===2){memoryMoves++;if(memoryDeck[memoryOpen[0]].pair===memoryDeck[memoryOpen[1]].pair){memoryMatched.push(...memoryOpen);memoryOpen=[];}}}
+ const out=$("#publicHubContent");if(out)out.innerHTML=fanZone();
+});
 
 boot();
