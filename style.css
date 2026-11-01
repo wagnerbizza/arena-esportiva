@@ -1157,3 +1157,14 @@ input[type="checkbox"]:focus-visible { outline:3px solid var(--focus); outline-o
 .team-profile-heading .formgrid { margin-bottom:0; }
 #team [name="sports"] { min-height:150px; }
 @media(max-width:600px) { .team-profile-title { align-items:flex-start; gap:12px; } .team-profile-heading nav button { flex:1 1 130px; } }
+/* 25 — Localização e equipes com lista primeiro. */
+.location-trail { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 14px; margin:0 0 18px; border-left:3px solid var(--accent); border-radius:6px; background:var(--panel); font-size:14px; line-height:1.6; }
+.location-trail button { padding:5px 8px; min-height:36px; background:transparent; color:var(--text); text-decoration:underline; border:0; }
+.location-trail > span:first-child { color:var(--muted); }
+.team-directory-heading { align-items:flex-start; gap:16px; }
+.team-directory-heading h2 { margin:0 0 8px; }
+.team-directory-heading p { max-width:660px; line-height:1.6; }
+.team-directory-title { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.team-directory-card .toolbar { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+.team-directory-card .toolbar button { flex:1 1 130px; }
+@media(max-width:600px) { .location-trail { font-size:13px; padding:10px; gap:5px; } .team-directory-heading { flex-direction:column; } }
