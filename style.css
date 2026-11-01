@@ -1275,3 +1275,22 @@ footer .connection-indicator {margin-left:18px;}
 .workspace-disclosures .navigation-chevron {display:block;width:18px;height:18px;margin:0;color:var(--accent);transform:none;}
 .workspace-disclosures details[open] .navigation-chevron {transform:rotate(90deg);}
 @media(max-width:700px){.navigation-disclosure-action {font-size:10px;}}
+
+/* Revisão de navegação: uma entrada por função e títulos por perfil. */
+.has-account-menu .accessibility-bar > .preferences-entry,
+.has-account-menu .accessibility-bar > [data-open-tutorial],
+.has-account-menu .accessibility-bar > [data-training-entry] {display:none!important;}
+.has-account-menu .accessibility-bar {margin:0;padding:0;border:0;min-height:0;}
+.accessibility-bar > [data-open-tutorial],.accessibility-bar > [data-training-entry] {margin:0!important;}
+.accessibility-bar {display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.workspace-tabs.workspace-disclosures {grid-template-columns:repeat(var(--workspace-count,4),minmax(0,1fr));align-items:start;}
+.account-popover {width:380px;max-height: min(80vh,720px);overflow-y:auto;overscroll-behavior:contain;}
+.account-popover .account-feature {display:grid;gap:4px;padding:12px;text-decoration:none;line-height:1.4;}
+.account-feature small {font-size:.82rem;font-weight:400;color:var(--muted);}
+.account-popover .account-feature:hover,.account-popover .account-feature:focus-visible {border-color:var(--accent);background:var(--bg);}
+.account-popover [data-open-accessibility] {border-left:3px solid var(--accent);}
+.account-popover [data-account-exit] {margin-top:6px;border-top:2px solid var(--line);}
+.admin-heading h2 {margin:6px 0;font-size:clamp(1.35rem,3vw,1.9rem);}
+button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible {outline:3px solid var(--accent);outline-offset:3px;}
+@media(max-width:700px){.workspace-tabs.workspace-disclosures{grid-template-columns:repeat(2,minmax(0,1fr));}.account-popover{position:fixed;top:80px;right:12px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 104px);}.account-summary{display:none;}}
+@media(max-width:380px){.workspace-tabs.workspace-disclosures{grid-template-columns:1fr;}}

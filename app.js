@@ -174,11 +174,17 @@ let systemLogoBusy = false, systemLogoVersion = 0;
 const canManageRosters = () => role === "admin" || (role === "operator" && operatorPermissions.includes("rosters"));
 const accountRole = () => C.demo ? "Demonstração local" : role === "admin" ? "Administrador principal" : role === "operator" ? "Operador" : "Aguardando autorização";
 const accountName = () => user?.displayName || (state.users || []).find((p) => p.id === user?.uid)?.name || user?.email?.split("@")[0] || "Conta conectada";
+// Títulos por contexto, sem alterar a identidade personalizada salva.
+function systemDisplayName(){
+ const title=String(state.settings.title||'').trim();
+ return !title || /^(arena|arena esportiva)\s*[•—–-]?\s*(esporte|esportes) ao vivo$/i.test(title) ? 'Arena Esportiva' : title;
+}
+function panelDisplayName(){return trainingMode?'Treinamento — dados fictícios':role==='admin'?'Painel do Administrador':role==='operator'?'Painel do Operador':'Acesso à organização';}
 function renderBrandAndIdentity() {
   updateArenaFavicon();
   renderConnectionStatus();
   const brand = $("#systemBrand");
-  if (brand) brand.innerHTML = `<span class="system-logo">${state.settings.logo ? `<img src="${esc(state.settings.logo)}" alt="Logo da organização" onerror="this.hidden=true">` : '<span aria-hidden="true">◈</span>'}</span><span class="brand-copy"><b>${esc(state.settings.title || "ARENA")}</b><small>CENTRAL ESPORTIVA</small></span>`;
+  if (brand) brand.innerHTML = `<span class="system-logo">${state.settings.logo ? `<img src="${esc(state.settings.logo)}" alt="Logo da organização" onerror="this.hidden=true">` : '<span aria-hidden="true">◈</span>'}</span><span class="brand-copy"><b>${esc(systemDisplayName())}</b><small>CENTRAL ESPORTIVA</small></span>`;
   const identity = $("#sessionIdentity");
   if (!identity) return;
   identity.hidden = !admin || (!user && !C.demo);
@@ -527,7 +533,7 @@ function render() {
   resetRemovedContext();
   hideContextHelp();
   document.documentElement.style.setProperty("--accent", state.settings.color);
-  document.title = state.settings.title;
+  document.title = systemDisplayName()+" — "+(admin?panelDisplayName():"Jogos e Resultados");
   renderBrandAndIdentity();
   document.body.classList.toggle("report-mode", admin && section === "reports");
   $("#logout")?.classList.toggle("hidden", C.demo || !user);
@@ -537,7 +543,7 @@ function render() {
     return;
   }
   if (!admin) {
-    app.innerHTML = `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(state.settings.title)}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section><div class="sectionhead"><h2>Acompanhe os jogos</h2><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
+    app.innerHTML = `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section><div class="sectionhead"><h2>Acompanhe os jogos</h2><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
       D.SPORTS,
       (x) => x,
       (x) => x,
@@ -570,7 +576,7 @@ function render() {
     ["documentation", "Guias e documentação"],
     ["monitor", "Operadores e partidas"],
   ];
-  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">PAINEL DA ORGANIZAÇÃO</span><h2>${esc(state.settings.title)}</h2></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${workspaceNavigation(sections)}${locationTrail()}<div id="view">${view()}</div>`;
+  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">${esc(systemDisplayName())}</span><h2>${esc(panelDisplayName())}</h2></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${workspaceNavigation(sections)}${locationTrail()}<div id="view">${view()}</div>`;
   if (busy || accessBusy) app.querySelectorAll("button").forEach((b) => (b.disabled = true));
   if (section === "reports" && $("[name=reportMatch]")) {
     $("[name=reportMatch]").value = reportFilter;
@@ -1833,7 +1839,7 @@ function setupTutorial() {
   dialog.style.cssText="width:min(92vw,650px);max-height:85vh;overflow:auto;background:var(--panel);color:var(--text);border:2px solid var(--line);border-radius:12px;padding:24px";
   dialog.innerHTML='<p id="arenaTutorialProgress" class="muted" aria-live="polite"></p><h2 id="arenaTutorialTitle" tabindex="-1"></h2><p id="arenaTutorialBody"></p><p class="muted">Este guia apenas orienta: não cria nem altera registros.</p><div class="toolbar"><button type="button" id="arenaTutorialPrevious">Anterior</button><button type="button" id="arenaTutorialNext" class="primary">Próximo</button><button type="button" id="arenaTutorialClose">Fechar guia</button></div>';
   document.body.append(dialog);
-  open.addEventListener("click",()=>{hideContextHelp();tutorialReturnFocus=document.activeElement;tutorialIndex=0;drawTutorial();dialog.showModal();document.getElementById("arenaTutorialTitle").focus();});
+  open.addEventListener("click",()=>{hideContextHelp();tutorialReturnFocus=document.body.classList.contains("has-account-menu")?$("#accountMenuToggle"):document.activeElement;tutorialIndex=0;drawTutorial();dialog.showModal();document.getElementById("arenaTutorialTitle").focus();});
   document.getElementById("arenaTutorialPrevious").addEventListener("click",()=>{tutorialIndex--;drawTutorial();document.getElementById("arenaTutorialTitle").focus();});
   document.getElementById("arenaTutorialNext").addEventListener("click",()=>{if(tutorialIndex>=tutorialSteps().length-1)dialog.close();else{tutorialIndex++;drawTutorial();document.getElementById("arenaTutorialTitle").focus();}});
   document.getElementById("arenaTutorialClose").addEventListener("click",()=>dialog.close());
@@ -1864,7 +1870,7 @@ function setupTraining() {
   if(!trainingMode){
     const link=document.createElement("a");link.className="button";link.style.margin="8px 0 0 8px";
     const url=new URL("painel.html",location.href);url.search="?demonstracao=1";
-    link.href=url.href;link.target="_blank";link.rel="noopener";link.textContent="Abrir demonstração para treinar";bar.append(link);return;
+    link.href=url.href;link.target="_blank";link.rel="noopener";link.dataset.trainingEntry="";link.textContent="Treinamento — dados fictícios";bar.append(link);return;
   }
   const banner=document.createElement("section");banner.className="card noprint";banner.style.cssText="margin:16px 5%;border:3px solid #ba891a";
   banner.innerHTML='<h2>Demonstração — somente dados fictícios</h2><p>Este treino funciona apenas neste navegador, sem conexão com o Firebase. Sua conta e os resultados reais permanecem na outra aba.</p><div class="toolbar"><label>Simular perfil<select id="trainingRole"><option value="admin">Administrador</option><option value="operator">Operador</option><option value="operator-rosters">Operador com cadastros</option></select></label><button type="button" id="trainingReset">Reiniciar apenas o treino</button><a class="button" id="trainingCentral">Voltar à central real</a><a class="button" id="trainingPublic" target="_blank" rel="noopener">Ver painel público do treino</a></div><p class="muted">Para começar, abra Partidas → Operar partida → Iniciar jogo. Cadastros e lançamentos daqui não são publicados no evento real. As permissões simuladas são apenas uma orientação; não representam contas reais.</p>';
@@ -2061,7 +2067,7 @@ document.addEventListener("change",e=>{if(!e.target.hasAttribute("data-removed-s
 // 20 — Menu da conta e preferências. Apenas navegação; conserva autenticação/permissões.
 function accountMenuMarkup(){
  const label=C.demo?"Demonstração local":accountName();
- return `<div class="account-summary"><strong>${esc(label)}</strong><small>${esc(accountRole())}</small></div><div class="account-dropdown"><button type="button" id="accountMenuToggle" data-account-menu-toggle aria-expanded="false" aria-controls="accountPopover">Minha conta <span data-connection-dot class="connection-dot" aria-hidden="true"></span><span aria-hidden="true">▾</span></button><div id="accountPopover" class="account-popover" hidden><div class="account-menu-identity"><strong>${esc(label)}</strong>${!C.demo?`<span>${esc(user?.email||"Sem e-mail informado")}</span>`:""}<small>${esc(accountRole())}</small></div>${connectionAccountPanel()}<nav aria-label="Opções da conta">${C.demo||role?'<button type="button" data-my-account>Minha conta e segurança</button>':'<button type="button" data-access-refresh>Atualizar situação do acesso</button>'}<button type="button" data-open-accessibility>Aparência e acessibilidade</button>${role==="admin"?'<button type="button" data-account-settings>Configurações do sistema</button>':""}<button type="button" data-account-guide>Como usar o sistema</button>${C.demo?`<a class="button" href="${esc(new URL("painel.html",location.href).href)}">Sair da demonstração</a>`:'<button type="button" data-account-exit>Sair da conta</button>'}</nav></div></div>`;
+ return `<div class="account-summary"><strong>${esc(label)}</strong><small>${esc(accountRole())}</small></div><div class="account-dropdown"><button type="button" id="accountMenuToggle" data-account-menu-toggle aria-expanded="false" aria-controls="accountPopover">Minha conta <span data-connection-dot class="connection-dot" aria-hidden="true"></span><span aria-hidden="true">▾</span></button><div id="accountPopover" class="account-popover" hidden><div class="account-menu-identity"><strong>${esc(label)}</strong>${!C.demo?`<span>${esc(user?.email||"Sem e-mail informado")}</span>`:""}<small>${esc(accountRole())}</small></div>${connectionAccountPanel()}<nav aria-label="Opções da conta">${C.demo||role?'<button type="button" class="account-feature" data-my-account><strong>Minha conta e segurança</strong><small>Perfil, acesso, senha e vínculo com Google</small></button>':'<button type="button" data-access-refresh>Atualizar situação do acesso</button>'}<button type="button" class="account-feature" data-open-accessibility><strong>Aparência e acessibilidade</strong><small>Tema, tamanho do texto, contraste e movimentos</small></button>${role==="admin"?'<button type="button" data-account-settings>Configurações do sistema</button>':""}<button type="button" class="account-feature" data-account-guide><strong>Ajuda e guia de uso</strong><small>Orientações passo a passo para o seu perfil</small></button><a class="button account-feature" href="${esc(new URL("painel.html?demonstracao=1",location.href).href)}" target="_blank" rel="noopener"><strong>Treinamento</strong><small>Pratique em outra aba com dados fictícios</small></a>${C.demo?`<a class="button" href="${esc(new URL("painel.html",location.href).href)}">Sair da demonstração</a>`:'<button type="button" data-account-exit>Sair da conta</button>'}</nav></div></div>`;
 }
 function closeAccountMenu(focus=false){
  const toggle=$("#accountMenuToggle"),panel=$("#accountPopover");
@@ -2077,7 +2083,7 @@ function setupAccountTools(){
  for(const child of [...details.children])if(child.tagName!=="SUMMARY")dialog.append(child);
  details.remove();region.append(dialog);
  const icon='<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><circle cx="12" cy="4" r="2"/><path d="M3 8h18M12 7v7m0 0-5 7m5-7 5 7"/></svg>';
- region.insertAdjacentHTML("afterbegin",`<button type="button" class="preferences-entry" data-open-accessibility>${icon}<span>Aparência e acessibilidade</span></button><button type="button" class="accessibility-float" data-open-accessibility aria-label="Abrir opções de acessibilidade" title="Acessibilidade">${icon}</button>`);
+ region.insertAdjacentHTML("afterbegin",`<button type="button" class="preferences-entry" data-open-accessibility>${icon}<span>Preferências de leitura</span></button>`);
  let returnFocus=null;
  const openPreferences=source=>{hideContextHelp();closeAccountMenu();returnFocus=source?.closest("#accountPopover")?$("#accountMenuToggle"):source; if(!dialog.open)dialog.showModal();$("#arenaPreferencesTitle").focus();};
  dialog.addEventListener("close",()=>{hideContextHelp();if(returnFocus?.isConnected)returnFocus.focus();});
@@ -2111,7 +2117,7 @@ function workspaceNavigation(sections){
  const visible=workspaceDefinitions.filter(g=>allowedWorkspaceSections(g).length);
  const group=visible.find(g=>g.sections.includes(section))||visible[0];
  const labels=Object.fromEntries(sections);
- return `<section class="navigation-finder noprint" aria-label="Encontrar função"><label for="functionSearch">O que você quer fazer?</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: gol, jogador, PDF, logo, permissões…" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><p class="muted">Digite para encontrar uma função ou expanda uma área pela seta abaixo.</p><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section><nav class="workspace-tabs workspace-disclosures noprint" aria-label="Áreas da central">${visible.map(g=>`<details name="arena-navigation" data-navigation-group="${g.id}" ${expandedNavigation.has(g.id)?"open":""} class="${group?.id===g.id&&section!=="account"?"current-area":""}"><summary><span><strong>${g.title}</strong><small>${g.intro}</small></span><span class="navigation-disclosure-action" aria-hidden="true"><span class="navigation-closed-label">Ver opções</span><span class="navigation-open-label">Fechar</span><svg class="navigation-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8 5 7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></summary><div class="navigation-options">${allowedWorkspaceSections(g).map(id=>`<button type="button" data-section="${id}" ${id===section?'aria-current="page"':""}><strong>${esc(labels[id]||id)}</strong><small>${esc(navigationDescriptions[id]?.description||"")}</small></button>`).join("")}</div></details>`).join("")}</nav>${section!=="account"?`<nav class="workspace-subtabs noprint" aria-label="Seções de ${esc(group.title)}">${allowedWorkspaceSections(group).map(id=>sections.find(s=>s[0]===id)).filter(Boolean).map(([id,label])=>`<button type="button" data-section="${id}" class="${section===id?"active":""}" ${section===id?'aria-current="page"':""}>${label}</button>`).join("")}</nav>`:""}`;
+ return `<section class="navigation-finder noprint" aria-label="Encontrar função"><label for="functionSearch">O que você quer fazer?</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: gol, jogador, PDF, logo, permissões…" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><p class="muted">Digite para encontrar uma função ou expanda uma área pela seta abaixo.</p><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section><nav class="workspace-tabs workspace-disclosures noprint" style="--workspace-count:${visible.length}" aria-label="Áreas da central">${visible.map(g=>`<details name="arena-navigation" data-navigation-group="${g.id}" ${expandedNavigation.has(g.id)?"open":""} class="${group?.id===g.id&&section!=="account"?"current-area":""}"><summary><span><strong>${g.title}</strong><small>${g.intro}</small></span><span class="navigation-disclosure-action" aria-hidden="true"><span class="navigation-closed-label">Ver opções</span><span class="navigation-open-label">Fechar</span><svg class="navigation-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8 5 7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></summary><div class="navigation-options">${allowedWorkspaceSections(g).map(id=>`<button type="button" data-section="${id}" ${id===section?'aria-current="page"':""}><strong>${esc(labels[id]||id)}</strong><small>${esc(navigationDescriptions[id]?.description||"")}</small></button>`).join("")}</div></details>`).join("")}</nav>${section!=="account"?`<nav class="workspace-subtabs noprint" aria-label="Seções de ${esc(group.title)}">${allowedWorkspaceSections(group).map(id=>sections.find(s=>s[0]===id)).filter(Boolean).map(([id,label])=>`<button type="button" data-section="${id}" class="${section===id?"active":""}" ${section===id?'aria-current="page"':""}>${label}</button>`).join("")}</nav>`:""}`;
 }
 function documentationView(){
  const central=new URL("painel.html",location.href);central.search="";
