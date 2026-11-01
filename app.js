@@ -178,7 +178,9 @@ function renderBrandAndIdentity() {
   const identity = $("#sessionIdentity");
   if (!identity) return;
   identity.hidden = !admin || (!user && !C.demo);
-  identity.innerHTML = identity.hidden ? "" : `<div><strong>${esc(C.demo ? "Demonstração local" : accountName())}</strong>${!C.demo ? `<span>${esc(user.email || "Sem e-mail informado")}</span>` : ""}<small>${esc(accountRole())}</small></div>${C.demo || role ? '<button type="button" data-my-account>Minha conta</button>' : ""}`;
+  document.body.classList.toggle("has-account-menu",!identity.hidden);
+  const signature=JSON.stringify([identity.hidden,user?.uid,user?.email,accountName(),accountRole(),role,C.demo]);
+  if(identity.dataset.signature!==signature){identity.dataset.signature=signature;identity.innerHTML=identity.hidden?"":accountMenuMarkup();}
 }
 function settingsView() {
   const s = state.settings;
@@ -205,7 +207,7 @@ function accountView() {
   if (C.demo) return `<section class="card"><h2>Minha conta</h2><p>Você está na demonstração local. Nome, e-mail e recuperação de senha aparecem ao entrar com uma conta do Firebase.</p></section>`;
   if (!user) return "";
   const providers = [...new Set((user.providerData || []).map((p) => ({password:"E-mail e senha", "google.com":"Google", "microsoft.com":"Microsoft"})[p.providerId] || p.providerId))];
-  return `<section class="card"><h2>Minha conta</h2><p class="muted">Confira a conta que está usando nesta sessão.</p><dl class="account-details"><div><dt>Nome</dt><dd>${esc(accountName())}</dd></div><div><dt>E-mail</dt><dd>${esc(user.email || "Não informado")}</dd></div><div><dt>Perfil de acesso</dt><dd>${esc(accountRole())}</dd></div><div><dt>Confirmação do e-mail</dt><dd>${user.emailVerified ? "Confirmado" : "Ainda não confirmado"}</dd></div><div><dt>Formas de entrada já vinculadas</dt><dd>${esc(providers.join(", ") || "Não informado")}</dd></div></dl>${role === "admin" ? '<p class="public-notice">Sua conta continua como administrador principal. Nenhuma opção desta tela altera suas permissões.</p>' : '<p class="muted">Seu acesso às partidas é definido pelo administrador principal.</p>'}<div class="toolbar"><button type="button" data-account-recover ${!user.email ? "disabled" : ""}>Enviar e-mail para redefinir senha</button><button type="button" data-account-exit>Sair desta conta</button></div><p class="muted">A redefinição é concluída pelo link enviado ao seu e-mail. A vinculação com Microsoft será adicionada em outra etapa.</p>${googleLinkPanel()}</section>`;
+  return `<section class="card"><h2>Minha conta</h2><p class="muted">Confira a conta que está usando nesta sessão.</p><dl class="account-details"><div><dt>Nome</dt><dd>${esc(accountName())}</dd></div><div><dt>E-mail</dt><dd>${esc(user.email || "Não informado")}</dd></div><div><dt>Perfil de acesso</dt><dd>${esc(accountRole())}</dd></div><div><dt>Confirmação do e-mail</dt><dd>${user.emailVerified ? "Confirmado" : "Ainda não confirmado"}</dd></div><div><dt>Formas de entrada já vinculadas</dt><dd>${esc(providers.join(", ") || "Não informado")}</dd></div></dl>${role === "admin" ? '<p class="public-notice">Sua conta continua como administrador principal. Nenhuma opção desta tela altera suas permissões.</p>' : '<p class="muted">Seu acesso às partidas é definido pelo administrador principal.</p>'}<div class="toolbar"><button type="button" data-account-recover ${!user.email ? "disabled" : ""}>Enviar e-mail para redefinir senha</button><button type="button" data-account-exit>Sair desta conta</button></div><p class="muted">A redefinição é concluída pelo link enviado ao seu e-mail. Você também pode vincular sua conta Google abaixo.</p>${googleLinkPanel()}</section>`;
 }
 
 // Atualizações ao vivo preservam o formulário ainda não enviado.
@@ -557,7 +559,7 @@ function render() {
   app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">PAINEL DA ORGANIZAÇÃO</span><h2>${esc(state.settings.title)}</h2></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div><nav>${sections
     .filter(
       ([id]) =>
-        role === "admin" || ["overview", "matches", "account"].includes(id),
+        id !== "account" && (role === "admin" || ["overview", "matches"].includes(id)),
     )
     .map(
       ([id, label]) =>
@@ -1767,7 +1769,7 @@ function setupAccessibility(){
     const b=e.target.closest("button,input,select,textarea");if(!b)return;
     if(b.hasAttribute("data-touch-help")){touchHelp=!touchHelp;b.setAttribute("aria-pressed",String(touchHelp));b.textContent="Ajuda da função: "+(touchHelp?"ativada":"desativada");return;}
     if(b.hasAttribute("data-reset-preferences")){preferences={...preferenceDefaults};savePreferences();for(const el of region.querySelectorAll("[data-pref]")){if(el.type==="checkbox")el.checked=preferences[el.dataset.pref];else el.value=preferences[el.dataset.pref];}hideContextHelp();return;}
-    if(touchHelp&&!b.closest(".accessibility-bar")&&!b.closest("#arenaTutorial")){e.preventDefault();e.stopImmediatePropagation();document.getElementById("touchHelpStatus").textContent=helpFor(b)||"Este controle não possui uma explicação adicional.";showContextHelp(b);}
+    if(touchHelp&&!b.closest(".accessibility-bar")&&!b.closest("#arenaTutorial")&&!b.closest("#sessionIdentity")){e.preventDefault();e.stopImmediatePropagation();document.getElementById("touchHelpStatus").textContent=helpFor(b)||"Este controle não possui uma explicação adicional.";showContextHelp(b);}
   },true);
   themeQuery.addEventListener("change",()=>{if(preferences.theme==="auto")applyPreferences();});
 }
@@ -1822,7 +1824,7 @@ function drawTutorial() {
 }
 function setupTutorial() {
   const bar=document.querySelector(".accessibility-bar"); if(!bar)return;
-  const open=document.createElement("button");open.type="button";open.textContent="Como usar — guia passo a passo";open.style.marginTop="8px";bar.append(open);
+  const open=document.createElement("button");open.type="button";open.dataset.openTutorial="";open.textContent="Como usar — guia passo a passo";open.style.marginTop="8px";bar.append(open);
   const dialog=document.createElement("dialog");dialog.id="arenaTutorial";
   dialog.setAttribute("aria-labelledby","arenaTutorialTitle");dialog.setAttribute("aria-describedby","arenaTutorialBody");
   dialog.style.cssText="width:min(92vw,650px);max-height:85vh;overflow:auto;background:var(--panel);color:var(--text);border:2px solid var(--line);border-radius:12px;padding:24px";
@@ -2052,5 +2054,46 @@ document.addEventListener("click",async e=>{
 });
 document.addEventListener("input",e=>{if(!e.target.hasAttribute("data-removed-query")||role!=="admin")return;removedQuery=e.target.value;const out=$("#removedResults");if(out)out.innerHTML=removedResults();});
 document.addEventListener("change",e=>{if(!e.target.hasAttribute("data-removed-sport")||role!=="admin")return;removedSport=e.target.value;const out=$("#removedResults");if(out)out.innerHTML=removedResults();});
+
+// 20 — Menu da conta e preferências. Apenas navegação; conserva autenticação/permissões.
+function accountMenuMarkup(){
+ const label=C.demo?"Demonstração local":accountName();
+ return `<div class="account-summary"><strong>${esc(label)}</strong><small>${esc(accountRole())}</small></div><div class="account-dropdown"><button type="button" id="accountMenuToggle" data-account-menu-toggle aria-expanded="false" aria-controls="accountPopover">Minha conta <span aria-hidden="true">▾</span></button><div id="accountPopover" class="account-popover" hidden><div class="account-menu-identity"><strong>${esc(label)}</strong>${!C.demo?`<span>${esc(user?.email||"Sem e-mail informado")}</span>`:""}<small>${esc(accountRole())}</small></div><nav aria-label="Opções da conta">${C.demo||role?'<button type="button" data-my-account>Minha conta e segurança</button>':'<button type="button" data-access-refresh>Atualizar situação do acesso</button>'}<button type="button" data-open-accessibility>Aparência e acessibilidade</button>${role==="admin"?'<button type="button" data-account-settings>Configurações do sistema</button>':""}<button type="button" data-account-guide>Como usar o sistema</button>${C.demo?`<a class="button" href="${esc(new URL("painel.html",location.href).href)}">Sair da demonstração</a>`:'<button type="button" data-account-exit>Sair da conta</button>'}</nav></div></div>`;
+}
+function closeAccountMenu(focus=false){
+ const toggle=$("#accountMenuToggle"),panel=$("#accountPopover");
+ if(panel)panel.hidden=true;if(toggle)toggle.setAttribute("aria-expanded","false");
+ if(focus)toggle?.focus();
+}
+function setupAccountTools(){
+ const region=document.querySelector(".accessibility-bar"),details=$("#arenaPreferences");
+ if(!region||!details)return;
+ const dialog=document.createElement("dialog");dialog.id="arenaPreferencesDialog";
+ dialog.setAttribute("aria-labelledby","arenaPreferencesTitle");
+ dialog.innerHTML='<div class="preferences-dialog-heading"><h2 id="arenaPreferencesTitle" tabindex="-1">Aparência e acessibilidade</h2><button type="button" data-close-accessibility aria-label="Fechar aparência e acessibilidade">Fechar ✕</button></div>';
+ for(const child of [...details.children])if(child.tagName!=="SUMMARY")dialog.append(child);
+ details.remove();region.append(dialog);
+ const icon='<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><circle cx="12" cy="4" r="2"/><path d="M3 8h18M12 7v7m0 0-5 7m5-7 5 7"/></svg>';
+ region.insertAdjacentHTML("afterbegin",`<button type="button" class="preferences-entry" data-open-accessibility>${icon}<span>Aparência e acessibilidade</span></button><button type="button" class="accessibility-float" data-open-accessibility aria-label="Abrir opções de acessibilidade" title="Acessibilidade">${icon}</button>`);
+ let returnFocus=null;
+ const openPreferences=source=>{hideContextHelp();closeAccountMenu();returnFocus=source?.closest("#accountPopover")?$("#accountMenuToggle"):source; if(!dialog.open)dialog.showModal();$("#arenaPreferencesTitle").focus();};
+ dialog.addEventListener("close",()=>{hideContextHelp();if(returnFocus?.isConnected)returnFocus.focus();});
+ document.addEventListener("click",e=>{
+  const toggle=e.target.closest("[data-account-menu-toggle]");
+  if(toggle){hideContextHelp();const panel=$("#accountPopover"),open=toggle.getAttribute("aria-expanded")!=="true";panel.hidden=!open;toggle.setAttribute("aria-expanded",String(open));return;}
+  const accessibility=e.target.closest("[data-open-accessibility]");
+  if(accessibility){openPreferences(accessibility);return;}
+  if(e.target.closest("[data-close-accessibility]")){dialog.close();return;}
+  if(e.target.closest("[data-account-settings]")){
+   if(role!=="admin")return;closeAccountMenu();cloud?.stopHistory();section="settings";selected="";render();$("#view h2")?.scrollIntoView({block:"start"});return;
+  }
+  if(e.target.closest("[data-account-guide]")){closeAccountMenu();document.querySelector("[data-open-tutorial]")?.click();return;}
+  if(!e.target.closest(".account-dropdown"))closeAccountMenu();
+  else if(e.target.closest("#accountPopover button,#accountPopover a"))closeAccountMenu();
+ });
+ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#accountPopover")&&!$("#accountPopover").hidden){e.preventDefault();closeAccountMenu(true);}});
+ document.addEventListener("focusin",e=>{if(!e.target.closest("#sessionIdentity"))closeAccountMenu();});
+}
+setupAccountTools();
 
 boot();
