@@ -510,6 +510,7 @@ function matchCard(m, button = false) {
 }
 
 function render() {
+  resetRemovedContext();
   hideContextHelp();
   document.documentElement.style.setProperty("--accent", state.settings.color);
   document.title = state.settings.title;
@@ -1938,7 +1939,7 @@ let cleanupPlan=null,cleanupBusy=false,cleanupCopied=false;
 function cleanupPanel(){
  const eligible=state.matches.filter(m=>!["Ao vivo","Pausada","Suspensa"].includes(m.status)&&!m.clock?.running);
  const p=cleanupPlan,m=p?.before;
- return `<section class="card"><h2>Limpeza de partidas de teste</h2><p>Remove uma partida da central, do painel público e da classificação. Equipes, jogadores, campeonatos, contas, logo, configurações e auditoria permanecem.</p><p><strong>A exclusão é permanente. A cópia é para consulta e não possui restauração automática.</strong> Partidas ao vivo, pausadas, suspensas ou com relógio rodando não podem ser removidas.</p><label>Partida para conferir<select id="cleanupMatch">${eligible.map(m=>`<option value="${esc(m.id)}" ${p?.matchId===m.id?"selected":""}>${esc(name(m.home)+" × "+name(m.away)+" • "+m.sport+" • "+format(m.date)+" • "+m.status)}</option>`).join("")||'<option value="">Nenhuma partida disponível</option>'}</select></label><button type="button" data-cleanup-preview ${cleanupBusy||!eligible.length?"disabled":""}>Conferir partida antes de excluir</button>${m?`<div class="public-notice"><h3>Prévia da exclusão</h3><p>${esc(name(m.home))} × ${esc(name(m.away))}<br>${esc(m.sport)} • ${esc(format(m.date))} • ${esc(m.status)}<br>${esc(m.competition||"Sem campeonato")}<br>Placar: ${esc(D.score(m).join(" × "))}<br>ID: ${esc(m.id)}</p><p>Será removida somente esta partida e sua publicação. O registro completo da exclusão ficará privado para o administrador principal.</p><button type="button" data-cleanup-copy ${cleanupBusy?"disabled":""}>Baixar cópia desta partida</button><form id="cleanupConfirm"><label>Motivo da limpeza<textarea name="cleanupReason" minlength="5" maxlength="500" required></textarea></label><label>Digite EXCLUIR para confirmar<input name="cleanupWord" autocomplete="off" required></label><label class="confirmation-check"><input type="checkbox" name="cleanupSaved" required><span>Abri e conferi a cópia baixada e reconheço que não há restauração automática.</span></label><button type="submit" ${cleanupBusy||!cleanupCopied?"disabled":""}>Excluir somente a partida conferida</button></form><button type="button" data-cleanup-cancel ${cleanupBusy?"disabled":""}>Cancelar prévia</button></div>`:""}<hr><button type="button" data-cleanup-history>Baixar histórico de exclusões (JSON)</button><p class="muted">Exclusões também aparecem em Exportar auditoria completa. A primeira versão limpa partidas; não exclui cadastros de equipes, jogadores ou campeonatos.</p></section>`;
+ return `<section class="card"><h2>Limpeza de partidas de teste</h2><p>Remove uma partida da central, do painel público e da classificação. Equipes, jogadores, campeonatos, contas, logo, configurações e auditoria permanecem.</p><p><strong>A exclusão é permanente. A cópia é para consulta e não possui restauração automática.</strong> Partidas ao vivo, pausadas, suspensas ou com relógio rodando não podem ser removidas.</p><label>Partida para conferir<select id="cleanupMatch">${eligible.map(m=>`<option value="${esc(m.id)}" ${p?.matchId===m.id?"selected":""}>${esc(name(m.home)+" × "+name(m.away)+" • "+m.sport+" • "+format(m.date)+" • "+m.status)}</option>`).join("")||'<option value="">Nenhuma partida disponível</option>'}</select></label><button type="button" data-cleanup-preview ${cleanupBusy||!eligible.length?"disabled":""}>Conferir partida antes de excluir</button>${m?`<div class="public-notice"><h3>Prévia da exclusão</h3><p>${esc(name(m.home))} × ${esc(name(m.away))}<br>${esc(m.sport)} • ${esc(format(m.date))} • ${esc(m.status)}<br>${esc(m.competition||"Sem campeonato")}<br>Placar: ${esc(D.score(m).join(" × "))}<br>ID: ${esc(m.id)}</p><p>Será removida somente esta partida e sua publicação. O registro completo da exclusão ficará privado para o administrador principal.</p><button type="button" data-cleanup-copy ${cleanupBusy?"disabled":""}>Baixar cópia desta partida</button><form id="cleanupConfirm"><label>Motivo da limpeza<textarea name="cleanupReason" minlength="5" maxlength="500" required></textarea></label><label>Digite EXCLUIR para confirmar<input name="cleanupWord" autocomplete="off" required></label><label class="confirmation-check"><input type="checkbox" name="cleanupSaved" required><span>Abri e conferi a cópia baixada e reconheço que não há restauração automática.</span></label><button type="submit" ${cleanupBusy||!cleanupCopied?"disabled":""}>Excluir somente a partida conferida</button></form><button type="button" data-cleanup-cancel ${cleanupBusy?"disabled":""}>Cancelar prévia</button></div>`:""}<hr>${removedHistoryPanel()}<hr><button type="button" data-cleanup-history>Baixar histórico de exclusões (JSON)</button><p class="muted">Exclusões também aparecem em Exportar auditoria completa. A primeira versão limpa partidas; não exclui cadastros de equipes, jogadores ou campeonatos.</p></section>`;
 }
 document.addEventListener("click",async e=>{
  const b=e.target.closest("[data-cleanup-preview],[data-cleanup-copy],[data-cleanup-cancel],[data-cleanup-history]");
@@ -1979,6 +1980,7 @@ document.addEventListener("submit",async e=>{
    if(trainingMode)trainingStore(state);else localStorage.setItem(key,JSON.stringify(state));
    render();
   }else await cloud.deleteTestMatch(plan,reason,word);
+  removedRequest++;removedHistory=[];removedLoaded=false;removedLoading=false;removedError="";
   cleanupPlan=null;cleanupCopied=false;selected="";toast("Partida removida. Equipes, contas e histórico preservados.");
  }catch(error){toast(error.message,true);}finally{cleanupBusy=false;render();}
 });
@@ -1999,5 +2001,56 @@ document.addEventListener("click", e => {
   button.setAttribute("aria-label",(visible?"Ocultar ":"Mostrar ")+label.toLowerCase());
   button.innerHTML=passwordEye(visible)+`<span>${visible?"Ocultar":"Mostrar"}</span>`;
 });
+
+// 19 — Histórico de exclusões na tela. Consulta somente; não restaura ou exclui registros.
+let removedHistory=[],removedLoaded=false,removedLoading=false,removedQuery="",removedSport="",removedContext="",removedRequest=0,removedError="";
+function removedContextKey(){return (C.demo?key:(user?.uid||"anônimo"))+":"+role;}
+function resetRemovedContext(){
+ const next=removedContextKey();if(next===removedContext)return;
+ removedContext=next;removedRequest++;removedHistory=[];removedLoaded=false;removedLoading=false;removedQuery="";removedSport="";removedError="";
+}
+function removedTime(value){
+ if(value?.toMillis)return value.toMillis();
+ if(value&&typeof value==="object"&&Number.isFinite(value.seconds??value._seconds))return (value.seconds??value._seconds)*1000;
+ const n=Date.parse(value);return Number.isFinite(n)?n:0;
+}
+function removedDate(value){const n=removedTime(value);return n?new Date(n).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"}):"Data não informada";}
+function removedTeam(id){return state.teams.find(t=>t.id===id)?.name||id||"Equipe não informada";}
+function removedRows(){
+ const logs=C.demo?(state.cleanupAudit||[]):removedHistory;
+ const q=searchText(removedQuery);
+ return logs.filter(r=>{
+  const m=r.before||{};
+  return (!removedSport||m.sport===removedSport)&&(!q||searchText([removedTeam(m.home),removedTeam(m.away),m.competition,m.sport,r.reason,r.target,r.actor,removedDate(r.at)].join(" ")).includes(q));
+ }).slice().sort((a,b)=>removedTime(b.at)-removedTime(a.at));
+}
+function removedResults(){
+ if(role!=="admin")return "";
+ if(removedLoading)return '<p role="status">Consultando histórico…</p>';
+ if(removedError)return `<p role="alert">${esc(removedError)} Use Atualizar histórico para tentar novamente.</p>`;
+ if(!removedLoaded)return '<p class="muted">Clique em Ver partidas excluídas para consultar o histórico privado.</p>';
+ const rows=removedRows();
+ return `<p role="status">${rows.length} exclusão(ões) nesta visualização. Horários de Brasília. ${C.demo?"Dados locais da demonstração.":"Dados da última consulta; use Atualizar histórico para buscar alterações."}</p>${rows.length?table(["Excluída em","Partida","Modalidade","Campeonato","Placar","Motivo","Responsável"],rows.map(r=>{
+  const m=r.before||{},score=Array.isArray(m.score)?m.score.join(" × "):"—";
+  return tr([removedDate(r.at),removedTeam(m.home)+" × "+removedTeam(m.away),m.sport||"—",m.competition||"Sem campeonato",score,r.reason||"—",r.actor==="demonstração"?"Demonstração":r.actor===user?.uid?"Administrador principal":r.actor||"Não informado"]);
+ })):empty(removedQuery||removedSport?"Nenhuma exclusão corresponde aos filtros.":"Nenhuma partida excluída registrada neste ambiente.")}`;
+}
+function removedHistoryPanel(){
+ resetRemovedContext();
+ return `<section aria-labelledby="removedHistoryHeading"><h3 id="removedHistoryHeading">Partidas excluídas</h3><p>Consulta exclusiva do administrador principal. Os registros permanecem preservados; esta lista não é uma lixeira e não oferece restauração automática.</p><button type="button" data-removed-load ${removedLoading?"disabled":""}>${removedLoaded||removedError?"Atualizar histórico":"Ver partidas excluídas"}</button><div class="formgrid"><label>Buscar no histórico<input type="search" data-removed-query value="${esc(removedQuery)}" placeholder="Equipe, campeonato, motivo, data ou identificador"></label><label>Modalidade no histórico<select data-removed-sport><option value="">Todas as modalidades</option>${["Futebol","Futsal","Basquete","Vôlei","Vôlei de praia","Handebol"].map(s=>`<option value="${esc(s)}" ${s===removedSport?"selected":""}>${esc(s)}</option>`).join("")}</select></label></div><div id="removedResults">${removedResults()}</div></section>`;
+}
+document.addEventListener("click",async e=>{
+ if(!e.target.closest("[data-removed-load]")||removedLoading||role!=="admin")return;
+ resetRemovedContext();const context=removedContextKey(),request=++removedRequest;
+ removedLoading=true;removedError="";refresh();
+ try{
+  const rows=C.demo?(state.cleanupAudit||[]):await cloud.cleanupHistory();
+  if(request!==removedRequest||context!==removedContextKey()||role!=="admin")return;
+  removedHistory=rows;removedLoaded=true;
+ }catch(error){if(request===removedRequest){removedLoaded=false;removedError="Não foi possível consultar o histórico. Confira a conexão e seu acesso de administrador.";}}
+ finally{if(request===removedRequest){removedLoading=false;refresh();}}
+});
+document.addEventListener("input",e=>{if(!e.target.hasAttribute("data-removed-query")||role!=="admin")return;removedQuery=e.target.value;const out=$("#removedResults");if(out)out.innerHTML=removedResults();});
+document.addEventListener("change",e=>{if(!e.target.hasAttribute("data-removed-sport")||role!=="admin")return;removedSport=e.target.value;const out=$("#removedResults");if(out)out.innerHTML=removedResults();});
 
 boot();
