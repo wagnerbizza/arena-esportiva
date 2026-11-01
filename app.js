@@ -2445,3 +2445,53 @@ function renderConnectionStatus(){
 }
 
 boot();
+
+// 30 — Navegação intencional: posiciona somente após abrir uma função.
+// Não acompanha snapshots, cronômetro, placar, filtros nem gravações de lances.
+function navigationDestination(control){
+ const routes=[
+  ['data-my-account','#view'],['data-account-settings','#view'],
+  ['data-section','#view'],['data-workspace','#view'],
+  ['data-open','#view'],['data-back','#view'],
+  ['data-access-mode','#app'],['data-access-edit','#access-user'],
+  ['data-access-cancel','#view'],
+  ['data-edit-championship','#championship'],['data-new-championship','#championship'],
+  ['data-championship-games','#list-results-matches'],
+  ['data-new-team-form','#team'],['data-team-form-back','#view'],
+  ['data-edit-team','#team'],['data-edit-player','#player'],
+  ['data-team-profile','.team-profile-heading'],['data-profile-back','#view'],
+  ['data-profile-tab','.team-profile-heading + .card'],
+  ['data-profile-edit','#team'],['data-profile-new-player','.team-player-editor'],
+  ['data-profile-player','.team-player-editor'],['data-player-editor-cancel','.team-profile-heading'],
+  ['data-public-area','#publicHubContent'],['data-open-clock','#clockSettings']
+ ];
+ return routes.find(([attribute])=>control.hasAttribute(attribute))?.[1]||null;
+}
+function revealNavigationDestination(selector){
+ const container=document.querySelector(selector);if(!container)return;
+ // Os diálogos abertos gerenciam seu próprio foco.
+ if(document.querySelector('dialog[open]'))return;
+ const heading=container.matches('h1,h2,h3,h4')?container:container.querySelector('h1,h2,h3,h4');
+ const target=heading||container;
+ target.setAttribute('tabindex','-1');
+ target.style.scrollMarginTop='24px';
+ target.focus({preventScroll:true});
+ target.scrollIntoView({block:'start',behavior:'instant'});
+}
+let navigationRevealFrame=0;
+document.addEventListener('click',event=>{
+ const control=event.target.closest('button,a');
+ if(!control||control.disabled||control.getAttribute('aria-disabled')==='true')return;
+ const selector=navigationDestination(control);if(!selector)return;
+ const before=document.querySelector(selector),beforeContent=before?.firstElementChild;
+ if(navigationRevealFrame)cancelAnimationFrame(navigationRevealFrame);
+ navigationRevealFrame=requestAnimationFrame(()=>{
+  navigationRevealFrame=0;
+  if(event.defaultPrevented)return;
+  const after=document.querySelector(selector);
+  // Ação recusada sem mudança de conteúdo não desloca a página.
+  const editsInPlace=control.hasAttribute('data-edit-player');
+  if(!after||after===before&&after.firstElementChild===beforeContent&&!editsInPlace)return;
+  revealNavigationDestination(selector);
+ });
+},true);
