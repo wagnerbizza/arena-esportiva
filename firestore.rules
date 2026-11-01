@@ -9,6 +9,8 @@ service cloud.firestore {
   function operator() { return request.auth != null && request.auth.token.get('email_verified',false) == true && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'operator' && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('enabled',true) == true; }
   function staff() { return owner() || operator(); }
   function admin() { return owner(); }
+  // 23 — Delegação explícita, revogável, sem promover o operador a titular.
+  function rosterManager() { return owner() || (operator() && 'rosters' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions',[])); }
   function operatorFor(id) { return owner() || (operator() && id in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('matches',[])); }
   function bounded(s,n) { return s is string && s.size() <= n; }
   function nonempty(s,n) { return bounded(s,n) && s.size() > 0; }
@@ -31,12 +33,15 @@ service cloud.firestore {
   function publishedSettings(d) { return getAfter(/databases/$(database)/documents/publicSettings/main).data == publicSettings(d); }
   function publishedMatch(d,id) { return getAfter(/databases/$(database)/documents/publicMatches/$(id)).data == publicMatch(d); }
   function teamSchema(d,id) {
-   return meta(d,id) && d.keys().hasOnly(['id','name','short','coach','category','badge','_revision','_audit','_updatedAt','_updatedBy'])
+   return meta(d,id) && d.keys().hasOnly(['id','name','short','coach','category','badge','sports','archived','_revision','_audit','_updatedAt','_updatedBy'])
+    && d.get('sports',[]) is list && d.get('sports',[]).size() <= 6 && d.get('sports',[]).toSet().size() == d.get('sports',[]).size() && d.get('sports',[]).hasOnly(['Futebol','Futsal','Basquete','Vôlei','Vôlei de praia','Handebol'])
+    && d.get('archived',false) is bool
     && nonempty(d.name,150) && bounded(d.short,12) && bounded(d.coach,150) && bounded(d.category,150) && image(d.badge);
   }
   function playerSchema(d,id) {
    return meta(d,id) && d.keys().hasOnly(['id','name','team','number','position','reserve','_revision','_audit','_updatedAt','_updatedBy'])
     && nonempty(d.name,150) && nonempty(d.team,100) && exists(/databases/$(database)/documents/teams/$(d.team))
+    && get(/databases/$(database)/documents/teams/$(d.team)).data.get('archived',false) == false
     && bounded(d.number,8) && bounded(d.position,50) && d.reserve is bool;
   }
   function settingsSchema(d) {
@@ -164,10 +169,13 @@ service cloud.firestore {
   // A conta principal nunca pode ser alterada por esta coleção.
   function userSchema(d,uid) {
    return d.keys().hasAll(['id','name','email','role','enabled','matches','createdAt','updatedAt','revision','auditId'])
-    && d.keys().hasOnly(['id','name','email','role','enabled','matches','createdAt','updatedAt','revision','auditId'])
+    && d.keys().hasOnly(['id','name','email','role','enabled','matches','createdAt','updatedAt','revision','auditId','permissions'])
     && d.id == uid && nonempty(d.name,100) && bounded(d.email,254)
     && d.role in ['pending','operator'] && d.enabled is bool && d.matches is list && d.matches.size() <= 100
     && d.matches.toSet().size() == d.matches.size()
+    && d.get('permissions',[]) is list && d.get('permissions',[]).size() <= 1
+    && d.get('permissions',[]).hasOnly(['rosters'])
+    && (d.role != 'pending' || d.get('permissions',[]) == [])
     && (d.role != 'pending' || (d.enabled == false && d.matches == []))
     && d.createdAt is timestamp && d.updatedAt == request.time && d.revision is int && d.revision > 0
     && nonempty(d.auditId,100);
@@ -226,27 +234,50 @@ service cloud.firestore {
    allow delete: if false;
   }
   match /teams/{id} {
-   allow read: if admin();
-   allow create: if admin() && teamSchema(request.resource.data,id) && request.resource.data._revision == 1 && pair(request.resource.data,'teams',id,null) && publishedTeam(request.resource.data,id);
-   allow update: if admin() && teamSchema(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'teams',id,resource.data) && publishedTeam(request.resource.data,id);
+   allow read: if rosterManager();
+   allow create: if rosterManager() && teamSchema(request.resource.data,id) && request.resource.data.get('archived',false) == false && request.resource.data._revision == 1 && pair(request.resource.data,'teams',id,null) && publishedTeam(request.resource.data,id);
+   allow update: if rosterManager() && teamSchema(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1
+    && (request.resource.data.get('archived',false) == resource.data.get('archived',false) || (owner() && logData(request.resource.data).detail.type in ['arquivamento','reativação'] && nonempty(logData(request.resource.data).detail.reason,500) && logData(request.resource.data).detail.reason.size() >= 5))
+    && pair(request.resource.data,'teams',id,resource.data) && publishedTeam(request.resource.data,id);
    allow delete: if false;
   }
   match /players/{id} {
-   allow read: if admin();
-   allow create: if admin() && playerSchema(request.resource.data,id) && request.resource.data._revision == 1 && pair(request.resource.data,'players',id,null);
-   allow update: if admin() && playerSchema(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'players',id,resource.data);
+   allow read: if rosterManager();
+   allow create: if rosterManager() && playerSchema(request.resource.data,id) && request.resource.data._revision == 1 && pair(request.resource.data,'players',id,null);
+   allow update: if rosterManager() && playerSchema(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'players',id,resource.data);
    allow delete: if false;
+  }
+  // 17 — Apenas o titular remove partidas, com registro completo e publicação removida.
+  function cleanupAllowed(id,b) {
+   let a=getAfter(/databases/$(database)/documents/cleanupAudit/$(id)).data;
+   return owner() && !(b.status in ['Ao vivo','Pausada','Suspensa'])
+    && b.get('clock',emptyClock()).running == false
+    && a.target == id && a.entity == 'matches' && a.actor == request.auth.uid
+    && a.at == request.time && a.before == b && a.after == null
+    && nonempty(a.reason,500) && a.reason.size() >= 5
+    && !existsAfter(/databases/$(database)/documents/matches/$(id))
+    && !existsAfter(/databases/$(database)/documents/publicMatches/$(id));
+  }
+  match /cleanupAudit/{id} {
+   allow read: if owner();
+   allow create: if owner()
+    && request.resource.data.keys().hasOnly(['target','entity','actor','at','reason','before','after'])
+    && exists(/databases/$(database)/documents/matches/$(id))
+    && cleanupAllowed(id,get(/databases/$(database)/documents/matches/$(id)).data);
+   allow update,delete: if false;
   }
   match /matches/{id} {
    allow get: if operatorFor(id);
    allow list: if admin();
    allow create: if admin() && matchSchema(request.resource.data,id) && request.resource.data._revision == 1
     && exists(/databases/$(database)/documents/teams/$(request.resource.data.home)) && exists(/databases/$(database)/documents/teams/$(request.resource.data.away))
+    && get(/databases/$(database)/documents/teams/$(request.resource.data.home)).data.get('archived',false) == false
+    && get(/databases/$(database)/documents/teams/$(request.resource.data.away)).data.get('archived',false) == false
     && request.resource.data.score == [0,0] && request.resource.data.sets == [] && request.resource.data.status == 'Agendada' && request.resource.data.notes == ''
     && pair(request.resource.data,'matches',id,null) && publishedMatch(request.resource.data,id);
    allow update: if operatorFor(id) && meta(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1
     && pair(request.resource.data,'matches',id,resource.data) && publishedMatch(request.resource.data,id) && validMatchUpdate(request.resource.data,resource.data);
-   allow delete: if false;
+   allow delete: if cleanupAllowed(id,resource.data);
   }
   match /publicSettings/main {
    allow read: if true;
@@ -255,13 +286,13 @@ service cloud.firestore {
   }
   match /publicTeams/{id} {
    allow read: if true;
-   allow create, update: if admin() && request.resource.data == publicTeam(getAfter(/databases/$(database)/documents/teams/$(id)).data);
+   allow create, update: if rosterManager() && request.resource.data == publicTeam(getAfter(/databases/$(database)/documents/teams/$(id)).data);
    allow delete: if false;
   }
   match /publicMatches/{id} {
    allow read: if true;
    allow create, update: if operatorFor(id) && request.resource.data == publicMatch(getAfter(/databases/$(database)/documents/matches/$(id)).data);
-   allow delete: if false;
+   allow delete: if cleanupAllowed(id,get(/databases/$(database)/documents/matches/$(id)).data);
   }
   match /audit/{id} {
    allow read: if admin();
