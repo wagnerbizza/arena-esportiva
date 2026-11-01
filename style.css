@@ -1339,3 +1339,8 @@ button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,s
 .public-tools-options {position:absolute;left:0;top:calc(100% + 8px);z-index:510;display:grid;gap:8px;width:320px;max-width:calc(100vw - 40px);padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:0 8px 24px #0005;box-sizing:border-box;}
 .public-tools-options > button,.public-tools-options > a {width:100%;margin:0!important;text-align:left;white-space:normal;box-sizing:border-box;}
 body:not([data-admin="true"]) .hero {padding-top:12px;padding-bottom:16px;}
+
+/* 37 — Preferências públicas centralizadas acima da apresentação. */
+body:not([data-admin="true"]) .accessibility-bar {justify-content:center;}
+body:not([data-admin="true"]) .public-tools {flex:0 1 auto;max-width:100%;}
+body:not([data-admin="true"]) .public-tools-options {left:50%;right:auto;transform:translateX(-50%);}
