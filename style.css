@@ -1211,3 +1211,39 @@ input[type="checkbox"]:focus-visible { outline:3px solid var(--focus); outline-o
 .navigation-search-results button {display:grid;gap:7px;text-align:left;}
 .navigation-search-results small {font-weight:400;line-height:1.5;}
 @media(max-width:700px){.workspace-disclosures summary {padding:12px;} .workspace-disclosures .navigation-options small {display:block;} .navigation-search-results {grid-template-columns:1fr;} .navigation-search-row {flex-wrap:wrap;} .navigation-search-row input{flex-basis:100%;}}
+
+/* 30 — Acabamento final: topo compacto e cabeçalhos de menus alinhados.
+   min-height permite que textos ampliados cresçam sem cortes. */
+body[data-admin="true"] header { padding-top:16px; padding-bottom:16px; }
+body[data-admin="true"] main { padding-top:14px; }
+body[data-admin="true"] .accessibility-bar { margin-top:8px; margin-bottom:8px; padding-top:0; padding-bottom:0; }
+.admin-heading { margin-bottom:14px; }
+.admin-heading h2 { margin-bottom:0; }
+.admin-heading .tag { display:block; margin-bottom:5px; }
+.navigation-finder { margin-top:10px; }
+.workspace-disclosures summary { box-sizing:border-box; min-height:106px; }
+@media(max-width:700px) {
+ body[data-admin="true"] header { padding-top:12px; padding-bottom:12px; }
+ body[data-admin="true"] main { padding-top:10px; }
+ .workspace-disclosures summary { min-height:64px; }
+ .admin-heading { align-items:flex-start; flex-wrap:wrap; gap:8px; }
+ .navigation-finder { padding:12px; }
+}
+
+/* 31 — Público compacto e estado vazio com caminho para os resultados. */
+body:not([data-admin="true"]) header { padding-top:14px; padding-bottom:14px; }
+body:not([data-admin="true"]) .accessibility-bar { margin-top:8px; margin-bottom:8px; padding-top:0; padding-bottom:0; }
+body:not([data-admin="true"]) main { padding-top:12px; }
+body:not([data-admin="true"]) .hero { padding-top:18px; padding-bottom:20px; margin-bottom:18px; }
+body:not([data-admin="true"]) .hero p { margin-bottom:0; }
+.public-empty-state { grid-column:1/-1; text-align:center; padding:24px; }
+.public-empty-state h3 { margin-bottom:8px; }
+.public-empty-state p { margin-top:0; }
+.workspace-disclosures summary > span:first-child { min-width:0; }
+@media(min-width:701px) {
+ .workspace-disclosures summary small { min-height:3em; line-height:1.5; }
+}
+@media(max-width:700px) {
+ body:not([data-admin="true"]) .hero { padding-top:12px; padding-bottom:16px; }
+ .public-empty-state { padding:18px; }
+}

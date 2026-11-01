@@ -592,7 +592,9 @@ function publicMatches(filter) {
         )
         .map((m) => matchCard(m))
         .join("")
-    : empty("Nenhuma partida publicada para esta seleção.");
+     : publicArea==="active"
+      ? `<section class="card public-empty-state"><h3>Nenhum jogo atual nesta seleção</h3><p>Não há partidas agendadas, em andamento ou interrompidas${filter?" nesta modalidade":""}. Consulte os jogos concluídos em Resultados.</p><button type="button" class="primary" data-public-area="results">Ver resultados</button></section>`
+      : empty("Nenhuma partida publicada para esta seleção.");
 }
 function view() {
   if(section==="teams"&&selectedTeamId&&canManageRosters())return teamProfileView();
