@@ -176,6 +176,7 @@ const accountRole = () => C.demo ? "Demonstração local" : role === "admin" ? "
 const accountName = () => user?.displayName || (state.users || []).find((p) => p.id === user?.uid)?.name || user?.email?.split("@")[0] || "Conta conectada";
 function renderBrandAndIdentity() {
   updateArenaFavicon();
+  renderConnectionStatus();
   const brand = $("#systemBrand");
   if (brand) brand.innerHTML = `<span class="system-logo">${state.settings.logo ? `<img src="${esc(state.settings.logo)}" alt="Logo da organização" onerror="this.hidden=true">` : '<span aria-hidden="true">◈</span>'}</span><span class="brand-copy"><b>${esc(state.settings.title || "ARENA")}</b><small>CENTRAL ESPORTIVA</small></span>`;
   const identity = $("#sessionIdentity");
@@ -184,6 +185,7 @@ function renderBrandAndIdentity() {
   document.body.classList.toggle("has-account-menu",!identity.hidden);
   const signature=JSON.stringify([identity.hidden,user?.uid,user?.email,accountName(),accountRole(),role,C.demo]);
   if(identity.dataset.signature!==signature){identity.dataset.signature=signature;identity.innerHTML=identity.hidden?"":accountMenuMarkup();}
+  renderConnectionStatus();
 }
 function settingsView() {
   const s = state.settings;
@@ -393,9 +395,7 @@ function empty(text) {
 }
 // 1 — Conexão. Demonstração não exige login e NÃO protege os dados locais.
 async function boot() {
-  $("#mode").textContent = C.demo
-    ? "DEMONSTRAÇÃO LOCAL • dados apenas neste navegador; sem segurança de produção."
-    : "FIREBASE SPARK • conectando…";
+  setConnectionStatus(C.demo?"DEMONSTRAÇÃO LOCAL":"conectando");
   if (C.demo) {
     try {
       state = JSON.parse(localStorage.getItem(key)) || (trainingMode ? trainingSeed() : D.fresh());
@@ -407,7 +407,7 @@ async function boot() {
       );
     }
     role = "admin";
-    if (trainingMode) $("#mode").textContent = "DEMONSTRAÇÃO ISOLADA • sem Firebase • nenhum resultado real é alterado";
+    if (trainingMode) setConnectionStatus("DEMONSTRAÇÃO ISOLADA");
     render();
     window.addEventListener("storage", (e) => {
       if (e.key === key) {
@@ -434,12 +434,13 @@ async function boot() {
         operatorPermissions = Array.isArray(access.permissions)?access.permissions:[];
         render();
       },
-      onError: (e) => toast(e.message, true),
-      onConnection: (t) => ($("#mode").textContent = t),
+      onError: (e) => toast(admin?e.message:"Não foi possível atualizar os resultados. Confira a conexão.", true),
+      onConnection: setConnectionStatus,
     });
     render();
   } catch (e) {
-    toast("Não foi possível conectar: " + e.message, true);
+    setConnectionStatus("conexão indisponível");
+    toast(admin?"Não foi possível conectar: " + e.message:"Não foi possível carregar os resultados. Tente novamente em instantes.", true);
   }
 }
 async function dispatch(a) {
@@ -1635,10 +1636,9 @@ document.addEventListener("change", async (e) => {
     toast(e.message, true);
   }
 });
-window.addEventListener("offline", () => {
-  $("#mode").textContent =
-    "SEM CONEXÃO • Firebase: novos lançamentos exigem conexão.";
-});
+window.addEventListener("offline", () => {if(!C.demo)setConnectionStatus("offline");});
+window.addEventListener("online", () => {if(!C.demo)setConnectionStatus("aguardando confirmação do servidor");});
+
 function setBadgeDraft(value) {
   const f = $("#team");
   if (!f) return;
@@ -2061,7 +2061,7 @@ document.addEventListener("change",e=>{if(!e.target.hasAttribute("data-removed-s
 // 20 — Menu da conta e preferências. Apenas navegação; conserva autenticação/permissões.
 function accountMenuMarkup(){
  const label=C.demo?"Demonstração local":accountName();
- return `<div class="account-summary"><strong>${esc(label)}</strong><small>${esc(accountRole())}</small></div><div class="account-dropdown"><button type="button" id="accountMenuToggle" data-account-menu-toggle aria-expanded="false" aria-controls="accountPopover">Minha conta <span aria-hidden="true">▾</span></button><div id="accountPopover" class="account-popover" hidden><div class="account-menu-identity"><strong>${esc(label)}</strong>${!C.demo?`<span>${esc(user?.email||"Sem e-mail informado")}</span>`:""}<small>${esc(accountRole())}</small></div><nav aria-label="Opções da conta">${C.demo||role?'<button type="button" data-my-account>Minha conta e segurança</button>':'<button type="button" data-access-refresh>Atualizar situação do acesso</button>'}<button type="button" data-open-accessibility>Aparência e acessibilidade</button>${role==="admin"?'<button type="button" data-account-settings>Configurações do sistema</button>':""}<button type="button" data-account-guide>Como usar o sistema</button>${C.demo?`<a class="button" href="${esc(new URL("painel.html",location.href).href)}">Sair da demonstração</a>`:'<button type="button" data-account-exit>Sair da conta</button>'}</nav></div></div>`;
+ return `<div class="account-summary"><strong>${esc(label)}</strong><small>${esc(accountRole())}</small></div><div class="account-dropdown"><button type="button" id="accountMenuToggle" data-account-menu-toggle aria-expanded="false" aria-controls="accountPopover">Minha conta <span data-connection-dot class="connection-dot" aria-hidden="true"></span><span aria-hidden="true">▾</span></button><div id="accountPopover" class="account-popover" hidden><div class="account-menu-identity"><strong>${esc(label)}</strong>${!C.demo?`<span>${esc(user?.email||"Sem e-mail informado")}</span>`:""}<small>${esc(accountRole())}</small></div>${connectionAccountPanel()}<nav aria-label="Opções da conta">${C.demo||role?'<button type="button" data-my-account>Minha conta e segurança</button>':'<button type="button" data-access-refresh>Atualizar situação do acesso</button>'}<button type="button" data-open-accessibility>Aparência e acessibilidade</button>${role==="admin"?'<button type="button" data-account-settings>Configurações do sistema</button>':""}<button type="button" data-account-guide>Como usar o sistema</button>${C.demo?`<a class="button" href="${esc(new URL("painel.html",location.href).href)}">Sair da demonstração</a>`:'<button type="button" data-account-exit>Sair da conta</button>'}</nav></div></div>`;
 }
 function closeAccountMenu(focus=false){
  const toggle=$("#accountMenuToggle"),panel=$("#accountPopover");
@@ -2410,5 +2410,31 @@ document.addEventListener("click",e=>{
  if(e.target.closest("[data-clear-navigation-search]")){navigationQuery="";const input=$("#functionSearch");if(input){input.value="";input.focus();}const out=$("#navigationSearchResults");if(out)out.innerHTML="";}
  if(e.target.closest("[data-navigation-result],.navigation-options [data-section]")){navigationQuery="";expandedNavigation.clear();for(const d of document.querySelectorAll("[data-navigation-group]"))d.open=false;const input=$("#functionSearch");if(input)input.value="";const out=$("#navigationSearchResults");if(out)out.innerHTML="";$("#view")?.scrollIntoView({block:"start"});}
 });
+
+// 32 — Indicador de sincronização: sem faixa técnica no uso normal.
+// A confirmação vem das notificações existentes do Firestore, sem consultas extras.
+let connectionState={kind:"waiting",label:"Conectando…",message:"Aguardando confirmação da conexão.",confirmedAt:null};
+function connectionAccountPanel(){return `<section class="connection-account" aria-label="Conexão do sistema"><strong>Conexão do sistema</strong><p data-connection-label></p><small data-connection-detail></small></section>`;}
+function setConnectionStatus(raw){
+ const text=String(raw||"").toLocaleLowerCase("pt-BR");
+ if(C.demo)connectionState={kind:"demo",label:"Demonstração local",message:"Dados fictícios neste navegador; nenhum resultado real é alterado.",confirmedAt:null};
+ else if(text.includes("offline")||navigator.onLine===false)connectionState={...connectionState,kind:"offline",label:"Sem internet",message:"Atualizações interrompidas. Os resultados exibidos podem estar desatualizados."};
+ else if(/cota|indisponível|indisponivel|permissão|permissao/.test(text))connectionState={...connectionState,kind:"warning",label:"Atualização indisponível",message:"Não foi possível confirmar as atualizações. Os resultados exibidos podem estar desatualizados."};
+ else if(/cache|aguardando|conectando/.test(text))connectionState={...connectionState,kind:"waiting",needsConfirmation:connectionState.needsConfirmation||["offline","warning"].includes(connectionState.kind),label:"Conectando…",message:"Aguardando confirmação das atualizações."};
+ else if(text.includes("conectado"))connectionState={kind:"connected",label:"Conexão ativa",message:"Atualizações automáticas habilitadas.",confirmedAt:new Date()};
+ else connectionState={...connectionState,kind:"ready",label:"Pronto para entrar",message:"Entre com sua conta para acessar a central."};
+ renderConnectionStatus();
+}
+function renderConnectionStatus(){
+ const c=connectionState,bar=$("#mode");
+ if(bar){bar.hidden=!["offline","warning","demo"].includes(c.kind)&&!c.needsConfirmation;bar.classList.toggle("connection-alert",["offline","warning"].includes(c.kind)||!!c.needsConfirmation);bar.textContent=c.kind==="demo"?"DEMONSTRAÇÃO ISOLADA • dados fictícios • nenhum resultado real é alterado":c.message;bar.setAttribute("role","status");}
+ const footer=document.querySelector("footer");
+ if(footer&&!footer.querySelector("#connectionIndicator")){const el=document.createElement("details");el.id="connectionIndicator";el.className="connection-indicator noprint";el.innerHTML='<summary><span data-connection-dot class="connection-dot" aria-hidden="true"></span><span>Conexão</span></summary><div><strong data-connection-label></strong><p data-connection-detail></p></div>';footer.appendChild(el);}
+ const detail=c.message+(c.confirmedAt?" Última confirmação: "+c.confirmedAt.toLocaleTimeString("pt-BR")+".":"");
+ for(const el of document.querySelectorAll("[data-connection-dot]")){el.dataset.state=c.kind;el.title=c.label;}
+ for(const el of document.querySelectorAll("[data-connection-label]"))el.textContent=c.label;
+ for(const el of document.querySelectorAll("[data-connection-detail]"))el.textContent=detail;
+ const button=$("#accountMenuToggle");if(button)button.title="Minha conta • "+c.label;
+}
 
 boot();

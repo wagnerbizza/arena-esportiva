@@ -1247,3 +1247,21 @@ body:not([data-admin="true"]) .hero p { margin-bottom:0; }
  body:not([data-admin="true"]) .hero { padding-top:12px; padding-bottom:16px; }
  .public-empty-state { padding:18px; }
 }
+
+/* 32 — Conexão discreta no rodapé e detalhes na conta. */
+#mode[hidden] { display:none!important; }
+#mode.connection-alert { background:#473519; color:#fff0cf; border-bottom:1px solid #d89b39; }
+.connection-dot {display:inline-block;width:8px;height:8px;border-radius:50%;background:#8995a0;flex-shrink:0;vertical-align:middle;margin:0 4px;}
+.connection-dot[data-state="connected"] {background:#67b98c;}
+.connection-dot[data-state="waiting"],.connection-dot[data-state="ready"],.connection-dot[data-state="demo"] {background:#b79d69;}
+.connection-dot[data-state="offline"],.connection-dot[data-state="warning"] {background:#ec8b75;}
+.connection-indicator {display:inline-block;max-width:100%;text-align:left;margin:10px 0 0;padding:0;border:0;background:transparent;}
+.connection-indicator summary {display:flex;align-items:center;gap:3px;cursor:pointer;font-size:12px;color:var(--muted);list-style:none;min-height:32px;}
+.connection-indicator summary::-webkit-details-marker {display:none;}
+.connection-indicator>div {max-width:420px;border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--panel);color:var(--text);font-size:13px;}
+.connection-indicator p {margin:6px 0 0;}
+.connection-account {padding:10px;margin:0 0 12px;border:1px solid var(--line);border-radius:8px;font-size:13px;}
+.connection-account p {margin:6px 0;}
+.connection-account small {display:block;line-height:1.5;}
+footer .connection-indicator {margin-left:18px;}
+@media(max-width:600px){footer .connection-indicator {display:block;margin-left:0;} .connection-indicator summary {min-height:44px;}}
