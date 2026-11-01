@@ -228,7 +228,7 @@ function refresh() {
     id: f.id,
     multi: [...f.querySelectorAll("select[multiple]")].map((e) => [e.name, [...e.selectedOptions].map((o) => o.value)]),
     values: [...f.elements]
-      .filter((e) => e.name && e.type !== "password")
+      .filter((e) => e.name && e.type !== "password" && !e.hasAttribute("data-private-password"))
       .map((e) => [e.name, e.value]),
   }));
   render();
@@ -363,6 +363,11 @@ function eventDescription(e) {
 }
 
 function field(label, name, type = "text", extra = "") {
+  // Senhas nunca entram na cópia de formulários, mesmo quando visíveis.
+  if (type === "password") {
+    const id = "credential-" + name;
+    return `<div class="password-field"><label for="${esc(id)}">${label}</label><div class="password-control"><input id="${esc(id)}" name="${esc(name)}" type="password" data-private-password ${extra}><button type="button" data-toggle-password aria-controls="${esc(id)}" aria-pressed="false" aria-label="Mostrar ${esc(label.toLowerCase())}">${passwordEye(false)}<span>Mostrar</span></button></div></div>`;
+  }
   return `<label>${label}<input name="${name}" type="${type}" ${extra}></label>`;
 }
 function select(label, name, opts) {
@@ -1933,7 +1938,7 @@ let cleanupPlan=null,cleanupBusy=false,cleanupCopied=false;
 function cleanupPanel(){
  const eligible=state.matches.filter(m=>!["Ao vivo","Pausada","Suspensa"].includes(m.status)&&!m.clock?.running);
  const p=cleanupPlan,m=p?.before;
- return `<section class="card"><h2>Limpeza de partidas de teste</h2><p>Remove uma partida da central, do painel público e da classificação. Equipes, jogadores, campeonatos, contas, logo, configurações e auditoria permanecem.</p><p><strong>A exclusão é permanente. A cópia é para consulta e não possui restauração automática.</strong> Partidas ao vivo, pausadas, suspensas ou com relógio rodando não podem ser removidas.</p><label>Partida para conferir<select id="cleanupMatch">${eligible.map(m=>`<option value="${esc(m.id)}" ${p?.matchId===m.id?"selected":""}>${esc(name(m.home)+" × "+name(m.away)+" • "+m.sport+" • "+format(m.date)+" • "+m.status)}</option>`).join("")||'<option value="">Nenhuma partida disponível</option>'}</select></label><button type="button" data-cleanup-preview ${cleanupBusy||!eligible.length?"disabled":""}>Conferir partida antes de excluir</button>${m?`<div class="public-notice"><h3>Prévia da exclusão</h3><p>${esc(name(m.home))} × ${esc(name(m.away))}<br>${esc(m.sport)} • ${esc(format(m.date))} • ${esc(m.status)}<br>${esc(m.competition||"Sem campeonato")}<br>Placar: ${esc(D.score(m).join(" × "))}<br>ID: ${esc(m.id)}</p><p>Será removida somente esta partida e sua publicação. O registro completo da exclusão ficará privado para o administrador principal.</p><button type="button" data-cleanup-copy ${cleanupBusy?"disabled":""}>Baixar cópia desta partida</button><form id="cleanupConfirm"><label>Motivo da limpeza<textarea name="cleanupReason" minlength="5" maxlength="500" required></textarea></label><label>Digite EXCLUIR para confirmar<input name="cleanupWord" autocomplete="off" required></label><label><input type="checkbox" name="cleanupSaved" required> Abri e conferi a cópia baixada e reconheço que não há restauração automática.</label><button type="submit" ${cleanupBusy||!cleanupCopied?"disabled":""}>Excluir somente a partida conferida</button></form><button type="button" data-cleanup-cancel ${cleanupBusy?"disabled":""}>Cancelar prévia</button></div>`:""}<hr><button type="button" data-cleanup-history>Baixar histórico de exclusões (JSON)</button><p class="muted">Exclusões também aparecem em Exportar auditoria completa. A primeira versão limpa partidas; não exclui cadastros de equipes, jogadores ou campeonatos.</p></section>`;
+ return `<section class="card"><h2>Limpeza de partidas de teste</h2><p>Remove uma partida da central, do painel público e da classificação. Equipes, jogadores, campeonatos, contas, logo, configurações e auditoria permanecem.</p><p><strong>A exclusão é permanente. A cópia é para consulta e não possui restauração automática.</strong> Partidas ao vivo, pausadas, suspensas ou com relógio rodando não podem ser removidas.</p><label>Partida para conferir<select id="cleanupMatch">${eligible.map(m=>`<option value="${esc(m.id)}" ${p?.matchId===m.id?"selected":""}>${esc(name(m.home)+" × "+name(m.away)+" • "+m.sport+" • "+format(m.date)+" • "+m.status)}</option>`).join("")||'<option value="">Nenhuma partida disponível</option>'}</select></label><button type="button" data-cleanup-preview ${cleanupBusy||!eligible.length?"disabled":""}>Conferir partida antes de excluir</button>${m?`<div class="public-notice"><h3>Prévia da exclusão</h3><p>${esc(name(m.home))} × ${esc(name(m.away))}<br>${esc(m.sport)} • ${esc(format(m.date))} • ${esc(m.status)}<br>${esc(m.competition||"Sem campeonato")}<br>Placar: ${esc(D.score(m).join(" × "))}<br>ID: ${esc(m.id)}</p><p>Será removida somente esta partida e sua publicação. O registro completo da exclusão ficará privado para o administrador principal.</p><button type="button" data-cleanup-copy ${cleanupBusy?"disabled":""}>Baixar cópia desta partida</button><form id="cleanupConfirm"><label>Motivo da limpeza<textarea name="cleanupReason" minlength="5" maxlength="500" required></textarea></label><label>Digite EXCLUIR para confirmar<input name="cleanupWord" autocomplete="off" required></label><label class="confirmation-check"><input type="checkbox" name="cleanupSaved" required><span>Abri e conferi a cópia baixada e reconheço que não há restauração automática.</span></label><button type="submit" ${cleanupBusy||!cleanupCopied?"disabled":""}>Excluir somente a partida conferida</button></form><button type="button" data-cleanup-cancel ${cleanupBusy?"disabled":""}>Cancelar prévia</button></div>`:""}<hr><button type="button" data-cleanup-history>Baixar histórico de exclusões (JSON)</button><p class="muted">Exclusões também aparecem em Exportar auditoria completa. A primeira versão limpa partidas; não exclui cadastros de equipes, jogadores ou campeonatos.</p></section>`;
 }
 document.addEventListener("click",async e=>{
  const b=e.target.closest("[data-cleanup-preview],[data-cleanup-copy],[data-cleanup-cancel],[data-cleanup-history]");
@@ -1976,6 +1981,23 @@ document.addEventListener("submit",async e=>{
   }else await cloud.deleteTestMatch(plan,reason,word);
   cleanupPlan=null;cleanupCopied=false;selected="";toast("Partida removida. Equipes, contas e histórico preservados.");
  }catch(error){toast(error.message,true);}finally{cleanupBusy=false;render();}
+});
+
+// 18 — Mostrar/ocultar senha. Só muda a exibição do campo nesta tela.
+function passwordEye(visible) {
+  return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>${visible?'<path d="m3 3 18 18"/>':""}</svg>`;
+}
+document.addEventListener("click", e => {
+  const button=e.target.closest("[data-toggle-password]");
+  if(!button||button.disabled)return;
+  const input=document.getElementById(button.getAttribute("aria-controls"));
+  if(!input?.hasAttribute("data-private-password"))return;
+  const visible=input.type==="password";
+  input.type=visible?"text":"password";
+  button.setAttribute("aria-pressed",String(visible));
+  const label=document.querySelector(`label[for="${input.id}"]`)?.textContent||"senha";
+  button.setAttribute("aria-label",(visible?"Ocultar ":"Mostrar ")+label.toLowerCase());
+  button.innerHTML=passwordEye(visible)+`<span>${visible?"Ocultar":"Mostrar"}</span>`;
 });
 
 boot();

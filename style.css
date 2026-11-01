@@ -1074,3 +1074,24 @@ input,select,textarea { background:var(--input); color:var(--text); border-color
 :root[data-theme="light"] .brand-signature { color:#425266; opacity:1; }
 :root[data-theme="light"] .danger { color:#9c1515; }
 @media print { :root { --bg:#fff; --panel:#fff; --text:#111; --muted:#333; --line:#aaa; --control:#fff; --input:#fff; } body { background:white!important; color:#111!important; } }
+
+/* 18 — Confirmações visíveis e controles de senha acessíveis. */
+label:has(> input[type="checkbox"]), .confirmation-check {
+  flex-direction:row; align-items:flex-start; gap:12px; cursor:pointer;
+  line-height:1.6; color:var(--text);
+}
+input[type="checkbox"] {
+  appearance:auto; -webkit-appearance:checkbox; flex:0 0 24px;
+  width:24px; height:24px; min-width:24px; min-height:24px;
+  padding:0; margin:3px 0 0; accent-color:var(--accent); cursor:pointer;
+}
+.confirmation-check { padding:14px; margin:14px 0; border:2px solid var(--line); border-radius:8px; background:var(--panel); }
+.confirmation-check span { flex:1; min-width:0; }
+input[type="checkbox"]:focus-visible { outline:3px solid var(--focus); outline-offset:4px; }
+.password-field { display:grid; gap:7px; min-width:0; }
+.password-control { display:flex; align-items:stretch; gap:8px; min-width:0; }
+.password-control input { flex:1; min-width:0; width:0; }
+.password-control button { flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; gap:6px; min-width:44px; min-height:44px; padding:10px; }
+/* Clip também oculta o atalho quando o navegador desativa transformações. */
+.skip-link:not(:focus-visible) { width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); clip-path:inset(50%); white-space:nowrap; }
+.skip-link:focus-visible { width:auto; height:auto; max-width:calc(100vw - 16px); margin:0; clip:auto; clip-path:none; white-space:normal; transform:none; }
