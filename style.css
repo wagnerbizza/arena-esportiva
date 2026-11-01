@@ -1168,3 +1168,8 @@ input[type="checkbox"]:focus-visible { outline:3px solid var(--focus); outline-o
 .team-directory-card .toolbar { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
 .team-directory-card .toolbar button { flex:1 1 130px; }
 @media(max-width:600px) { .location-trail { font-size:13px; padding:10px; gap:5px; } .team-directory-heading { flex-direction:column; } }
+
+/* 26 — Editor do elenco: a equipe fica visível durante todo o cadastro. */
+.team-player-editor { margin: 1.25rem 0; padding: 1.25rem; border: 2px solid var(--accent); border-radius: 14px; }
+.team-player-editor h4 { font-size: 1.1rem; margin: 0 0 1rem; }
+.team-player-editor .toolbar { display: flex; flex-wrap: wrap; gap: .6rem; }

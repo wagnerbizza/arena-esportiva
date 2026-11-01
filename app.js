@@ -1176,6 +1176,19 @@ document.addEventListener("submit", async (e) => {
       });
       return;
     }
+    if (f.id === "team-player") {
+      if (!canManageRosters()) throw Error("Conta sem acesso aos cadastros.");
+      const t=state.teams.find(t=>t.id===selectedTeamId);
+      if(!t||t.archived||section!=="teams"||teamProfileTab!=="roster"||!teamPlayerDraft) throw Error("Abra uma equipe ativa para alterar o elenco.");
+      const id=teamPlayerDraft.id||"";
+      if(id&&!state.players.some(p=>p.id===id&&p.team===t.id)) throw Error("Jogador indisponível nesta equipe. Reabra o cadastro.");
+      const record={id,team:t.id,name:d.name.trim(),number:d.number.trim(),position:d.position.trim(),reserve:d.reserve==="true"};
+      teamPlayerDraft=record;
+      await dispatch({type:"player",data:record});
+      teamPlayerDraft=null;teamHistoryLoaded=false;render();
+      toast(id?"Jogador atualizado nesta equipe.":"Jogador adicionado nesta equipe.");
+      return;
+    }
     if (["team", "player", "match", "settings", "championship"].includes(f.id)) {
       if (f.id === "settings") {
         if (systemLogoBusy) throw Error("Aguarde a preparação do logo antes de salvar.");
@@ -2179,7 +2192,8 @@ document.addEventListener("click",e=>{
 
 // 24 — Ficha da equipe. Dados atuais, partidas e lances têm escopos separados.
 let teamProfileContext="";
-function resetTeamProfileContext(){const current=(C.demo?"demo":user?.uid||"anônimo")+":"+role+":"+canManageRosters();if(current===teamProfileContext)return;teamProfileContext=current;teamFormVisible=false;teamEditorId="";selectedTeamId="";teamHistoryRows=[];teamHistoryLoaded=false;teamEventsKey="";teamProfileRequest++;teamProfileBusy=false;}
+let teamPlayerDraft=null;
+function resetTeamProfileContext(){const current=(C.demo?"demo":user?.uid||"anônimo")+":"+role+":"+canManageRosters();if(current===teamProfileContext)return;teamProfileContext=current;teamPlayerDraft=null;teamFormVisible=false;teamEditorId="";selectedTeamId="";teamHistoryRows=[];teamHistoryLoaded=false;teamEventsKey="";teamProfileRequest++;teamProfileBusy=false;}
 let selectedTeamId="",teamProfileTab="data",teamProfileSport="",teamProfileChamp="",teamHistoryRows=[],teamHistoryLoaded=false,teamProfileBusy=false,teamEventsKey="",teamProfileRequest=0;
 function teamSports(t){return [...new Set([...(t.sports||[]),...state.matches.filter(m=>[m.home,m.away].includes(t.id)).map(m=>m.sport)])].sort();}
 function teamMatches(){return state.matches.filter(m=>[m.home,m.away].includes(selectedTeamId)&&(!teamProfileSport||m.sport===teamProfileSport)&&(!teamProfileChamp||(m.championshipId||"__unlinked__")===teamProfileChamp));}
@@ -2224,7 +2238,7 @@ function teamProfileView(){
  const championships=[...new Map(state.matches.filter(m=>[m.home,m.away].includes(t.id)).map(m=>[m.championshipId||"__unlinked__",m.championshipId?(m.competition||"Campeonato"):"Sem vínculo com campeonato"])).entries()];
  let content="";
  if(teamProfileTab==="data")content=`<section class="card"><h3>Cadastro atual</h3><dl class="account-details"><div><dt>Nome</dt><dd>${esc(t.name)}</dd></div><div><dt>Sigla</dt><dd>${esc(t.short||"Não informada")}</dd></div><div><dt>Técnico(a)</dt><dd>${esc(t.coach||"Não informado")}</dd></div><div><dt>Categoria</dt><dd>${esc(t.category||"Não informada")}</dd></div><div><dt>Modalidades cadastradas</dt><dd>${esc((t.sports||[]).join(", ")||"Ainda não informadas")}</dd></div><div><dt>Situação</dt><dd>${t.archived?"Arquivada":"Ativa"}</dd></div></dl><p class="muted">O cadastro atual não reescreve os elencos e técnicos congelados nas súmulas das partidas já criadas.</p><button type="button" data-profile-edit>Editar dados e modalidades</button>${role==="admin"?` <button type="button" data-profile-archive ${teamProfileBusy?"disabled":""}>${t.archived?"Reativar equipe":"Arquivar equipe"}</button><p class="muted">Arquivar preserva nome, jogadores, resultados e histórico. A equipe sai das opções de novos jogos e novos jogadores, e pode ser reativada.</p>`:""}</section>`;
- if(teamProfileTab==="roster")content=`<section class="card"><h3>Elenco atual • ${roster.length} jogador(es)</h3>${!t.archived?'<button type="button" data-profile-new-player>Adicionar jogador nesta equipe</button>':'<p>Reative a equipe antes de alterar o elenco.</p>'}${roster.length?table(["Nome","Número","Posição","Escalação","Ação"],roster.map(p=>tr([p.name,p.number,p.position,p.reserve?"Reserva / banco":"Titular"]).replace("</tr>",`<td>${!t.archived?`<button type="button" data-profile-player="${esc(p.id)}">Editar jogador</button>`:"—"}</td></tr>`))):empty("Nenhum jogador cadastrado nesta equipe.")}<p class="muted">Cartões, faltas e pontos são registrados na partida. Consulte Estatísticas para os lances dos jogos selecionados.</p></section>`;
+ if(teamProfileTab==="roster")content=`<section class="card"><h3>Elenco atual • ${roster.length} jogador(es)</h3>${!t.archived?'<button type="button" data-profile-new-player>Adicionar jogador nesta equipe</button>':'<p>Reative a equipe antes de alterar o elenco.</p>'}${teamPlayerEditor(t)}${roster.length?table(["Nome","Número","Posição","Escalação","Ação"],roster.map(p=>tr([p.name,p.number,p.position,p.reserve?"Reserva / banco":"Titular"]).replace("</tr>",`<td>${!t.archived?`<button type="button" data-profile-player="${esc(p.id)}">Editar jogador</button>`:"—"}</td></tr>`))):empty("Nenhum jogador cadastrado nesta equipe.")}<p class="muted">Cartões, faltas e pontos são registrados na partida. Consulte Estatísticas para os lances dos jogos selecionados.</p></section>`;
  if(teamProfileTab==="games")content=`<div class="grid">${games.map(m=>matchCard(m,true)).join("")||empty("Nenhuma partida corresponde a esta equipe e aos filtros.")}</div>${role!=="admin"?'<p>Esta conta vê somente suas partidas atribuídas.</p>':""}`;
  if(teamProfileTab==="stats"){
   const stats=teamStatistics(games,t.id),ready=C.demo||teamEventsKey===teamMatchKey(),events=ready?teamAthleteEvents(games,t.id):[];
@@ -2244,9 +2258,9 @@ document.addEventListener("click",async e=>{
  const b=e.target.closest("[data-team-profile],[data-profile-back],[data-profile-tab],[data-profile-edit],[data-profile-archive],[data-profile-new-player],[data-profile-player],[data-profile-events],[data-profile-history]");if(!b)return;
  try{
   if(!canManageRosters())throw Error("Conta sem acesso aos cadastros.");
-  if(b.dataset.teamProfile){teamProfileBusy=false;selectedTeamId=b.dataset.teamProfile;teamProfileTab=["roster","games"].includes(b.dataset.initialTeamTab)?b.dataset.initialTeamTab:"data";teamProfileSport="";teamProfileChamp="";teamHistoryRows=[];teamHistoryLoaded=false;teamEventsKey="";teamProfileRequest++;section="teams";render();return;}
-  if(b.hasAttribute("data-profile-back")){teamFormVisible=false;teamEditorId="";selectedTeamId="";teamProfileBusy=false;teamProfileRequest++;render();return;}
-  if(b.dataset.profileTab){if(["stats","history"].includes(b.dataset.profileTab)&&role!=="admin")return;teamProfileTab=b.dataset.profileTab;render();return;}
+  if(b.dataset.teamProfile){teamProfileBusy=false;selectedTeamId=b.dataset.teamProfile;teamProfileTab=["roster","games"].includes(b.dataset.initialTeamTab)?b.dataset.initialTeamTab:"data";teamProfileSport="";teamProfileChamp="";teamHistoryRows=[];teamHistoryLoaded=false;teamEventsKey="";teamProfileRequest++;section="teams";teamPlayerDraft=null;render();return;}
+  if(b.hasAttribute("data-profile-back")){teamPlayerDraft=null;teamFormVisible=false;teamEditorId="";selectedTeamId="";teamProfileBusy=false;teamProfileRequest++;render();return;}
+  if(b.dataset.profileTab){if(["stats","history"].includes(b.dataset.profileTab)&&role!=="admin")return;teamProfileTab=b.dataset.profileTab;teamPlayerDraft=null;render();return;}
   if(b.hasAttribute("data-profile-edit")){openTeamEditor(selectedTeamId);return;}
   const teamId=selectedTeamId,t=state.teams.find(t=>t.id===teamId);if(!t)return;
   if(b.hasAttribute("data-profile-archive")){
@@ -2256,8 +2270,10 @@ document.addEventListener("click",async e=>{
   }
   if(b.hasAttribute("data-profile-new-player")||b.dataset.profilePlayer){
    if(t.archived)throw Error("Reative a equipe antes de alterar seu elenco.");
-   selectedTeamId="";section="players";listFilters.players={...listDefaults.players,team:teamId};render();
-   if(b.dataset.profilePlayer)document.querySelector(`[data-edit-player="${CSS.escape(b.dataset.profilePlayer)}"]`)?.click();else{$("#player").elements.team.value=teamId;$("#player").scrollIntoView({block:"start"});}return;
+   const player=b.dataset.profilePlayer?state.players.find(p=>p.id===b.dataset.profilePlayer&&p.team===teamId):null;
+   if(b.dataset.profilePlayer&&!player)throw Error("Jogador não encontrado nesta equipe.");
+   teamPlayerDraft=player?{...player}:{name:"",number:"",position:"",reserve:false};
+   teamProfileTab="roster";render();$("#team-player")?.scrollIntoView({block:"center"});$("#team-player")?.elements.name.focus({preventScroll:true});return;
   }
   if(role!=="admin"||teamProfileBusy)return;
   const request=++teamProfileRequest;teamProfileBusy=true;refresh();
@@ -2298,5 +2314,13 @@ document.addEventListener("click",e=>{
  teamFormVisible=!!e.target.closest("[data-new-team-form]");section="teams";render();
  if(teamFormVisible){$("#team")?.scrollIntoView({block:"start"});$("#team")?.elements.name.focus({preventScroll:true});}
 });
+
+// 26 — Editor do elenco dentro da equipe. Usa a mesma gravação e auditoria dos cadastros.
+function teamPlayerEditor(t){
+ if(!teamPlayerDraft||t.archived)return "";
+ const p=teamPlayerDraft,v=k=>esc(p[k]||"");
+ return `<section class="team-player-editor" aria-labelledby="teamPlayerTitle"><h4 id="teamPlayerTitle">${p.id?"Editar jogador":"Novo jogador"} • ${esc(t.name)}</h4><form id="team-player"><div class="formgrid"><label>Nome do jogador<input name="name" required maxlength="150" value="${v("name")}" autocomplete="off"></label><label>Número da camisa<input name="number" maxlength="8" value="${v("number")}"></label><label>Posição<input name="position" maxlength="50" value="${v("position")}" placeholder="Ex.: goleiro, zagueiro, atacante"></label><label>Escalação no cadastro<select name="reserve"><option value="false" ${!p.reserve?"selected":""}>Titular</option><option value="true" ${p.reserve?"selected":""}>Reserva / banco</option></select></label></div><p class="muted">Salva no elenco atual de ${esc(t.name)}. Não altera jogadores ou escalações das súmulas já criadas. O administrador principal pode consultar a alteração em Histórico de alterações.</p><div class="toolbar"><button class="primary">${p.id?"Salvar alterações do jogador":"Salvar jogador nesta equipe"}</button><button type="button" data-player-editor-cancel>Cancelar edição</button></div></form></section>`;
+}
+document.addEventListener("click",e=>{if(e.target.closest("[data-player-editor-cancel]")){teamPlayerDraft=null;render();}});
 
 boot();
