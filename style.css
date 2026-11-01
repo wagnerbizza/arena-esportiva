@@ -1124,3 +1124,29 @@ input[type="checkbox"]:focus-visible { outline:3px solid var(--focus); outline-o
  .preferences-dialog-heading { flex-wrap:wrap; }
  .accessibility-float { right:12px; bottom:12px; }
 }
+
+/* 21/22 — Áreas da central e painel público. */
+.workspace-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:16px 0 12px; }
+.workspace-tabs button { text-align:left; padding:16px; display:grid; gap:7px; min-width:0; }
+.workspace-tabs strong { font-size:17px; }
+.workspace-tabs small { font-size:12px; font-weight:400; line-height:1.5; }
+.workspace-subtabs { padding:12px; border:1px solid var(--line); border-radius:12px; margin-bottom:20px; background:var(--panel); }
+.documentation-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:18px; margin-top:20px; }
+.documentation-grid article { padding:18px; border:1px solid var(--line); border-radius:12px; }
+.documentation-grid article h3 { margin-top:0; }
+.documentation-grid p,.documentation-grid li { line-height:1.7; }
+.admin-metrics,.public-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin:20px 0; }
+.admin-metrics article,.public-metrics article { border:1px solid var(--line); border-radius:12px; padding:20px; background:var(--panel); display:grid; gap:5px; }
+.admin-metrics strong,.public-metrics strong { font-size:34px; line-height:1.2; }
+.public-metrics article { border-top:3px solid var(--accent); }
+.public-navigation { margin:20px 0; }
+.public-goals { margin-top:-4px; }
+.sport-challenge { max-width:850px; margin:20px auto; }
+.public-locations { margin-top:22px; }
+.google-button { display:inline-flex; align-items:center; justify-content:center; gap:10px; min-height:48px; }
+.google-symbol { flex:0 0 20px; background:white; border-radius:50%; padding:3px; box-sizing:content-box; }
+.access-card { border-top:4px solid var(--accent); padding:28px; border-radius:16px; }
+.access-card .google-entry .google-button { width:100%; }
+.access-card .toolbar { gap:10px; }
+@media(max-width:700px) { .workspace-tabs { grid-template-columns:repeat(2,minmax(0,1fr)); } .workspace-tabs button { padding:12px; } .workspace-tabs small { display:none; } .public-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.workspace-tabs button.active small { color:inherit; }

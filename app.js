@@ -198,10 +198,10 @@ function setSystemLogoDraft(value) {
 function googleLinkPanel() {
   if (!user || C.demo) return "";
   const linked = (user.providerData || []).find((p) => p.providerId === "google.com");
-  return `<section class="google-account"><h3>Entrada com Google</h3>${linked ? `<p><strong>Google vinculado</strong>${linked.email ? "<br>" + esc(linked.email) : ""}</p><p class="muted">Você pode entrar pelo Google usando esta identidade. Suas permissões continuam as mesmas.</p>` : `<p>Conta atual: <strong>${esc(user.email || accountName())}</strong>. Adicione o Google mantendo esta conta e seus acessos.</p><p class="muted">Na janela do Google, selecione preferencialmente o mesmo e-mail desta conta. Se já existir outra conta cadastrada com essa identidade Google, a vinculação será recusada.</p><button type="button" class="google-button" data-google-link ${accessBusy ? "disabled" : ""}>Vincular Google à minha conta atual</button>`}</section>`;
+  return `<section class="google-account"><h3>Entrada com Google</h3>${linked ? `<p><strong>Google vinculado</strong>${linked.email ? "<br>" + esc(linked.email) : ""}</p><p class="muted">Você pode entrar pelo Google usando esta identidade. Suas permissões continuam as mesmas.</p>` : `<p>Conta atual: <strong>${esc(user.email || accountName())}</strong>. Adicione o Google mantendo esta conta e seus acessos.</p><p class="muted">Na janela do Google, selecione preferencialmente o mesmo e-mail desta conta. Se já existir outra conta cadastrada com essa identidade Google, a vinculação será recusada.</p><button type="button" class="google-button" data-google-link ${accessBusy ? "disabled" : ""}>${googleSymbol()}<span>Vincular Google à minha conta atual</span></button>`}</section>`;
 }
 function googleEntryButton(registerIntent = false) {
-  return `<div class="google-entry"><button type="button" class="google-button" data-google-entry="${registerIntent ? "register" : "login"}" ${!cloud || accessBusy ? "disabled" : ""}>${registerIntent ? "Cadastrar com Google" : "Entrar com Google"}</button><p class="muted">${registerIntent ? "Use seu nome e e-mail do Google. Não precisa preencher uma senha neste formulário. O acesso depende da aprovação do administrador." : "Já tem conta por e-mail e senha? Entre por ela primeiro e vincule o Google em Minha conta."}</p></div>`;
+  return `<div class="google-entry"><button type="button" class="google-button" data-google-entry="${registerIntent ? "register" : "login"}" ${!cloud || accessBusy ? "disabled" : ""}>${googleSymbol()}<span>${registerIntent ? "Cadastrar com Google" : "Entrar com Google"}</span></button><p class="muted">${registerIntent ? "Use seu nome e e-mail do Google. Não precisa preencher uma senha neste formulário. O acesso depende da aprovação do administrador." : "Já tem conta por e-mail e senha? Entre por ela primeiro e vincule o Google em Minha conta."}</p></div>`;
 }
 function accountView() {
   if (C.demo) return `<section class="card"><h2>Minha conta</h2><p>Você está na demonstração local. Nome, e-mail e recuperação de senha aparecem ao entrar com uma conta do Firebase.</p></section>`;
@@ -529,7 +529,7 @@ function render() {
       D.SPORTS,
       (x) => x,
       (x) => x,
-    )}</select></div><div id="publicMatches" class="grid">${publicMatches(publicFilter)}</div>${standingsPanel()}`;
+    )}</select></div>${publicHub()}`;
     $("#filter").value = publicFilter;
     if (state.settings.banner)
       $("#hero").style.backgroundImage =
@@ -537,7 +537,7 @@ function render() {
     return;
   }
   // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
-  if (role !== "admin" && !["overview", "matches", "account"].includes(section)) {
+  if (role !== "admin" && !["overview", "matches", "account", "documentation"].includes(section)) {
     section = "overview";
     selected = "";
   }
@@ -555,17 +555,10 @@ function render() {
     ["settings", "Configurações"],
     ["users", "Usuários e permissões"],
     ["account", "Minha conta"],
+    ["documentation", "Guias e documentação"],
+    ["monitor", "Operadores e partidas"],
   ];
-  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">PAINEL DA ORGANIZAÇÃO</span><h2>${esc(state.settings.title)}</h2></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div><nav>${sections
-    .filter(
-      ([id]) =>
-        id !== "account" && (role === "admin" || ["overview", "matches"].includes(id)),
-    )
-    .map(
-      ([id, label]) =>
-        `<button data-section="${id}" class="${section === id ? "active" : ""}">${label}</button>`,
-    )
-    .join("")}</nav><div id="view">${view()}</div>`;
+  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">PAINEL DA ORGANIZAÇÃO</span><h2>${esc(state.settings.title)}</h2></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${workspaceNavigation(sections)}<div id="view">${view()}</div>`;
   if (busy || accessBusy) app.querySelectorAll("button").forEach((b) => (b.disabled = true));
   if (section === "reports" && $("[name=reportMatch]")) {
     $("[name=reportMatch]").value = reportFilter;
@@ -576,7 +569,8 @@ function render() {
   }
 }
 function publicMatches(filter) {
-  const list = state.matches.filter((m) => !filter || m.sport === filter);
+  const list = state.matches.filter(m=>(!filter||m.sport===filter)&&
+    (publicArea==="live"?m.status==="Ao vivo":publicArea==="schedule"?["Agendada","Adiada"].includes(m.status):publicArea==="results"?["Encerrada","Homologada","Cancelada"].includes(m.status):true));
   return list.length
     ? list
         .slice()
@@ -590,6 +584,8 @@ function publicMatches(filter) {
     : empty("Nenhuma partida publicada para esta seleção.");
 }
 function view() {
+  if(section==="documentation")return documentationView();
+  if(section==="monitor"&&role==="admin")return operatorMonitor();
   if (section === "cleanup" && role === "admin") return cleanupPanel();
   if (section === "standings" && role === "admin") return standingsPanel();
   if (section === "account") return accountView();
@@ -1078,7 +1074,7 @@ function download(name, value) {
 }
 // 7 — Acesso e aprovação. Senhas ficam somente no Firebase Authentication.
 function accessView() {
-  const wrap = (content) => `<section class="card" style="max-width:520px;margin:40px auto"><span class="tag">ACESSO À CENTRAL</span>${content}</section>`;
+  const wrap = (content) => `<section class="card access-card" style="max-width:520px;margin:40px auto"><span class="tag">ACESSO À CENTRAL</span>${content}</section>`;
   if (user) {
     const messages = {
       loading: "Conferindo sua autorização…",
@@ -1586,7 +1582,7 @@ document.addEventListener("change", async (e) => {
     }
     if (e.target.id === "filter") {
       publicFilter = e.target.value;
-      $("#publicMatches").innerHTML = publicMatches(publicFilter);
+      render();
     }
     if (e.target.name === "reportMatch") {
       reportFilter = e.target.value;
@@ -2095,5 +2091,76 @@ function setupAccountTools(){
  document.addEventListener("focusin",e=>{if(!e.target.closest("#sessionIdentity"))closeAccountMenu();});
 }
 setupAccountTools();
+
+// 21 — Organização da central. Permissões continuam validadas pelo Firebase.
+const workspaceDefinitions=[
+ {id:"games",title:"Jogos",intro:"Programação, operação e classificação",sections:["overview","matches","championships","standings"]},
+ {id:"records",title:"Cadastros",intro:"Equipes, jogadores e importações",sections:["teams","players","imports"]},
+ {id:"documents",title:"Documentação",intro:"Guias, súmulas e relatórios",sections:["documentation","reports"]},
+ {id:"administration",title:"Administração",intro:"Operadores, acessos e configurações",sections:["monitor","users","settings","cleanup"]}
+];
+function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation"].includes(id));}
+function workspaceNavigation(sections){
+ const visible=workspaceDefinitions.filter(g=>allowedWorkspaceSections(g).length);
+ const current=visible.find(g=>g.sections.includes(section));
+ const group=current||visible[0];
+ return `<nav class="workspace-tabs noprint" aria-label="Áreas da central">${visible.map(g=>`<button type="button" data-workspace="${g.id}" class="${group?.id===g.id&&section!=="account"?"active":""}" ${group?.id===g.id&&section!=="account"?'aria-current="page"':""}><strong>${g.title}</strong><small>${g.intro}</small></button>`).join("")}</nav>${section!=="account"?`<nav class="workspace-subtabs noprint" aria-label="Seções de ${esc(group.title)}">${allowedWorkspaceSections(group).map(id=>sections.find(s=>s[0]===id)).filter(Boolean).map(([id,label])=>`<button type="button" data-section="${id}" class="${section===id?"active":""}" ${section===id?'aria-current="page"':""}>${label}</button>`).join("")}</nav>`:""}`;
+}
+function documentationView(){
+ const central=new URL("painel.html",location.href);central.search="";
+ const pub=new URL("index.html",location.href);pub.search="";
+ const signup=new URL(central);signup.search="?acesso=cadastro";
+ return `<section class="card"><span class="tag">GUIAS E DOCUMENTOS</span><h2>Central de documentação</h2><p>Encontre orientações e os endereços para usar a Arena em outros computadores. Cada pessoa usa sua própria conta.</p><div class="documentation-grid"><article><h3>Operar uma partida</h3><ol><li>Abra Jogos → Partidas e escolha uma partida autorizada.</li><li>Inicie o jogo, confira as equipes e registre os lances.</li><li>Use pausas e avisos para informar interrupções. Ao terminar, encerre a partida.</li></ol><button type="button" data-section="matches">Abrir partidas</button></article><article><h3>Usar em outro computador</h3><p>Abra o link da central em um navegador com internet. Entre com sua conta Google vinculada ou e-mail e senha. Não é necessário instalar VS Code ou GitHub para operar os jogos.</p><p><a href="${esc(central.href)}" target="_blank" rel="noopener">Abrir central</a> · <a href="${esc(pub.href)}" target="_blank" rel="noopener">Abrir painel público</a></p></article><article><h3>Novos operadores</h3><p>Envie o cadastro. A pessoa cria a conta, confirma o e-mail quando solicitado e aguarda a aprovação do administrador principal, que atribui as partidas.</p><a class="button" href="${esc(signup.href)}" target="_blank" rel="noopener">Abrir cadastro de operador</a></article><article><h3>Conta e leitura</h3><p>No menu Minha conta, confira o perfil, os métodos de entrada e a redefinição de senha. Aparência e acessibilidade muda tema, texto e contraste apenas neste navegador.</p><button type="button" data-open-accessibility>Abrir acessibilidade</button></article>${role==="admin"?'<article><h3>Súmulas e relatórios</h3><p>Consulte PDF, Excel, auditoria e cópia JSON. As cópias JSON são para consulta; ainda não há restauração automática.</p><button type="button" data-section="reports">Abrir súmulas e relatórios</button></article><article><h3>Compartilhar ou entregar o sistema</h3><p>Para colaboração, aprove contas e atribua partidas. Para outra organização independente, use uma cópia do código com GitHub e Firebase próprios. Transferir esta instalação exige revisar a propriedade e o UID principal no código e nas regras; transferir só o repositório não troca esse administrador.</p></article><article><h3>Limpeza de testes</h3><p>Remova somente a partida conferida, após baixar a cópia. Histórico e contas são preservados. Não é uma lixeira e não há restauração automática.</p><button type="button" data-section="cleanup">Abrir limpeza de testes</button></article>':""}</div></section>`;
+}
+function operatorMonitor(){
+ if(role!=="admin")return "";
+ const people=(state.users||[]).filter(u=>u.id!==(cloud?.mainUID||user?.uid));
+ const operators=people.filter(u=>u.role==="operator"&&u.enabled!==false),pending=people.filter(u=>u.role==="pending");
+ const assigned=new Set(operators.flatMap(u=>u.matches||[]));
+ const operational=state.matches.filter(m=>!["Encerrada","Homologada","Cancelada"].includes(m.status));
+ const unassigned=operational.filter(m=>!assigned.has(m.id));
+ return `<section class="card"><span class="tag">ADMINISTRAÇÃO</span><h2>Operadores e distribuição de partidas</h2><p>Acompanhe as aprovações e quem tem autorização em cada jogo. “Aprovado” indica permissão de acesso; não indica que a pessoa esteja conectada neste momento.</p><div class="admin-metrics"><article><strong>${operators.length}</strong><span>Operadores aprovados</span></article><article><strong>${pending.length}</strong><span>Solicitações pendentes</span></article><article><strong>${unassigned.length}</strong><span>Partidas em aberto sem operador</span></article></div><button type="button" data-section="users">Gerenciar acessos e atribuições</button>${table(["Pessoa","E-mail","Situação do acesso","Partidas existentes atribuídas"],people.map(u=>tr([u.name||"Operador",u.email||"Não informado",u.role==="pending"?"Aguardando aprovação":u.role==="operator"?(u.enabled===false?"Bloqueado":"Aprovado"):"Revisar perfil",(u.matches||[]).map(id=>state.matches.find(m=>m.id===id)).filter(Boolean).map(m=>`${name(m.home)} × ${name(m.away)} (${m.status})`).join("; ")||"Nenhuma"]))) }${people.length?"":empty(C.demo?"A demonstração não contém contas reais de operadores.":"Nenhum operador cadastrado.")}</section><section class="card"><h3>Partidas em aberto sem operador atribuído</h3>${unassigned.length?table(["Partida","Modalidade","Situação","Local"],unassigned.map(m=>tr([name(m.home)+" × "+name(m.away),m.sport,m.status,m.place||"A definir"]))):empty("Todas as partidas em aberto possuem operador aprovado atribuído, ou não há partidas em aberto.")}<p class="muted">O administrador principal continua autorizado a operar todas as partidas.</p></section>`;
+}
+document.addEventListener("click",e=>{
+ const b=e.target.closest("[data-workspace]");if(!b)return;
+ const group=workspaceDefinitions.find(g=>g.id===b.dataset.workspace),allowed=group&&allowedWorkspaceSections(group);
+ if(!allowed?.length)return;
+ const target=allowed.includes(section)?section:allowed[0];cloud?.stopHistory();selected="";pendingImport=null;section=target;render();
+});
+
+// 22 — Painel público: estatísticas dos jogos publicados e diversão apenas local.
+let publicArea="all",sportChallengeIndex=0,sportChallengeAnswer="";
+const sportChallenges=[
+ {question:"Qual jogador tem a função de proteger o gol no futebol?",answers:["Goleiro","Levantador","Pivô"],correct:0,explanation:"O goleiro atua na defesa do gol."},
+ {question:"Em qual modalidade a cesta é usada para pontuar?",answers:["Vôlei","Basquete","Futebol"],correct:1,explanation:"A cesta faz parte do basquete."},
+ {question:"Qual destas modalidades tem uma rede dividindo a quadra?",answers:["Futebol","Basquete","Vôlei"],correct:2,explanation:"No vôlei, a rede separa os dois lados da quadra."}
+];
+function publicStatistics(){
+ const games=state.matches.filter(m=>!publicFilter||m.sport===publicFilter),ended=games.filter(m=>["Encerrada","Homologada"].includes(m.status));
+ const football=ended.filter(m=>m.sport==="Futebol"),goals=football.reduce((sum,m)=>sum+(m.score||[0,0]).reduce((a,n)=>a+(Number.isFinite(n)?n:0),0),0),teams=new Set(games.flatMap(m=>[m.home,m.away]).filter(Boolean));
+ return `<div class="public-metrics" aria-label="Estatísticas dos jogos publicados"><article><strong>${games.filter(m=>m.status==="Ao vivo").length}</strong><span>Jogos ao vivo</span></article><article><strong>${games.filter(m=>["Agendada","Adiada"].includes(m.status)).length}</strong><span>Jogos programados</span></article><article><strong>${ended.length}</strong><span>Jogos concluídos</span></article><article><strong>${teams.size}</strong><span>Equipes nas partidas</span></article></div>${!publicFilter||publicFilter==="Futebol"?`<p class="muted public-goals">Futebol: ${goals} gol(s) em ${football.length} partida(s) encerrada(s) ou homologada(s).</p>`:""}`;
+}
+function publicChallenge(){
+ const q=sportChallenges[sportChallengeIndex%sportChallenges.length],answered=sportChallengeAnswer!=="";
+ return `<section class="card sport-challenge"><span class="tag">INTERVALO ESPORTIVO</span><h2>Desafio rápido</h2><p>Uma brincadeira para aprender enquanto acompanha as partidas. Suas respostas ficam apenas nesta página.</p><h3>${esc(q.question)}</h3><div class="toolbar">${q.answers.map((a,i)=>`<button type="button" data-sport-answer="${i}" ${answered?"disabled":""}>${esc(a)}</button>`).join("")}</div>${answered?`<p role="status"><strong>${Number(sportChallengeAnswer)===q.correct?"Acertou!":"Vamos aprender!"}</strong> ${esc(q.explanation)}</p><button type="button" data-sport-next>Próximo desafio</button>`:""}</section>`;
+}
+function publicHub(){
+ const tabs=[["all","Todos os jogos"],["live","Ao vivo"],["schedule","Agenda"],["results","Resultados"],["standings","Classificação"],["fun","Diversão"]];
+ return `${publicStatistics()}<nav class="public-navigation" aria-label="Conteúdo do painel público">${tabs.map(([id,label])=>`<button type="button" data-public-area="${id}" class="${id===publicArea?"active":""}" ${id===publicArea?'aria-current="page"':""}>${label}</button>`).join("")}</nav><div id="publicHubContent">${publicHubContent()}</div>`;
+}
+function publicHubContent(){
+ if(publicArea==="fun")return publicChallenge();
+ if(publicArea==="standings")return standingsPanel()||empty("A classificação estará disponível quando houver partidas vinculadas a um campeonato de futebol.");
+ return `<div id="publicMatches" class="grid">${publicMatches(publicFilter)}</div>${publicArea==="all"?'<section class="card public-locations"><h2>Esporte em diferentes locais</h2><p>Veja o local informado em cada partida. Use a modalidade, a agenda e os jogos ao vivo para acompanhar os eventos publicados pela organização.</p></section>':""}`;
+}
+function googleSymbol(){return '<svg class="google-symbol" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.32 2.98-7.36Z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.41l-3.24-2.51c-.9.6-2.05.97-3.38.97-2.6 0-4.8-1.76-5.59-4.12H3.07v2.59A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.41 13.93a6 6 0 0 1 0-3.86V7.48H3.07a10 10 0 0 0 0 9.04l3.34-2.59Z"/><path fill="#EA4335" d="M12 5.95c1.47 0 2.78.5 3.82 1.5l2.86-2.87A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.93 5.48l3.34 2.59C7.2 7.7 9.4 5.95 12 5.95Z"/></svg>';}
+document.addEventListener("click",e=>{
+ if(admin)return;
+ const area=e.target.closest("[data-public-area]");
+ if(area){publicArea=area.dataset.publicArea;render();return;}
+ const answer=e.target.closest("[data-sport-answer]");
+ if(answer&&sportChallengeAnswer===""){sportChallengeAnswer=answer.dataset.sportAnswer;const out=$("#publicHubContent");if(out)out.innerHTML=publicChallenge();return;}
+ if(e.target.closest("[data-sport-next]")){sportChallengeIndex++;sportChallengeAnswer="";const out=$("#publicHubContent");if(out)out.innerHTML=publicChallenge();}
+});
 
 boot();
