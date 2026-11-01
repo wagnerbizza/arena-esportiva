@@ -581,7 +581,7 @@ function render() {
 }
 function publicMatches(filter) {
   const list = state.matches.filter(m=>(!filter||m.sport===filter)&&
-    (publicArea==="live"?m.status==="Ao vivo":publicArea==="schedule"?["Agendada","Adiada"].includes(m.status):publicArea==="results"?["Encerrada","Homologada","Cancelada"].includes(m.status):true));
+    (publicArea==="live"?m.status==="Ao vivo":publicArea==="schedule"?["Agendada","Adiada"].includes(m.status):publicArea==="results"?finalStatuses.includes(m.status):publicArea==="active"?!finalStatuses.includes(m.status):true));
   return list.length
     ? list
         .slice()
@@ -603,30 +603,7 @@ function view() {
   if (section === "account") return accountView();
   if (section === "championships" && role === "admin") return championshipsView();
   if (section === "users" && role === "admin") return usersView();
-  if (section === "overview")
-    return `<div class="grid">${[
-      ["Equipes", state.teams.length],
-      ["Jogadores", state.players.length],
-      [
-        "Partidas ao vivo",
-        state.matches.filter((m) => m.status === "Ao vivo").length,
-      ],
-    ]
-      .map(
-        ([l, n]) =>
-          `<div class="card"><span class="muted">${l}</span><div class="kpi">${n}</div></div>`,
-      )
-      .join("")}</div><h2>Quadra e campo</h2><div class="grid">${
-      state.matches.length
-        ? state.matches
-            .slice(-6)
-            .reverse()
-            .map((m) => matchCard(m, true))
-            .join("")
-        : empty(
-            "Comece cadastrando duas equipes e seus jogadores; depois crie uma partida.",
-          )
-    }</div>`;
+  if (section === "overview")return overviewMatchView();
   if (section === "teams") return teamsDirectoryView();
   if (section === "players")
     return `<div class="card"><h2>Cadastrar jogador</h2><p class="muted">Cadastre o elenco antes de criar a partida. A súmula preserva uma cópia do elenco daquela data.</p><form id="player"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome", "name", "text", "required")}${select("Equipe", "team", teamOptions())}${field("Número", "number")}${field("Posição", "position")}${select("Escalação", "reserve", '<option value="false">Titular</option><option value="true">Reserva / banco</option>')}</div><button class="primary">Salvar jogador</button> <button type="button" data-section="imports">Importar jogadores</button></form></div>${listPanel("players")}`;
@@ -2157,7 +2134,7 @@ document.addEventListener("click",e=>{
 });
 
 // 22 — Painel público: estatísticas dos jogos publicados e diversão apenas local.
-let publicArea="all",sportChallengeIndex=0,sportChallengeAnswer="",quizHits=0,quizAttempts=0;
+let publicArea="active",sportChallengeIndex=0,sportChallengeAnswer="",quizHits=0,quizAttempts=0;
 const sportChallenges=[
  {question:"O placar estava 2 × 1 e a equipe visitante marcou. Como fica?",answers:["3 × 1","2 × 2","2 × 1"],correct:1,explanation:"O gol visitante acrescenta um ao segundo número: 2 × 2."},
  {question:"Um time marcou 3 gols e sofreu 1. Qual é o saldo de gols?",answers:["+2","+4","−2"],correct:0,explanation:"Saldo é gols marcados menos sofridos: 3 − 1 = +2."},
@@ -2176,13 +2153,13 @@ function publicChallenge(){
  return `<section class="card sport-challenge"><span class="tag">INTERVALO ESPORTIVO</span><h2>Desafio rápido</h2><p>Uma brincadeira para aprender enquanto acompanha as partidas. Suas respostas ficam apenas nesta página.</p><p class="quiz-score">Seu placar: <strong>${quizHits} acerto(s) em ${quizAttempts} resposta(s)</strong></p><h3>${esc(q.question)}</h3><div class="toolbar">${q.answers.map((a,i)=>`<button type="button" data-sport-answer="${i}" ${answered?"disabled":""}>${esc(a)}</button>`).join("")}</div>${answered?`<p role="status"><strong>${Number(sportChallengeAnswer)===q.correct?"Acertou!":"Vamos aprender!"}</strong> ${esc(q.explanation)}</p><button type="button" data-sport-next>Próximo desafio</button>`:""}</section>`;
 }
 function publicHub(){
- const tabs=[["all","Todos os jogos"],["live","Ao vivo"],["schedule","Agenda"],["results","Resultados"],["standings","Classificação"],["fun","Diversão"]];
+ const tabs=[["active","Jogos atuais"],["all","Todos os jogos"],["live","Ao vivo"],["schedule","Agenda"],["results","Resultados"],["standings","Classificação"],["fun","Diversão"]];
  return `${publicStatistics()}${publicSportSummary()}<nav class="public-navigation" aria-label="Conteúdo do painel público">${tabs.map(([id,label])=>`<button type="button" data-public-area="${id}" class="${id===publicArea?"active":""}" ${id===publicArea?'aria-current="page"':""}>${label}</button>`).join("")}</nav><div id="publicHubContent">${publicHubContent()}</div>`;
 }
 function publicHubContent(){
  if(publicArea==="fun")return fanZone();
  if(publicArea==="standings")return standingsPanel()||empty("A classificação estará disponível quando houver partidas vinculadas a um campeonato de futebol.");
- return `<div id="publicMatches" class="grid">${publicMatches(publicFilter)}</div>${publicArea==="all"?'<section class="card public-locations"><h2>Esporte em diferentes locais</h2><p>Veja o local informado em cada partida. Use a modalidade, a agenda e os jogos ao vivo para acompanhar os eventos publicados pela organização.</p></section>':""}`;
+ return `${publicArea==="active"?'<p class="muted">Partidas encerradas, homologadas e canceladas ficam em <strong>Resultados</strong> ou <strong>Todos os jogos</strong>.</p>':""}<div id="publicMatches" class="grid">${publicMatches(publicFilter)}</div>${["active","all"].includes(publicArea)?'<section class="card public-locations"><h2>Esporte em diferentes locais</h2><p>Veja o local informado em cada partida. Use a modalidade, a agenda e os jogos ao vivo para acompanhar os eventos publicados pela organização.</p></section>':""}`;
 }
 function googleSymbol(){return '<svg class="google-symbol" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.32 2.98-7.36Z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.41l-3.24-2.51c-.9.6-2.05.97-3.38.97-2.6 0-4.8-1.76-5.59-4.12H3.07v2.59A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.41 13.93a6 6 0 0 1 0-3.86V7.48H3.07a10 10 0 0 0 0 9.04l3.34-2.59Z"/><path fill="#EA4335" d="M12 5.95c1.47 0 2.78.5 3.82 1.5l2.86-2.87A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.93 5.48l3.34 2.59C7.2 7.7 9.4 5.95 12 5.95Z"/></svg>';}
 document.addEventListener("click",e=>{
@@ -2198,6 +2175,7 @@ document.addEventListener("click",e=>{
 let teamProfileContext="";
 let teamPlayerDraft=null;
 function resetTeamProfileContext(){const current=(C.demo?"demo":user?.uid||"anônimo")+":"+role+":"+canManageRosters();if(current===teamProfileContext)return;teamProfileContext=current;teamPlayerDraft=null;teamFormVisible=false;teamEditorId="";selectedTeamId="";teamHistoryRows=[];teamHistoryLoaded=false;teamEventsKey="";teamProfileRequest++;teamProfileBusy=false;}
+let teamGameScope="active";
 let selectedTeamId="",teamProfileTab="data",teamProfileSport="",teamProfileChamp="",teamHistoryRows=[],teamHistoryLoaded=false,teamProfileBusy=false,teamEventsKey="",teamProfileRequest=0;
 function teamSports(t){return [...new Set([...(t.sports||[]),...state.matches.filter(m=>[m.home,m.away].includes(t.id)).map(m=>m.sport)])].sort();}
 function teamMatches(){return state.matches.filter(m=>[m.home,m.away].includes(selectedTeamId)&&(!teamProfileSport||m.sport===teamProfileSport)&&(!teamProfileChamp||(m.championshipId||"__unlinked__")===teamProfileChamp));}
@@ -2243,7 +2221,7 @@ function teamProfileView(){
  let content="";
  if(teamProfileTab==="data")content=`<section class="card"><h3>Cadastro atual</h3><dl class="account-details"><div><dt>Nome</dt><dd>${esc(t.name)}</dd></div><div><dt>Sigla</dt><dd>${esc(t.short||"Não informada")}</dd></div><div><dt>Técnico(a)</dt><dd>${esc(t.coach||"Não informado")}</dd></div><div><dt>Categoria</dt><dd>${esc(t.category||"Não informada")}</dd></div><div><dt>Modalidades cadastradas</dt><dd>${esc((t.sports||[]).join(", ")||"Ainda não informadas")}</dd></div><div><dt>Situação</dt><dd>${t.archived?"Arquivada":"Ativa"}</dd></div></dl><p class="muted">O cadastro atual não reescreve os elencos e técnicos congelados nas súmulas das partidas já criadas.</p><button type="button" data-profile-edit>Editar dados e modalidades</button>${role==="admin"?` <button type="button" data-profile-archive ${teamProfileBusy?"disabled":""}>${t.archived?"Reativar equipe":"Arquivar equipe"}</button><p class="muted">Arquivar preserva nome, jogadores, resultados e histórico. A equipe sai das opções de novos jogos e novos jogadores, e pode ser reativada.</p>`:""}</section>`;
  if(teamProfileTab==="roster")content=`<section class="card"><h3>Elenco atual • ${roster.length} jogador(es)</h3>${!t.archived?'<button type="button" data-profile-new-player>Adicionar jogador nesta equipe</button>':'<p>Reative a equipe antes de alterar o elenco.</p>'}${teamPlayerEditor(t)}${roster.length?table(["Nome","Número","Posição","Escalação","Ação"],roster.map(p=>tr([p.name,p.number,p.position,p.reserve?"Reserva / banco":"Titular"]).replace("</tr>",`<td>${!t.archived?`<button type="button" data-profile-player="${esc(p.id)}">Editar jogador</button>`:"—"}</td></tr>`))):empty("Nenhum jogador cadastrado nesta equipe.")}<p class="muted">Cartões, faltas e pontos são registrados na partida. Consulte Estatísticas para os lances dos jogos selecionados.</p></section>`;
- if(teamProfileTab==="games")content=`<div class="grid">${games.map(m=>matchCard(m,true)).join("")||empty("Nenhuma partida corresponde a esta equipe e aos filtros.")}</div>${role!=="admin"?'<p>Esta conta vê somente suas partidas atribuídas.</p>':""}`;
+ if(teamProfileTab==="games")content=`<section class="card"><h3>Jogos da equipe</h3>${matchScopeButtons("team",teamGameScope)}<p class="muted">Finalizadas inclui encerradas, homologadas e canceladas. Os dados e as súmulas permanecem salvos.</p></section><div class="grid">${scopeMatches(games,teamGameScope).map(m=>matchCard(m,true)).join("")||empty("Nenhuma partida corresponde a esta equipe e aos filtros.")}</div>${role!=="admin"?'<p>Esta conta vê somente suas partidas atribuídas.</p>':""}`;
  if(teamProfileTab==="stats"){
   const stats=teamStatistics(games,t.id),ready=C.demo||teamEventsKey===teamMatchKey(),events=ready?teamAthleteEvents(games,t.id):[];
   content=`<section class="card"><h3>Resultados por modalidade</h3><p>Somente partidas encerradas ou homologadas. No vôlei, o resultado conta sets; nas demais modalidades, o placar. As modalidades não são somadas entre si.</p>${stats.length?table(["Modalidade","Jogos","Vitórias","Empates","Derrotas","A favor","Contra"],stats.map(r=>tr([r.sport,r.games,r.wins,r.draws,r.losses,r.for,r.against]))):empty("Ainda não há partidas concluídas nesta seleção.")}</section><section class="card"><h3>Jogadores, cartões e faltas</h3><p>Lances dos jogos selecionados, incluindo jogos em andamento e excluindo cancelados. Pontos/gols dos lances consideram os estornos registrados. Lances sem atleta ficam em uma linha própria.</p>${!C.demo?`<button type="button" data-profile-events ${teamProfileBusy?"disabled":""}>${teamProfileBusy?"Carregando…":"Carregar / atualizar lances"}</button>`:""}${ready?(events.length?table(["Modalidade","Jogador","Pontos/gols dos lances","Amarelos","Vermelhos","Faltas"],events.map(r=>tr([r.sport,r.player,r.points,r.yellow,r.red,r.fouls]))):empty("Nenhum lance correspondente carregado.")):empty("Carregue os lances para consultar cartões, faltas e pontuação individual.")}</section>`;
@@ -2262,7 +2240,7 @@ document.addEventListener("click",async e=>{
  const b=e.target.closest("[data-team-profile],[data-profile-back],[data-profile-tab],[data-profile-edit],[data-profile-archive],[data-profile-new-player],[data-profile-player],[data-profile-events],[data-profile-history]");if(!b)return;
  try{
   if(!canManageRosters())throw Error("Conta sem acesso aos cadastros.");
-  if(b.dataset.teamProfile){teamProfileBusy=false;selectedTeamId=b.dataset.teamProfile;teamProfileTab=["roster","games"].includes(b.dataset.initialTeamTab)?b.dataset.initialTeamTab:"data";teamProfileSport="";teamProfileChamp="";teamHistoryRows=[];teamHistoryLoaded=false;teamEventsKey="";teamProfileRequest++;section="teams";teamPlayerDraft=null;render();return;}
+  if(b.dataset.teamProfile){teamProfileBusy=false;selectedTeamId=b.dataset.teamProfile;teamGameScope="active";teamProfileTab=["roster","games"].includes(b.dataset.initialTeamTab)?b.dataset.initialTeamTab:"data";teamProfileSport="";teamProfileChamp="";teamHistoryRows=[];teamHistoryLoaded=false;teamEventsKey="";teamProfileRequest++;section="teams";teamPlayerDraft=null;render();return;}
   if(b.hasAttribute("data-profile-back")){teamPlayerDraft=null;teamFormVisible=false;teamEditorId="";selectedTeamId="";teamProfileBusy=false;teamProfileRequest++;render();return;}
   if(b.dataset.profileTab){if(["stats","history"].includes(b.dataset.profileTab)&&role!=="admin")return;teamProfileTab=b.dataset.profileTab;teamPlayerDraft=null;render();return;}
   if(b.hasAttribute("data-profile-edit")){openTeamEditor(selectedTeamId);return;}
@@ -2381,6 +2359,21 @@ document.addEventListener("click",e=>{
  if(b.hasAttribute("data-memory-turn"))memoryOpen=[];
  if(b.hasAttribute("data-memory-card")){const i=Number(b.dataset.memoryCard);if(!Number.isInteger(i)||!memoryDeck[i]||memoryOpen.length===2||memoryOpen.includes(i)||memoryMatched.includes(i))return;memoryOpen.push(i);if(memoryOpen.length===2){memoryMoves++;if(memoryDeck[memoryOpen[0]].pair===memoryDeck[memoryOpen[1]].pair){memoryMatched.push(...memoryOpen);memoryOpen=[];}}}
  const out=$("#publicHubContent");if(out)out.innerHTML=fanZone();
+});
+
+// 28 — Visualizações iniciais mostram os jogos atuais. Nunca remove registros do estado.
+let overviewGameScope="active";
+function scopeMatches(matches,scope){return matches.filter(m=>scope==="all"||(scope==="finished"?finalStatuses.includes(m.status):!finalStatuses.includes(m.status)));}
+function matchScopeButtons(area,value){return `<div class="list-groups" aria-label="Visualização dos jogos">${[["active","Atuais e próximas"],["finished","Finalizadas"],["all","Todas"]].map(([scope,label])=>`<button type="button" data-match-scope="${scope}" data-scope-area="${area}" class="${value===scope?"primary":""}" aria-pressed="${value===scope}">${label}</button>`).join("")}</div>`;}
+function overviewMatchView(){
+ const rows=scopeMatches(state.matches,overviewGameScope).slice().sort((a,b)=>{if(overviewGameScope!=="finished"){const priority=m=>m.status==="Ao vivo"?0:m.status==="Pausada"?1:2;const d=priority(a)-priority(b);if(d)return d;}return overviewGameScope==="finished"?new Date(b.date)-new Date(a.date):new Date(a.date)-new Date(b.date);});
+ return `<div class="grid">${[["Equipes",state.teams.length],["Jogadores",state.players.length],["Partidas ao vivo",state.matches.filter(m=>m.status==="Ao vivo").length]].map(([label,n])=>`<div class="card"><span class="muted">${label}</span><div class="kpi">${n}</div></div>`).join("")}</div><section class="card"><h2>Quadra e campo</h2>${matchScopeButtons("overview",overviewGameScope)}<p class="muted">Jogos encerrados ficam em Finalizadas. Esta seleção muda apenas a visualização.</p></section><div class="grid">${rows.slice(0,6).map(m=>matchCard(m,true)).join("")||empty(overviewGameScope==="active"?"Nenhuma partida atual. Consulte Finalizadas ou programe um novo jogo.":"Nenhuma partida nesta seleção.")}</div>${rows.length>6?'<p>Exibindo seis partidas. Abra Jogos → Partidas para consultar a lista completa.</p>':""}`;
+}
+document.addEventListener("click",e=>{
+ const b=e.target.closest("[data-match-scope]");if(!b||!admin||!['active','finished','all'].includes(b.dataset.matchScope))return;
+ if(b.dataset.scopeArea==="overview")overviewGameScope=b.dataset.matchScope;
+ if(b.dataset.scopeArea==="team")teamGameScope=b.dataset.matchScope;
+ render();
 });
 
 boot();
