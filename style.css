@@ -1185,3 +1185,29 @@ input[type="checkbox"]:focus-visible { outline:3px solid var(--focus); outline-o
 .memory-grid button:disabled { opacity:1; border:2px solid var(--accent); }
 .quiz-score { border-left:3px solid var(--accent); padding:.6rem 1rem; }
 @media(max-width:450px){.memory-grid {gap:.4rem;} .memory-grid button{min-height:60px;} .match-guide .toolbar button {width:100%;}}
+
+/* 29 — Explorar funções sem sair da tela atual. */
+.navigation-finder {border:1px solid var(--line); border-radius:14px; padding:16px; background:var(--panel); margin-top:14px;}
+.navigation-finder>label {font-weight:700; display:block; margin-bottom:8px;}
+.navigation-search-row {display:flex; gap:10px; align-items:center;}
+.navigation-search-row input {flex:1; min-width:0; margin:0;}
+.navigation-finder>p {font-size:.85rem; margin-bottom:0;}
+.workspace-disclosures {align-items:start;}
+.workspace-disclosures details {margin:0; padding:0; border:1px solid var(--line); border-radius:12px; background:var(--panel); overflow:hidden; min-width:0;}
+.workspace-disclosures summary {display:flex; align-items:center; justify-content:space-between; gap:10px; padding:16px; cursor:pointer; list-style:none;}
+.workspace-disclosures summary::-webkit-details-marker {display:none;}
+.workspace-disclosures summary span:first-child {display:grid;gap:6px;}
+.workspace-disclosures .current-area {border-color:var(--accent);box-shadow:inset 0 3px var(--accent);}
+.workspace-disclosures .current-area summary {color:var(--accent);}
+.navigation-chevron {font-size:1.7rem; flex-shrink:0;}
+.workspace-disclosures details[open] .navigation-chevron {transform:rotate(180deg);}
+.workspace-disclosures summary:focus-visible {outline:3px solid var(--accent);outline-offset:-4px;}
+.navigation-options {border-top:1px solid var(--line); padding:8px; display:grid; gap:6px;}
+.workspace-tabs .navigation-options button {padding:10px; width:100%; border-radius:8px;}
+.navigation-options button[aria-current="page"] {outline:2px solid var(--accent);outline-offset:-2px;}
+.navigation-options button strong {font-size:.95rem;}
+.navigation-options button small {display:block;font-size:.8rem;}
+.navigation-search-results {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px;}
+.navigation-search-results button {display:grid;gap:7px;text-align:left;}
+.navigation-search-results small {font-weight:400;line-height:1.5;}
+@media(max-width:700px){.workspace-disclosures summary {padding:12px;} .workspace-disclosures .navigation-options small {display:block;} .navigation-search-results {grid-template-columns:1fr;} .navigation-search-row {flex-wrap:wrap;} .navigation-search-row input{flex-basis:100%;}}

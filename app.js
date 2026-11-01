@@ -2107,9 +2107,9 @@ const workspaceDefinitions=[
 function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id)));}
 function workspaceNavigation(sections){
  const visible=workspaceDefinitions.filter(g=>allowedWorkspaceSections(g).length);
- const current=visible.find(g=>g.sections.includes(section));
- const group=current||visible[0];
- return `<nav class="workspace-tabs noprint" aria-label="Áreas da central">${visible.map(g=>`<button type="button" data-workspace="${g.id}" class="${group?.id===g.id&&section!=="account"?"active":""}" ${group?.id===g.id&&section!=="account"?'aria-current="page"':""}><strong>${g.title}</strong><small>${g.intro}</small></button>`).join("")}</nav>${section!=="account"?`<nav class="workspace-subtabs noprint" aria-label="Seções de ${esc(group.title)}">${allowedWorkspaceSections(group).map(id=>sections.find(s=>s[0]===id)).filter(Boolean).map(([id,label])=>`<button type="button" data-section="${id}" class="${section===id?"active":""}" ${section===id?'aria-current="page"':""}>${label}</button>`).join("")}</nav>`:""}`;
+ const group=visible.find(g=>g.sections.includes(section))||visible[0];
+ const labels=Object.fromEntries(sections);
+ return `<section class="navigation-finder noprint" aria-label="Encontrar função"><label for="functionSearch">O que você quer fazer?</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: gol, jogador, PDF, logo, permissões…" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><p class="muted">Digite para encontrar uma função ou expanda uma área pela seta abaixo.</p><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section><nav class="workspace-tabs workspace-disclosures noprint" aria-label="Áreas da central">${visible.map(g=>`<details data-navigation-group="${g.id}" ${expandedNavigation.has(g.id)?"open":""} class="${group?.id===g.id&&section!=="account"?"current-area":""}"><summary><span><strong>${g.title}</strong><small>${g.intro}</small></span><span class="navigation-chevron" aria-hidden="true">⌄</span></summary><div class="navigation-options">${allowedWorkspaceSections(g).map(id=>`<button type="button" data-section="${id}" ${id===section?'aria-current="page"':""}><strong>${esc(labels[id]||id)}</strong><small>${esc(navigationDescriptions[id]?.description||"")}</small></button>`).join("")}</div></details>`).join("")}</nav>${section!=="account"?`<nav class="workspace-subtabs noprint" aria-label="Seções de ${esc(group.title)}">${allowedWorkspaceSections(group).map(id=>sections.find(s=>s[0]===id)).filter(Boolean).map(([id,label])=>`<button type="button" data-section="${id}" class="${section===id?"active":""}" ${section===id?'aria-current="page"':""}>${label}</button>`).join("")}</nav>`:""}`;
 }
 function documentationView(){
  const central=new URL("painel.html",location.href);central.search="";
@@ -2374,6 +2374,39 @@ document.addEventListener("click",e=>{
  if(b.dataset.scopeArea==="overview")overviewGameScope=b.dataset.matchScope;
  if(b.dataset.scopeArea==="team")teamGameScope=b.dataset.matchScope;
  render();
+});
+
+// 29 — Navegação expansível e busca local. Resultados respeitam o perfil atual.
+let navigationQuery="";
+const expandedNavigation=new Set();
+const navigationDescriptions={
+ overview:{label:"Visão geral",description:"Resumo dos jogos atuais e consulta das finalizadas.",keywords:"inicio home encerradas finalizadas atuais próximas"},
+ matches:{label:"Partidas",description:"Criar ou operar jogos, placar, cronômetro e ocorrências.",keywords:"gol gols ponto pontos iniciar tempo relogio pausa intervalo etapa cartao cartões faltas substituicoes var estorno anular arbitragem juiz local futebol basquete volei"},
+ championships:{label:"Campeonatos",description:"Cadastrar competições e temporadas.",keywords:"competicao torneio campeonato temporada edicao categoria"},
+ standings:{label:"Classificação",description:"Consultar tabela e classificação do campeonato de futebol.",keywords:"tabela ranking saldo vitorias pontos"},
+ teams:{label:"Equipes",description:"Consultar e editar times, escudos, técnicos e elencos.",keywords:"time equipe bandeira escudo tecnico treinador modalidades arquivar reativar ficha elenco historico"},
+ players:{label:"Jogadores",description:"Cadastrar e editar atletas, camisa, posição e titular/reserva.",keywords:"jogador atleta numero camisa posicao titular reserva banco elenco"},
+ imports:{label:"Importar",description:"Trazer equipes e jogadores de planilha ou texto.",keywords:"importacao arquivo csv excel xlsx colar lista nomes"},
+ documentation:{label:"Guias e documentação",description:"Orientações e links para usar em outro computador.",keywords:"ajuda manual guia documento link computador compartilhar"},
+ reports:{label:"Súmulas e relatórios",description:"Consultar partidas e exportar PDF, Excel, auditoria e cópia JSON.",keywords:"sumula relatorio pdf excel exportar baixar backup copia json auditoria historico"},
+ monitor:{label:"Operadores e partidas",description:"Consultar operadores e distribuição dos jogos.",keywords:"monitoramento operador atribuicao distribuicao responsavel"},
+ users:{label:"Usuários e permissões",description:"Aprovar, bloquear e definir acessos dos operadores.",keywords:"usuario conta acesso permissao convite cadastro link aprovar bloquear autorizar"},
+ settings:{label:"Configurações",description:"Alterar título, cor, capa, logo e identidade visual.",keywords:"logotipo logo favicon icone aba titulo nome cor imagem capa configuracao"},
+ cleanup:{label:"Limpeza de testes",description:"Conferir cópia e excluir partidas de teste com registro.",keywords:"limpeza teste excluir apagar exclusoes historico"},
+ account:{label:"Minha conta",description:"Identificação, segurança, redefinição de senha e vínculo Google.",keywords:"email senha recuperar google vincular login conta sair"}
+};
+function navigationSearchResults(){
+ if(!navigationQuery.trim())return "";
+ const allowed=new Set([...workspaceDefinitions.flatMap(g=>allowedWorkspaceSections(g)),"account"]);
+ const words=searchText(navigationQuery).split(/\s+/).filter(Boolean);
+ const found=Object.entries(navigationDescriptions).filter(([id,item])=>allowed.has(id)&&words.every(word=>searchText([item.label,item.description,item.keywords].join(" ")).includes(word)));
+ return `<p class="muted">${found.length} função(ões) encontrada(s)</p><div class="navigation-search-results">${found.map(([id,item])=>`<button type="button" data-section="${id}" data-navigation-result><strong>${esc(item.label)}</strong><small>${esc(workspaceDefinitions.find(g=>g.sections.includes(id))?.title||"Conta")} › ${esc(item.description)}</small></button>`).join("")||'<p>Nenhuma função encontrada. Tente uma palavra como jogador, relógio ou relatório.</p>'}</div>`;
+}
+document.addEventListener("input",e=>{if(e.target.id!=="functionSearch")return;navigationQuery=e.target.value;const out=$("#navigationSearchResults");if(out)out.innerHTML=navigationSearchResults();});
+document.addEventListener("toggle",e=>{const group=e.target.dataset?.navigationGroup;if(!group)return;if(e.target.open)expandedNavigation.add(group);else expandedNavigation.delete(group);},true);
+document.addEventListener("click",e=>{
+ if(e.target.closest("[data-clear-navigation-search]")){navigationQuery="";const input=$("#functionSearch");if(input){input.value="";input.focus();}const out=$("#navigationSearchResults");if(out)out.innerHTML="";}
+ if(e.target.closest("[data-navigation-result],.navigation-options [data-section]")){navigationQuery="";expandedNavigation.clear();for(const d of document.querySelectorAll("[data-navigation-group]"))d.open=false;const input=$("#functionSearch");if(input)input.value="";const out=$("#navigationSearchResults");if(out)out.innerHTML="";$("#view")?.scrollIntoView({block:"start"});}
 });
 
 boot();
