@@ -25,6 +25,7 @@ let state = D.fresh(),
   selected = "",
   user = null,
   role = "",
+  operatorPermissions = [],
   pendingImport = null,
   busy = false,
   cloud = null,
@@ -170,6 +171,7 @@ document.addEventListener("input", (e) => {
 // 2.3 — IDENTIDADE VISUAL E CONTA. Dados da sessão aparecem apenas na central.
 // O logo é compactado e gravado nas configurações existentes, sem Firebase Storage.
 let systemLogoBusy = false, systemLogoVersion = 0;
+const canManageRosters = () => role === "admin" || (role === "operator" && operatorPermissions.includes("rosters"));
 const accountRole = () => C.demo ? "Demonstração local" : role === "admin" ? "Administrador principal" : role === "operator" ? "Operador" : "Aguardando autorização";
 const accountName = () => user?.displayName || (state.users || []).find((p) => p.id === user?.uid)?.name || user?.email?.split("@")[0] || "Conta conectada";
 function renderBrandAndIdentity() {
@@ -207,7 +209,7 @@ function accountView() {
   if (C.demo) return `<section class="card"><h2>Minha conta</h2><p>Você está na demonstração local. Nome, e-mail e recuperação de senha aparecem ao entrar com uma conta do Firebase.</p></section>`;
   if (!user) return "";
   const providers = [...new Set((user.providerData || []).map((p) => ({password:"E-mail e senha", "google.com":"Google", "microsoft.com":"Microsoft"})[p.providerId] || p.providerId))];
-  return `<section class="card"><h2>Minha conta</h2><p class="muted">Confira a conta que está usando nesta sessão.</p><dl class="account-details"><div><dt>Nome</dt><dd>${esc(accountName())}</dd></div><div><dt>E-mail</dt><dd>${esc(user.email || "Não informado")}</dd></div><div><dt>Perfil de acesso</dt><dd>${esc(accountRole())}</dd></div><div><dt>Confirmação do e-mail</dt><dd>${user.emailVerified ? "Confirmado" : "Ainda não confirmado"}</dd></div><div><dt>Formas de entrada já vinculadas</dt><dd>${esc(providers.join(", ") || "Não informado")}</dd></div></dl>${role === "admin" ? '<p class="public-notice">Sua conta continua como administrador principal. Nenhuma opção desta tela altera suas permissões.</p>' : '<p class="muted">Seu acesso às partidas é definido pelo administrador principal.</p>'}<div class="toolbar"><button type="button" data-account-recover ${!user.email ? "disabled" : ""}>Enviar e-mail para redefinir senha</button><button type="button" data-account-exit>Sair desta conta</button></div><p class="muted">A redefinição é concluída pelo link enviado ao seu e-mail. Você também pode vincular sua conta Google abaixo.</p>${googleLinkPanel()}</section>`;
+  return `<section class="card"><h2>Minha conta</h2><p class="muted">Confira a conta que está usando nesta sessão.</p><dl class="account-details"><div><dt>Nome</dt><dd>${esc(accountName())}</dd></div><div><dt>E-mail</dt><dd>${esc(user.email || "Não informado")}</dd></div><div><dt>Perfil de acesso</dt><dd>${esc(accountRole())}</dd></div><div><dt>Permissão de cadastros</dt><dd>${canManageRosters()?"Autorizado a gerenciar equipes e jogadores":"Não concedida"}</dd></div><div><dt>Confirmação do e-mail</dt><dd>${user.emailVerified ? "Confirmado" : "Ainda não confirmado"}</dd></div><div><dt>Formas de entrada já vinculadas</dt><dd>${esc(providers.join(", ") || "Não informado")}</dd></div></dl>${role === "admin" ? '<p class="public-notice">Sua conta continua como administrador principal. Nenhuma opção desta tela altera suas permissões.</p>' : '<p class="muted">Seu acesso às partidas é definido pelo administrador principal.</p>'}<div class="toolbar"><button type="button" data-account-recover ${!user.email ? "disabled" : ""}>Enviar e-mail para redefinir senha</button><button type="button" data-account-exit>Sair desta conta</button></div><p class="muted">A redefinição é concluída pelo link enviado ao seu e-mail. Você também pode vincular sua conta Google abaixo.</p>${googleLinkPanel()}</section>`;
 }
 
 // Atualizações ao vivo preservam o formulário ainda não enviado.
@@ -228,6 +230,7 @@ function refresh() {
       : null;
   const forms = [...app.querySelectorAll("form")].map((f) => ({
     id: f.id,
+    checks: [...f.elements].filter(e=>e.name&&["checkbox","radio"].includes(e.type)).map(e=>({name:e.name,value:e.value,checked:e.checked})),
     multi: [...f.querySelectorAll("select[multiple]")].map((e) => [e.name, [...e.selectedOptions].map((o) => o.value)]),
     values: [...f.elements]
       .filter((e) => e.name && e.type !== "password" && !e.hasAttribute("data-private-password"))
@@ -239,6 +242,7 @@ function refresh() {
     if (target)
       for (const [name, value] of f.values)
         if (target.elements[name]) target.elements[name].value = value;
+    if(target)for(const check of f.checks)for(const el of target.elements)if(el.name===check.name&&el.value===check.value&&["checkbox","radio"].includes(el.type))el.checked=check.checked;
     if (target) for (const [name, values] of f.multi) {
       const select = target.elements[name];
       if (select) for (const option of select.options) option.selected = values.includes(option.value);
@@ -426,6 +430,7 @@ async function boot() {
         accessStatus = access.status || "loading";
         user = u;
         role = r;
+        operatorPermissions = Array.isArray(access.permissions)?access.permissions:[];
         render();
       },
       onError: (e) => toast(e.message, true),
@@ -442,7 +447,7 @@ async function dispatch(a) {
   app.querySelectorAll("button").forEach((b) => (b.disabled = true));
   try {
     if (C.demo) {
-      if (trainingMode && role === "operator" && ["team","player","match","settings","import","championship","championshipLink","correct"].includes(a.type)) throw Error("Esta ação é do administrador na simulação. Troque o perfil para treinar essa função.");
+      if (trainingMode && role === "operator" && !(canManageRosters()&&(["team","player"].includes(a.type)||(a.type==="import"&&["team","player"].includes(a.kind)))) && ["team","player","match","settings","import","championship","championshipLink","correct"].includes(a.type)) throw Error("Esta ação é do administrador na simulação. Troque o perfil para treinar essa função.");
       const latest = JSON.parse(localStorage.getItem(key)) || D.fresh();
       if (!["team", "player", "match", "settings", "import", "championship"].includes(a.type)) {
         const old = latest.matches.find((m) => m.id === a.matchId);
@@ -537,7 +542,7 @@ function render() {
     return;
   }
   // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
-  if (role !== "admin" && !["overview", "matches", "account", "documentation"].includes(section)) {
+  if (role !== "admin" && !["overview", "matches", "account", "documentation", ...(canManageRosters()?["teams","players","imports"]:[])].includes(section)) {
     section = "overview";
     selected = "";
   }
@@ -1129,8 +1134,8 @@ function usersView() {
   const link = new URL("painel.html", location.href);
   link.search = "?acesso=cadastro";
   const editing = users.find((u) => u.id === managedUserId);
-  const editor = editing ? `<section class="card"><h3>Permissões de ${esc(editing.name || editing.email || "Operador cadastrado")}</h3><p>${esc(editing.email || "E-mail não registrado no perfil antigo")}<br><small>UID: ${esc(editing.id)}</small></p><form id="access-user"><input type="hidden" name="userId" value="${esc(editing.id)}"><label>Situação do acesso<select name="access"><option value="pending" ${editing.role === "pending" ? "selected" : ""}>Aguardando aprovação</option><option value="active" ${editing.role === "operator" && editing.enabled !== false ? "selected" : ""}>Aprovar / manter operador ativo</option><option value="blocked" ${editing.role === "operator" && editing.enabled === false ? "selected" : ""}>Bloquear acesso</option></select></label><p class="muted">Mesmo aprovado, o operador precisa confirmar o e-mail. Nenhum operador pode promover usuários ou acessar seus relatórios.</p><label>Partidas autorizadas (Ctrl+clique para selecionar várias)<select name="assignedMatches" multiple size="6" style="width:100%;min-height:150px">${state.matches.map((m) => `<option value="${esc(m.id)}" ${(editing.matches || []).includes(m.id) ? "selected" : ""}>${esc(m.sport + " • " + name(m.home) + " × " + name(m.away) + " • " + (m.competition || format(m.date)))}</option>`).join("")}</select></label><p class="muted">Sem seleção, o operador não recebe nenhuma partida. Voltar para pendente remove as atribuições.</p><label>Motivo da alteração<textarea name="reason" required maxlength="500" placeholder="Ex.: operador responsável pelos jogos da quadra 1"></textarea></label><p><button class="primary">Salvar permissões</button> <button type="button" data-access-cancel>Fechar edição</button></p></form></section>` : "";
-  return `<section class="card"><h2>Usuários e permissões</h2><p><strong>Administrador principal: ${esc(user?.email || "Wagner")}</strong><br>Sua conta é protegida. Esta tela não permite alterar, bloquear ou remover sua autoridade.</p><label>Link para solicitar acesso<input readonly value="${esc(link.href)}"></label><p><button type="button" data-access-copy>Copiar link de cadastro</button></p><p class="muted">Envie esse link ao novo operador. Para testar outra conta neste computador, use uma janela anônima.</p></section><section class="card"><h3>Solicitações e operadores</h3>${table(["Pessoa", "Situação", "Partidas", "Ação"], users.map((u) => `<tr><td>${esc(u.name || "Operador cadastrado")}<br><small>${esc(u.email || u.id)}</small></td><td>${esc(label(u))}</td><td>${(u.matches || []).length}</td><td><button type="button" data-access-edit="${esc(u.id)}">Revisar permissões</button></td></tr>`))}${users.length ? "" : empty("Nenhuma solicitação recebida ainda.")}</section>${editor}<section class="card"><h3>Últimos 50 registros de permissões</h3>${(state.accessAudit || []).map((a) => `<div class="event"><b>${esc(a.action)}</b><p>${esc(a.after?.name || a.target)} — ${esc(a.reason)}</p><small>${esc(a.at?.toDate ? a.at.toDate().toLocaleString("pt-BR") : "Aguardando confirmação do servidor")} • ${esc(a.after?.enabled ? "Ativo" : "Sem acesso ativo")} • ${(a.after?.matches || []).length} partida(s)</small></div>`).join("") || empty("Nenhuma alteração de permissão registrada nesta versão.")}</section>`;
+  const editor = editing ? `<section class="card"><h3>Permissões de ${esc(editing.name || editing.email || "Operador cadastrado")}</h3><p>${esc(editing.email || "E-mail não registrado no perfil antigo")}<br><small>UID: ${esc(editing.id)}</small></p><form id="access-user"><input type="hidden" name="userId" value="${esc(editing.id)}"><label>Situação do acesso<select name="access"><option value="pending" ${editing.role === "pending" ? "selected" : ""}>Aguardando aprovação</option><option value="active" ${editing.role === "operator" && editing.enabled !== false ? "selected" : ""}>Aprovar / manter operador ativo</option><option value="blocked" ${editing.role === "operator" && editing.enabled === false ? "selected" : ""}>Bloquear acesso</option></select></label><p class="muted">Mesmo aprovado, o operador precisa confirmar o e-mail. Nenhum operador pode promover usuários ou acessar seus relatórios.</p><label>Partidas autorizadas (Ctrl+clique para selecionar várias)<select name="assignedMatches" multiple size="6" style="width:100%;min-height:150px">${state.matches.map((m) => `<option value="${esc(m.id)}" ${(editing.matches || []).includes(m.id) ? "selected" : ""}>${esc(m.sport + " • " + name(m.home) + " × " + name(m.away) + " • " + (m.competition || format(m.date)))}</option>`).join("")}</select></label><p class="muted">Sem seleção, o operador não recebe nenhuma partida. Voltar para pendente remove as atribuições. Bloquear ou voltar para pendente também remove a permissão de cadastros.</p><label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${(editing.permissions||[]).includes("rosters")?"checked":""}><span>Permitir cadastrar, editar e importar equipes e jogadores de toda a organização (inclui visualizar técnicos e elencos). Não libera criar partidas, relatórios, contas, configurações ou exclusões.</span></label><label>Motivo da alteração<textarea name="reason" required maxlength="500" placeholder="Ex.: operador responsável pelos jogos da quadra 1"></textarea></label><p><button class="primary">Salvar permissões</button> <button type="button" data-access-cancel>Fechar edição</button></p></form></section>` : "";
+  return `<section class="card"><h2>Usuários e permissões</h2><p><strong>Administrador principal: ${esc(user?.email || "Wagner")}</strong><br>Sua conta é protegida. Esta tela não permite alterar, bloquear ou remover sua autoridade.</p><label>Link para solicitar acesso<input readonly value="${esc(link.href)}"></label><p><button type="button" data-access-copy>Copiar link de cadastro</button></p><p class="muted">Envie esse link ao novo operador. Para testar outra conta neste computador, use uma janela anônima.</p></section><section class="card"><h3>Solicitações e operadores</h3>${table(["Pessoa", "Situação", "Partidas", "Cadastros", "Ação"], users.map((u) => `<tr><td>${esc(u.name || "Operador cadastrado")}<br><small>${esc(u.email || u.id)}</small></td><td>${esc(label(u))}</td><td>${(u.matches || []).length}</td><td>${(u.permissions||[]).includes("rosters")&&u.enabled!==false&&u.role==="operator"?"Permitido":"Não permitido"}</td><td><button type="button" data-access-edit="${esc(u.id)}">Revisar permissões</button></td></tr>`))}${users.length ? "" : empty("Nenhuma solicitação recebida ainda.")}</section>${editor}<section class="card"><h3>Últimos 50 registros de permissões</h3>${(state.accessAudit || []).map((a) => `<div class="event"><b>${esc(a.action)}</b><p>${esc(a.after?.name || a.target)} — ${esc(a.reason)}</p><small>${esc(a.at?.toDate ? a.at.toDate().toLocaleString("pt-BR") : "Aguardando confirmação do servidor")} • ${esc(a.after?.enabled ? "Ativo" : "Sem acesso ativo")} • ${(a.after?.matches || []).length} partida(s) • Cadastros: ${(a.after?.permissions||[]).includes("rosters")?"permitido":"não permitido"}</small></div>`).join("") || empty("Nenhuma alteração de permissão registrada nesta versão.")}</section>`;
 }
 // EVENTOS DE INTERFACE — um único ponto de entrada para cada ação.
 document.addEventListener("submit", async (e) => {
@@ -1159,7 +1164,7 @@ document.addEventListener("submit", async (e) => {
           toast(user?.emailVerified ? "Solicitação registrada. Aguarde a aprovação do administrador principal." : "Solicitação registrada. Confira a confirmação enviada ao seu e-mail.");
         } else {
           await cloud.manageUser({userId:d.userId, access:d.access,
-            matches: new FormData(f).getAll("assignedMatches"), reason:d.reason});
+            matches: new FormData(f).getAll("assignedMatches"), permissions:f.elements.rosterPermission.checked?["rosters"]:[], reason:d.reason});
           managedUserId = "";
           toast("Permissões salvas e registradas no histórico.");
         }
@@ -1860,12 +1865,12 @@ function setupTraining() {
     link.href=url.href;link.target="_blank";link.rel="noopener";link.textContent="Abrir demonstração para treinar";bar.append(link);return;
   }
   const banner=document.createElement("section");banner.className="card noprint";banner.style.cssText="margin:16px 5%;border:3px solid #ba891a";
-  banner.innerHTML='<h2>Demonstração — somente dados fictícios</h2><p>Este treino funciona apenas neste navegador, sem conexão com o Firebase. Sua conta e os resultados reais permanecem na outra aba.</p><div class="toolbar"><label>Simular perfil<select id="trainingRole"><option value="admin">Administrador</option><option value="operator">Operador</option></select></label><button type="button" id="trainingReset">Reiniciar apenas o treino</button><a class="button" id="trainingCentral">Voltar à central real</a><a class="button" id="trainingPublic" target="_blank" rel="noopener">Ver painel público do treino</a></div><p class="muted">Para começar, abra Partidas → Operar partida → Iniciar jogo. Cadastros e lançamentos daqui não são publicados no evento real. As permissões simuladas são apenas uma orientação; não representam contas reais.</p>';
+  banner.innerHTML='<h2>Demonstração — somente dados fictícios</h2><p>Este treino funciona apenas neste navegador, sem conexão com o Firebase. Sua conta e os resultados reais permanecem na outra aba.</p><div class="toolbar"><label>Simular perfil<select id="trainingRole"><option value="admin">Administrador</option><option value="operator">Operador</option><option value="operator-rosters">Operador com cadastros</option></select></label><button type="button" id="trainingReset">Reiniciar apenas o treino</button><a class="button" id="trainingCentral">Voltar à central real</a><a class="button" id="trainingPublic" target="_blank" rel="noopener">Ver painel público do treino</a></div><p class="muted">Para começar, abra Partidas → Operar partida → Iniciar jogo. Cadastros e lançamentos daqui não são publicados no evento real. As permissões simuladas são apenas uma orientação; não representam contas reais.</p>';
   bar.after(banner);
   const central=new URL("painel.html",location.href);central.search="";document.getElementById("trainingCentral").href=central.href;
   const pub=new URL("index.html",location.href);pub.search="?demonstracao=1";document.getElementById("trainingPublic").href=pub.href;
   for(const link of document.querySelectorAll("header a")) {const url=new URL(link.href,location.href);if(url.origin===location.origin){url.search="?demonstracao=1";link.href=url.href;}}
-  document.getElementById("trainingRole").addEventListener("change",e=>{role=e.target.value;section="overview";selected="";render();toast("Perfil simulado: "+(role==="admin"?"administrador":"operador")+". Dados apenas de treinamento.");});
+  document.getElementById("trainingRole").addEventListener("change",e=>{role=e.target.value==="admin"?"admin":"operator";operatorPermissions=e.target.value==="operator-rosters"?["rosters"]:[];section="overview";selected="";render();toast("Perfil simulado: "+(role==="admin"?"administrador":"operador")+". Dados apenas de treinamento.");});
   document.getElementById("trainingReset").addEventListener("click",()=>{
     if(!confirm("Reiniciar somente os dados fictícios deste treino? Os dados reais não serão alterados."))return;
     try{const seed=trainingSeed();trainingStore(seed);state=seed;selected="";section="overview";pendingImport=null;quickPlayers=["",""];render();toast("Treino reiniciado com dados fictícios.");}catch(e){toast(e.message,true);}
@@ -2099,7 +2104,7 @@ const workspaceDefinitions=[
  {id:"documents",title:"Documentação",intro:"Guias, súmulas e relatórios",sections:["documentation","reports"]},
  {id:"administration",title:"Administração",intro:"Operadores, acessos e configurações",sections:["monitor","users","settings","cleanup"]}
 ];
-function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation"].includes(id));}
+function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id)));}
 function workspaceNavigation(sections){
  const visible=workspaceDefinitions.filter(g=>allowedWorkspaceSections(g).length);
  const current=visible.find(g=>g.sections.includes(section));

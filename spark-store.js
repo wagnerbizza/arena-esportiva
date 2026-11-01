@@ -13,6 +13,8 @@ export async function connectSpark({
   const OWNER_UID = "mwYVHBGiEJSYfKimTiBUMzcWHhn1";
   const isOwner = () => session?.uid === OWNER_UID;
   const authorized = () => isOwner() || (profile?.role === "operator" && profile.enabled !== false && session?.emailVerified === true);
+  // Permissão parcial de cadastro: não dá acesso à administração.
+  const canManageRosters = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("rosters"));
   const version = "11.0.2";
   const [fb, auth, F] = await Promise.all([
     import(`https://www.gstatic.com/firebasejs/${version}/firebase-app.js`),
@@ -114,7 +116,7 @@ export async function connectSpark({
     const ownerView = full && isOwner();
     watchDoc(ownerView ? "settings/main" : "publicSettings/main",
       (d) => (state.settings = d || D.fresh().settings));
-    watchCollection(ownerView ? "teams" : "publicTeams", (d) => (state.teams = d));
+    watchCollection(ownerView || (full && canManageRosters()) ? "teams" : "publicTeams", (d) => (state.teams = d));
     if (ownerView) {
       watchCollection("championships", (d) => (state.championships = d));
       watchCollection("players", (d) => (state.players = d));
@@ -126,12 +128,13 @@ export async function connectSpark({
     } else {
       // Operador não consulta a coleção privada inteira: recebe cada partida autorizada.
       // Os jogadores disponíveis são os elencos congelados nessas partidas.
+      if(canManageRosters())watchCollection("players",d=>state.players=d);
       const ids = [...new Set(profile?.matches || [])];
       for (const id of ids) {
         watchDoc("matches/" + id, (d) => {
           state.matches = state.matches.filter((m) => m.id !== id);
           if (d) state.matches.push(d);
-          state.players = [...new Map(state.matches.flatMap((m) => m.roster || [])
+          if(!canManageRosters())state.players = [...new Map(state.matches.flatMap((m) => m.roster || [])
             .map((p) => [p.id, p])).values()];
         });
       }
@@ -236,7 +239,8 @@ export async function connectSpark({
       : F.doc(F.collection(database, "audit")).id;
   async function send(action) {
     if (!session || !authorized()) throw Error("Faça login com uma conta autorizada.");
-    if (!isOwner() && (["team", "player", "settings", "match", "import", "correct", "championship", "championshipLink"].includes(action.type) ||
+    const rosterAction=canManageRosters()&&(["team","player"].includes(action.type)||(action.type==="import"&&["team","player"].includes(action.kind)));
+    if (!isOwner() && !rosterAction && (["team", "player", "settings", "match", "import", "correct", "championship", "championshipLink"].includes(action.type) ||
       !profile?.matches?.includes(action.matchId))) {
       throw Error("Sua conta não tem permissão para esta ação ou partida.");
     }
@@ -522,7 +526,7 @@ export async function connectSpark({
       return {uid:beforeUID, alreadyLinked:false};
     } finally { googleBusy = false; }
   }
-  async function manageUser({ userId, access, matches, reason }) {
+  async function manageUser({ userId, access, matches, reason, permissions }) {
     if (!isOwner()) throw Error("Somente o administrador principal gerencia usuários.");
     if (userId === OWNER_UID) throw Error("A conta principal está protegida e não pode ser alterada.");
     if (!["active", "blocked", "pending"].includes(access)) throw Error("Situação de acesso inválida.");
@@ -536,8 +540,10 @@ export async function connectSpark({
       const snap = await tx.get(ref);
       if (!snap.exists()) throw Error("Solicitação não encontrada.");
       const before = snap.data();
+      const granted=access==="active"?[...new Set(permissions===undefined?(before.permissions||[]):permissions)]:[];
+      if(granted.some(p=>p!=="rosters"))throw Error("Permissão específica inválida.");
       const after = { id: userId, name: before.name || "Operador cadastrado", email: before.email || "",
-        role: access === "pending" ? "pending" : "operator", enabled: access === "active", matches,
+        role: access === "pending" ? "pending" : "operator", enabled: access === "active", matches, permissions:granted,
         createdAt: before.createdAt || F.serverTimestamp(), updatedAt: F.serverTimestamp(),
         revision: (before.revision || 0) + 1, auditId: aid };
       const action = access === "blocked" ? "bloqueio" : access === "pending" ? "pendente" :
@@ -579,7 +585,7 @@ export async function connectSpark({
           typeof id === "string" && id.length > 0 && !id.includes("/"))));
       const status = !profile ? "incomplete" : profile.role === "operator" && profile.enabled === false ? "blocked" :
         !u.emailVerified ? "verify" : profile.role === "pending" ? "pending" : valid ? "operator" : "unauthorized";
-      onSession(u, valid ? "operator" : "", {status});
+      onSession(u, valid ? "operator" : "", {status,permissions:valid?(profile?.permissions||[]):[]});
       onData(state);
       if (valid) listen(true);
 
@@ -612,6 +618,7 @@ export async function connectSpark({
     refreshAccess,
     recoverPassword,
     manageUser,
+    canManageRosters,
     enterGoogle,
     linkGoogle,
     loadHistory,
