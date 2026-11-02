@@ -124,8 +124,16 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
     if (index) doc.addPage();
     doc.setTextColor(...ink);
     doc.setFont("helvetica", "bold");
+    // Logo institucional configurado no sistema, independente dos escudos das equipes.
+    if (g.organizationLogo) {
+      try {
+        doc.addImage(g.organizationLogo, "PNG", left, 5, 11, 11, undefined, "FAST");
+      } catch {
+        // Se a imagem não puder ser incorporada, a súmula continua sendo gerada.
+      }
+    }
     doc.setFontSize(10);
-    doc.text("SÚMULA DA PARTIDA", left, 15);
+    doc.text("SÚMULA DA PARTIDA", g.organizationLogo ? 26 : left, 15);
     doc.setFontSize(10);
     doc.text("WagnerBIZZA", 198, 15, { align: "right" });
     doc.setDrawColor(...accent);
@@ -276,6 +284,7 @@ export async function downloadReportPDF(games) {
   const prepared = await Promise.all(
     games.map(async (g) => ({
       ...g,
+      organizationLogo: await logoPNG(g.organizationLogo),
       logos: await Promise.all(g.badges.map(logoPNG)),
     })),
   );
