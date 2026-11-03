@@ -1,6 +1,5 @@
-// Arena Esportiva - Controle de Operadores e Permissões (Ajuste cirúrgico em app.js)
-// Mantém 100% da identidade visual, layout e funcionalidades originais do sistema.
-// Permite que operadores gerenciem equipes, jogadores, partidas e placares, sem acesso administrativo geral ou documentação.
+// Arena Esportiva - Lógica de Controle de Operadores (Ajuste cirúrgico em app.js)
+// Mantém 100% da identidade visual, layout e estrutura original do sistema intactos.
 
 async function salvarPermissoesOperador(userId, statusAcesso, partidasSelecionadas, permitirCadastros, motivo) {
     try {
@@ -19,12 +18,11 @@ async function salvarPermissoesOperador(userId, statusAcesso, partidasSelecionad
     }
 }
 
-// Lógica de verificação de permissão para operações de jogo
+// Verificação de permissões para ações de jogo (jogadores, equipes, partidas e placares)
 function verificarPermissaoOperador(usuarioAtual, acao) {
     if (!usuarioAtual) return false;
-    if (usuarioAtual.admin) return true; // Administrador tem acesso total
+    if (usuarioAtual.admin) return true;
     
-    // Operadores autorizados podem marcar placares, adicionar jogadores, equipes e criar partidas
     if (usuarioAtual.operadorCadastros || usuarioAtual.operador) {
         const acoesPermitidas = ['cadastrar_equipe', 'cadastrar_jogador', 'criar_partida', 'marcar_placar'];
         return acoesPermitidas.includes(acao);
