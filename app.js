@@ -1219,6 +1219,7 @@ async function accessAction(action) {
   catch (e) { toast(accessError(e), true); }
   finally { accessBusy = false; render(); }
 }
+let accessAuditExpanded = false;
 function usersView() {
   if (C.demo) return `<div class="card"><h2>Usuários e permissões</h2><p>Esta função utiliza as contas reais do Firebase e não está disponível na demonstração local.</p></div>`;
   const owner = cloud?.mainUID;
@@ -1249,10 +1250,10 @@ function usersView() {
   const accessAuditReport=accessAuditRows.map(a=>{
     const before=a.before||{},after=a.after||{},keys=[...new Set([...Object.keys(before),...Object.keys(after)])].filter(k=>!["createdAt","updatedAt","auditId","revision"].includes(k)&&JSON.stringify(before[k]??null)!==JSON.stringify(after[k]??null));
     const details=table(["Campo","Antes","Depois"],keys.map(k=>tr([k,accessAuditValue(k,before[k]),accessAuditValue(k,after[k])])));
-    return `<details class="event"><summary>${esc(accessAuditDate(a.at))} • ${esc(a.action||"Alteração")} • ${esc(after.name||before.name||a.target||"Usuário")}</summary><p>${esc(after.email||before.email||"E-mail não informado")}<br>Motivo: ${esc(a.reason||"Não informado")}<br>UID: ${esc(a.target||"—")}</p>${details}</details>`;
+    return `<details class="event" ${accessAuditExpanded?"open":""}><summary>${esc(accessAuditDate(a.at))} • ${esc(a.action||"Alteração")} • ${esc(after.name||before.name||a.target||"Usuário")}</summary><p>${esc(after.email||before.email||"E-mail não informado")}<br>Motivo: ${esc(a.reason||"Não informado")}<br>UID: ${esc(a.target||"—")}</p>${details}</details>`;
   }).join("")||empty("Nenhuma alteração de permissão registrada.");
   const accessLabel = (u) => u.enabled !== false && u.role === "operator" && (u.permissions||[]).includes("gamesView") ? "Sim" : "Não";
-  return `<section class="card"><h2>Usuários e permissões</h2><p><strong>Administrador principal: ${esc(user?.email || "Wagner")}</strong><br>Sua conta é protegida. Esta tela não permite alterar, bloquear ou remover sua autoridade.</p><label>Link para solicitar acesso<input readonly value="${esc(link.href)}"></label><p><button type="button" data-access-copy>Copiar link de cadastro</button></p><p class="muted">Envie esse link ao novo operador. Para testar outra conta neste computador, use uma janela anônima.</p></section><section class="card"><h3>Solicitações e operadores</h3>${table(["Pessoa", "Situação", "Partidas para operar", "Cadastros esportivos", "Acompanha jogos", "Ação"], users.map((u) => `<tr><td>${esc(u.name || "Operador cadastrado")}<br><small>${esc(u.email || u.id)}</small></td><td>${esc(label(u))}</td><td>${(u.matches || []).length}</td><td>${esc(registrationPermissions(u.permissions||[]))}</td><td>${accessLabel(u)}</td><td><button type="button" data-access-edit="${esc(u.id)}">Revisar permissões</button></td></tr>`))}${users.length ? "" : empty("Nenhuma solicitação recebida ainda.")}</section>${editor}<section id="accessAuditReport" class="card"><h3>Últimos 50 registros de permissões</h3><p class="muted">Abra cada registro para conferir os valores anteriores e posteriores, a justificativa e o responsável.</p><div class="toolbar noprint"><button type="button" data-access-audit-print>Imprimir / salvar em PDF</button><button type="button" data-access-audit-json>Baixar registros (JSON)</button><button type="button" data-access-audit-excel>Baixar registros (Excel)</button></div><p class="muted">${accessAuditRows.length} de até 50 registros mais recentes.</p>${accessAuditReport}</section>`;
+  return `<section class="card"><h2>Usuários e permissões</h2><p><strong>Administrador principal: ${esc(user?.email || "Wagner")}</strong><br>Sua conta é protegida. Esta tela não permite alterar, bloquear ou remover sua autoridade.</p><label>Link para solicitar acesso<input readonly value="${esc(link.href)}"></label><p><button type="button" data-access-copy>Copiar link de cadastro</button></p><p class="muted">Envie esse link ao novo operador. Para testar outra conta neste computador, use uma janela anônima.</p></section><section class="card"><h3>Solicitações e operadores</h3>${table(["Pessoa", "Situação", "Partidas para operar", "Cadastros esportivos", "Acompanha jogos", "Ação"], users.map((u) => `<tr><td>${esc(u.name || "Operador cadastrado")}<br><small>${esc(u.email || u.id)}</small></td><td>${esc(label(u))}</td><td>${(u.matches || []).length}</td><td>${esc(registrationPermissions(u.permissions||[]))}</td><td>${accessLabel(u)}</td><td><button type="button" data-access-edit="${esc(u.id)}">Revisar permissões</button></td></tr>`))}${users.length ? "" : empty("Nenhuma solicitação recebida ainda.")}</section>${editor}<section id="accessAuditReport" class="card"><h3>Últimos 50 registros de permissões</h3><p class="muted">Abra um registro para ver seus detalhes, ou expanda todos para revisar e imprimir o histórico completo.</p><div class="toolbar noprint"><button type="button" data-access-audit-expand>Expandir todos</button><button type="button" data-access-audit-collapse>Recolher todos</button><button type="button" data-access-audit-print>Imprimir / salvar em PDF</button><button type="button" data-access-audit-json>Baixar registros (JSON)</button><button type="button" data-access-audit-excel>Baixar registros (Excel)</button></div><p class="muted">${accessAuditRows.length} de até 50 registros mais recentes.</p>${accessAuditReport}</section>`;
 }
 // EVENTOS DE INTERFACE — um único ponto de entrada para cada ação.
 document.addEventListener("submit", async (e) => {
@@ -1432,9 +1433,20 @@ document.addEventListener("click", async (e) => {
     }
     if(b.hasAttribute("data-access-audit-print")){
       if(role!=="admin")throw Error("Histórico exclusivo do administrador principal.");
+      const entries=[...document.querySelectorAll("#accessAuditReport details")];
+      const previous=entries.map(item=>item.open);
+      entries.forEach(item=>item.open=true);
       document.body.classList.add("access-audit-print");
-      window.addEventListener("afterprint",()=>document.body.classList.remove("access-audit-print"),{once:true});
+      window.addEventListener("afterprint",()=>{
+        document.body.classList.remove("access-audit-print");
+        entries.forEach((item,index)=>item.open=previous[index]);
+      },{once:true});
       window.print();return;
+    }
+    if(b.hasAttribute("data-access-audit-expand")||b.hasAttribute("data-access-audit-collapse")){
+      accessAuditExpanded=b.hasAttribute("data-access-audit-expand");
+      document.querySelectorAll("#accessAuditReport details").forEach(item=>item.open=accessAuditExpanded);
+      return;
     }
     if(b.hasAttribute("data-access-audit-json")){
       if(role!=="admin")throw Error("Exportação exclusiva do administrador principal.");

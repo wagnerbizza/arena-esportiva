@@ -828,9 +828,6 @@ hr {
     box-shadow: none !important;
     padding: 0 !important;
   }
-  body.access-audit-print #accessAuditReport details:not([open]) > :not(summary) {
-    display: block !important;
-  }
   body.access-audit-print #accessAuditReport details {
     break-inside: avoid;
     page-break-inside: avoid;
