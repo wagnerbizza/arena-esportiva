@@ -13,6 +13,8 @@ service cloud.firestore {
   function rosterManager() { return owner() || (operator() && 'rosters' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions',[])); }
   // Criação de novas partidas é uma delegação independente; não concede operação nem edição.
   function matchCreator() { return owner() || (operator() && 'matchesCreate' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions',[])); }
+  // Gestão de campeonatos é independente dos demais cadastros administrativos.
+  function championshipManager() { return owner() || (operator() && 'championships' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions',[])); }
   function operatorFor(id) { return owner() || (operator() && id in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('matches',[])); }
   function bounded(s,n) { return s is string && s.size() <= n; }
   function nonempty(s,n) { return bounded(s,n) && s.size() > 0; }
@@ -50,7 +52,7 @@ service cloud.firestore {
    return meta(d,'main') && d.keys().hasOnly(['id','title','subtitle','color','banner','logo','_revision','_audit','_updatedAt','_updatedBy'])
     && nonempty(d.title,100) && bounded(d.subtitle,200) && d.color.matches('#[0-9a-fA-F]{6}') && image(d.banner) && image(d.get('logo',''));
   }
-  // 5 — Campeonatos: cadastro privado, editável apenas pelo administrador principal.
+  // 5 — Campeonatos: cadastro privado, delegável sem acesso às demais áreas administrativas.
   function championshipSchema(d,id) {
    return meta(d,id) && d.keys().hasOnly(['id','name','season','sport','category','status','_revision','_audit','_updatedAt','_updatedBy'])
     && nonempty(d.name,100) && nonempty(d.season,40) && bounded(d.category,150)
@@ -175,8 +177,9 @@ service cloud.firestore {
     && d.id == uid && nonempty(d.name,100) && bounded(d.email,254)
     && d.role in ['pending','operator'] && d.enabled is bool && d.matches is list && d.matches.size() <= 100
     && d.matches.toSet().size() == d.matches.size()
-    && d.get('permissions',[]) is list && d.get('permissions',[]).size() <= 1
-    && d.get('permissions',[]).hasOnly(['rosters'])
+    && d.get('permissions',[]) is list && d.get('permissions',[]).size() <= 4
+    && d.get('permissions',[]).toSet().size() == d.get('permissions',[]).size()
+    && d.get('permissions',[]).hasOnly(['rosters','matchesCreate','championships','gamesView'])
     && (d.role != 'pending' || d.get('permissions',[]) == [])
     && (d.role != 'pending' || (d.enabled == false && d.matches == []))
     && d.createdAt is timestamp && d.updatedAt == request.time && d.revision is int && d.revision > 0
@@ -229,9 +232,9 @@ service cloud.firestore {
    allow delete: if false;
   }
   match /championships/{id} {
-   allow read: if admin();
-   allow create: if admin() && championshipSchema(request.resource.data,id) && request.resource.data._revision == 1 && pair(request.resource.data,'championships',id,null);
-   allow update: if admin() && championshipSchema(request.resource.data,id) && request.resource.data.sport == resource.data.sport
+   allow read: if championshipManager();
+   allow create: if championshipManager() && championshipSchema(request.resource.data,id) && request.resource.data._revision == 1 && pair(request.resource.data,'championships',id,null);
+   allow update: if championshipManager() && championshipSchema(request.resource.data,id) && request.resource.data.sport == resource.data.sport
     && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'championships',id,resource.data);
    allow delete: if false;
   }
