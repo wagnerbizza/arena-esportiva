@@ -558,7 +558,7 @@ function render() {
     return;
   }
   // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
-  if (role !== "admin" && !["overview", "matches", "account", "documentation", ...(canManageRosters()?["teams","players","imports"]:[]), ...(canManageChampionships()?["championships"]:[])].includes(section)) {
+  if (role !== "admin" && !["overview", "matches", "account", "documentation", ...(canManageRosters()?["teams","players","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canCreateMatches()?["createMatch"]:[])].includes(section)) {
     section = "overview";
     selected = "";
   }
@@ -569,7 +569,8 @@ function render() {
     ["standings", "Classificação"],
     ["teams", "Equipes"],
     ["players", "Jogadores"],
-    ["matches", "Partidas"],
+    ["createMatch", "Cadastrar partida"],
+    ["matches", "Acompanhar jogos"],
     ["imports", "Importar"],
     ["reports", "Súmulas e relatórios"],
     ["cleanup", "Limpeza de testes"],
@@ -619,21 +620,21 @@ function view() {
   if (section === "teams") return teamsDirectoryView();
   if (section === "players")
     return `<div class="card"><h2>Cadastrar jogador</h2><p class="muted">Cadastre o elenco antes de criar a partida. A súmula preserva uma cópia do elenco daquela data.</p><form id="player"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome", "name", "text", "required")}${select("Equipe", "team", teamOptions())}${field("Número", "number")}${field("Posição", "position")}${select("Escalação", "reserve", '<option value="false">Titular</option><option value="true">Reserva / banco</option>')}</div><button class="primary">Salvar jogador</button> <button type="button" data-section="imports">Importar jogadores</button></form></div>${listPanel("players")}`;
+  if (section === "createMatch" && canCreateMatches())
+    return `<div class="card"><h2>Cadastrar partida</h2><p class="muted">Programe um jogo novo. Para acompanhar ou operar partidas, use Jogos.</p><form id="match"><div class="formgrid">${championshipSelectForCreate()}${select(
+      "Modalidade",
+      "sport",
+      options(
+        D.SPORTS,
+        (x) => x,
+        (x) => x,
+      ),
+    )}${select("Equipe da casa", "home", teamOptions())}${select("Equipe visitante", "away", teamOptions())}${field("Data e horário (horário deste computador)", "date", "datetime-local", "required")}${field("Local", "place")}${field("Competição / edição (partida sem vínculo)", "competition", "text", 'maxlength="150"')}${field("Árbitros e mesários", "referees")}${field("Etapa inicial (ex.: 1 ou 1º quarto)", "stage", "text", 'value="1"')}</div><button class="primary">Criar partida</button></form></div>`;
   if (section === "matches" && role !== "admin" && !selected) {
     return `<div class="card"><h2>${canViewAllGames()?"Acompanhar jogos":"Partidas atribuídas"}</h2><p>${canViewAllGames()?"Consulte todas as partidas publicadas — próximas, ao vivo e encerradas. A consulta não permite alterar placar. Para operar, o administrador precisa atribuir a partida.":"Você pode operar somente as partidas atribuídas pelo administrador principal. Histórico, relatórios e auditoria são exclusivos dele."}</p></div>${listPanel("matches")}`;
   }
   if (section === "matches")
-    return selected
-      ? operate()
-      : `<div class="card"><h2>Programar partida</h2><form id="match"><div class="formgrid">${championshipSelectForCreate()}${select(
-          "Modalidade",
-          "sport",
-          options(
-            D.SPORTS,
-            (x) => x,
-            (x) => x,
-          ),
-        )}${select("Equipe da casa", "home", teamOptions())}${select("Equipe visitante", "away", teamOptions())}${field("Data e horário (horário deste computador)", "date", "datetime-local", "required")}${field("Local", "place")}${field("Competição / edição (partida sem vínculo)", "competition", "text", 'maxlength="150"')}${field("Árbitros e mesários", "referees")}${field("Etapa inicial (ex.: 1 ou 1º quarto)", "stage", "text", 'value="1"')}</div><button class="primary" ${canCreateMatches() ? "" : "disabled"}>Criar partida</button></form></div>${listPanel("matches")}`;
+    return selected ? operate() : listPanel("matches");
   if (section === "imports") return importView();
   if (section === "reports") return reports();
   if (section === "settings") return settingsView();
@@ -2158,12 +2159,12 @@ setupAccountTools();
 
 // 21 — Organização da central. Permissões continuam validadas pelo Firebase.
 const workspaceDefinitions=[
- {id:"games",title:"Jogos",intro:"Programação, operação e classificação",sections:["overview","matches","championships","standings"]},
- {id:"records",title:"Cadastros",intro:"Equipes, jogadores e importações",sections:["teams","players","imports"]},
+ {id:"games",title:"Jogos",intro:"Acompanhar e operar partidas",sections:["overview","matches","standings"]},
+ {id:"records",title:"Cadastros",intro:"Equipes, jogadores, campeonatos e partidas",sections:["teams","players","imports","championships","createMatch"]},
  {id:"documents",title:"Documentação",intro:"Guias, súmulas e relatórios",sections:["documentation","reports"]},
  {id:"administration",title:"Administração",intro:"Operadores, acessos e configurações",sections:["monitor","users","settings","cleanup"]}
 ];
-function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships"));}
+function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canCreateMatches()&&id==="createMatch"));}
 function workspaceNavigation(sections){
  const visible=workspaceDefinitions.filter(g=>allowedWorkspaceSections(g).length);
  const group=visible.find(g=>g.sections.includes(section))||visible[0];
@@ -2439,7 +2440,8 @@ let navigationQuery="";
 const expandedNavigation=new Set();
 const navigationDescriptions={
  overview:{label:"Visão geral",description:"Resumo dos jogos atuais e consulta das finalizadas.",keywords:"inicio home encerradas finalizadas atuais próximas"},
- matches:{label:"Partidas",description:"Criar ou operar jogos, placar, cronômetro e ocorrências.",keywords:"gol gols ponto pontos iniciar tempo relogio pausa intervalo etapa cartao cartões faltas substituicoes var estorno anular arbitragem juiz local futebol basquete volei"},
+ matches:{label:"Acompanhar jogos",description:"Consultar jogos próximos, ao vivo e encerrados; operar somente os atribuídos.",keywords:"gol gols ponto pontos iniciar tempo relogio pausa intervalo etapa cartao cartões faltas substituicoes var estorno anular arbitragem juiz local futebol basquete volei"},
+ createMatch:{label:"Cadastrar partida",description:"Programar uma nova partida (se autorizado).",keywords:"criar cadastrar programar nova jogo partida"},
  championships:{label:"Campeonatos",description:"Cadastrar competições e temporadas (se autorizado).",keywords:"competicao torneio campeonato temporada edicao categoria"},
  standings:{label:"Classificação",description:"Consultar tabela e classificação do campeonato de futebol.",keywords:"tabela ranking saldo vitorias pontos"},
  teams:{label:"Equipes",description:"Consultar e editar times, escudos, técnicos e elencos.",keywords:"time equipe bandeira escudo tecnico treinador modalidades arquivar reativar ficha elenco historico"},
