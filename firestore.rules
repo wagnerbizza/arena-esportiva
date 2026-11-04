@@ -11,6 +11,8 @@ service cloud.firestore {
   function admin() { return owner(); }
   // 23 — Delegação explícita, revogável, sem promover o operador a titular.
   function rosterManager() { return owner() || (operator() && 'rosters' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions',[])); }
+  // Criação de novas partidas é uma delegação independente; não concede operação nem edição.
+  function matchCreator() { return owner() || (operator() && 'matchesCreate' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions',[])); }
   function operatorFor(id) { return owner() || (operator() && id in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('matches',[])); }
   function bounded(s,n) { return s is string && s.size() <= n; }
   function nonempty(s,n) { return bounded(s,n) && s.size() > 0; }
@@ -267,9 +269,9 @@ service cloud.firestore {
    allow update,delete: if false;
   }
   match /matches/{id} {
-   allow get: if operatorFor(id);
+   allow get: if operatorFor(id) || (matchCreator() && !exists(/databases/$(database)/documents/matches/$(id)));
    allow list: if admin();
-   allow create: if admin() && matchSchema(request.resource.data,id) && request.resource.data._revision == 1
+   allow create: if matchCreator() && matchSchema(request.resource.data,id) && request.resource.data._revision == 1
     && exists(/databases/$(database)/documents/teams/$(request.resource.data.home)) && exists(/databases/$(database)/documents/teams/$(request.resource.data.away))
     && get(/databases/$(database)/documents/teams/$(request.resource.data.home)).data.get('archived',false) == false
     && get(/databases/$(database)/documents/teams/$(request.resource.data.away)).data.get('archived',false) == false
@@ -291,7 +293,8 @@ service cloud.firestore {
   }
   match /publicMatches/{id} {
    allow read: if true;
-   allow create, update: if operatorFor(id) && request.resource.data == publicMatch(getAfter(/databases/$(database)/documents/matches/$(id)).data);
+   allow create: if matchCreator() && request.resource.data == publicMatch(getAfter(/databases/$(database)/documents/matches/$(id)).data);
+   allow update: if operatorFor(id) && request.resource.data == publicMatch(getAfter(/databases/$(database)/documents/matches/$(id)).data);
    allow delete: if cleanupAllowed(id,get(/databases/$(database)/documents/matches/$(id)).data);
   }
   match /audit/{id} {
