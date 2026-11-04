@@ -77,7 +77,7 @@ function filterSelect(kind, key, label, values, allLabel) {
 function listPanel(kind) {
   const unique = (rows, key) => [...new Set(rows.map((r) => r[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
   const f = listFilters[kind];
-  const titles = { teams: "Equipes cadastradas", players: "Jogadores cadastrados", matches: role === "admin" ? "Partidas cadastradas" : "Partidas atribuídas" };
+  const titles = { teams: "Equipes cadastradas", players: "Jogadores cadastrados", matches: role === "admin" ? "Partidas cadastradas" : canViewAllGames() ? "Jogos disponíveis" : "Partidas atribuídas" };
   let controls = `<label class="list-search">${kind === "matches" ? "Buscar equipe, competição ou local" : kind === "players" ? "Buscar nome ou número" : "Buscar equipe, sigla ou técnico"}<input type="search" data-list-filter="${kind}" data-filter-key="query" value="${esc(f.query)}" placeholder="Digite para buscar…" autocomplete="off"></label>`;
   if (kind === "teams") controls += filterSelect(kind, "category", "Categoria", unique(state.teams, "category"), "Todas as categorias")+filterSelect(kind,"sport","Modalidade",D.SPORTS,"Todas as modalidades")+filterSelect(kind,"status","Situação da equipe",[["active","Ativas"],["archived","Arquivadas"]],"Todas as equipes");
   if (kind === "players") controls += filterSelect(kind, "team", "Equipe", state.teams.slice().sort(alphabetical).map((t) => [t.id, t.name]), "Todas as equipes") + filterSelect(kind, "position", "Posição", unique(state.players, "position"), "Todas as posições") + filterSelect(kind, "reserve", "Escalação", [["false", "Titular"], ["true", "Reserva / banco"]], "Todos");
@@ -90,7 +90,7 @@ function listCount(kind) {
 }
 function listResults(kind) {
   const rows = filteredRecords(kind);
-  if (!rows.length) return empty(state[kind].length ? "Nenhum resultado com estes filtros. Use Limpar filtros ou, em Partidas, selecione Todas." : { teams: "Nenhuma equipe cadastrada.", players: "Nenhum jogador cadastrado.", matches: "Nenhuma partida disponível para sua conta." }[kind]);
+  if (!rows.length) return empty(state[kind].length ? "Nenhum resultado com estes filtros. Use Limpar filtros ou selecione Todas." : { teams: "Nenhuma equipe cadastrada.", players: "Nenhum jogador cadastrado.", matches: "Nenhum jogo disponível para esta conta." }[kind]);
   if (kind === "matches") return rows.map((m) => matchCard(m, true)).join("");
   if (kind === "teams") return rows.map(teamDirectoryCard).join("");
   return table(["Nome", "Equipe", "Número", "Posição", "Escalação", "Ação"], rows.map((p) => tr([p.name, name(p.team), p.number, p.position, p.reserve ? "Reserva" : "Titular"]).replace("</tr>", `<td><button data-edit-player="${esc(p.id)}">Editar</button></td></tr>`)));
@@ -1850,8 +1850,8 @@ function tutorialSteps() {
     ["Recuperar acesso", "Esqueci minha senha envia instruções ao seu e-mail. Se estiver bloqueado ou sem partidas atribuídas, procure o administrador principal."]
   ];
   if (role === "operator") return [
-    ["Sua conta de operador", "O cabeçalho identifica sua conta. Você recebe somente as partidas atribuídas pelo administrador principal. Permissões adicionais podem liberar cadastro de equipes/jogadores ou criação de novas partidas, sem conceder relatórios, usuários, configurações ou auditoria."],
-    ["Encontre sua partida", "Abra Partidas. Use busca, modalidade, situação e campeonato. Em andamento e próximas esconde as finalizadas; Todas permite localizar qualquer partida disponível para sua conta."],
+    ["Sua conta de operador", "O cabeçalho identifica sua conta. Em Cadastros, aparecem somente os tipos de cadastro autorizados. Em Jogos, você acompanha as partidas liberadas; só pode alterar placar e registrar lances nas partidas atribuídas pelo administrador."],
+    ["Encontre sua partida", "Abra Jogos → Acompanhar jogos. Use busca, modalidade, situação e campeonato. Em andamento e próximas esconde as finalizadas; Todas permite localizar qualquer partida disponível para sua conta."],
     ["Durante o jogo", "Abra Operar partida, confira as equipes e inicie o jogo quando autorizado. Use o lançamento rápido para registrar pontos ou gols na equipe correta. Se desejar, selecione o atleta antes do lançamento."],
     ["Interrupções e avisos", "Pausar e suspender registram o motivo e interrompem o cronômetro. O campo Aviso para quem está assistindo publica informações. Observações operacionais compõem a súmula. Confira sempre o que ficará público."],
     ["Correções e encerramento", "Se registrar um resultado errado, avise o administrador principal para realizar o estorno auditado. Ao encerrar, confira o placar. Reabertura, homologação, auditoria e relatórios são funções administrativas."],
@@ -1862,7 +1862,7 @@ function tutorialSteps() {
     ["Equipes e jogadores", "Cadastre as equipes e seus escudos em Equipes. Em Jogadores, informe equipe, número, posição e titular ou reserva. Prepare o elenco antes de criar a partida: a súmula preserva uma cópia daquele momento."],
     ["Importação com prévia", "Em Importar, selecione equipes ou jogadores e forneça a planilha ou o texto. Confira a prévia antes de confirmar. Corrija linhas inválidas e verifique duplicados. A importação não deve ser confirmada sem essa revisão."],
     ["Campeonatos e temporadas", "O administrador ou um operador autorizado pode cadastrar edições por modalidade e categoria. A modalidade fica fixa após salvar. Encerrar o campeonato impede novas partidas vinculadas, mas não encerra os jogos automaticamente."],
-    ["Programar e localizar partidas", "Em Partidas, escolha campeonato, equipes diferentes, data e local. O vínculo preenche a modalidade. Use Todas para encontrar jogos encerrados e Ver partidas no cartão do campeonato para filtrar seus jogos."],
+    ["Programar e localizar partidas", "Em Cadastros → Cadastrar partida, escolha campeonato, equipes diferentes, data e local. O vínculo preenche a modalidade. Em Jogos → Acompanhar jogos, use Todas para encontrar jogos encerrados e Ver partidas no cartão do campeonato para filtrar seus jogos."],
     ["Operar um jogo", "Confira as equipes antes de iniciar. Use +1 para gols no futebol e os valores próprios nas outras modalidades. O cronômetro possui início, parada e ajuste com justificativa. Cartões, faltas e outros lances ficam na seção de detalhes."],
     ["Gol anulado e VAR", "Se um gol for anulado, localize o ponto no Histórico e use Estornar com justificativa. Em uma partida encerrada, primeiro reabra com motivo. Para uma análise de VAR, publique um aviso ao público e aguarde a decisão antes do estorno."],
     ["Interrupções e súmula", "Informe o motivo ao pausar, suspender ou cancelar. Avisos são públicos; observações operacionais entram na súmula e ficam disponíveis a quem opera a partida. Ao concluir, confira o resultado e encerre. Homologação é uma ação separada."],
