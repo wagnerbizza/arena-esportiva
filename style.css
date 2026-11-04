@@ -819,6 +819,22 @@ hr {
     break-inside: avoid;
     page-break-inside: avoid;
   }
+  body.access-audit-print #view > *:not(#accessAuditReport) {
+    display: none !important;
+  }
+  body.access-audit-print #accessAuditReport {
+    display: block !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+  body.access-audit-print #accessAuditReport details:not([open]) > :not(summary) {
+    display: block !important;
+  }
+  body.access-audit-print #accessAuditReport details {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
   .report-sheet + .report-sheet {
     break-before: page;
     page-break-before: always;

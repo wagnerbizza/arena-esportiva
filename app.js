@@ -1234,8 +1234,25 @@ function usersView() {
     permissions.includes("championships") && "Campeonatos",
     permissions.includes("matchesCreate") && "Novas partidas",
   ].filter(Boolean).join(", ") || "Nenhum";
+  const permissionNames={rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos"};
+  const accessAuditRows=(state.accessAudit||[]).slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
+  const accessAuditDate=value=>value?.toDate?.().toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})||"Aguardando confirmação do servidor";
+  const accessAuditValue=(key,value)=>{
+    if(value==null)return "—";
+    if(key==="role")return value==="operator"?"Operador":value==="pending"?"Aguardando aprovação":String(value);
+    if(key==="enabled")return value?"Ativo":"Bloqueado / sem acesso";
+    if(key==="matches")return (value||[]).map(id=>{const m=state.matches.find(item=>item.id===id);return m?`${name(m.home)} × ${name(m.away)} (${m.sport})`:id;}).join(", ")||"Nenhuma";
+    if(key==="permissions")return (value||[]).map(p=>permissionNames[p]||p).join(", ")||"Nenhuma";
+    if(typeof value==="object")return JSON.stringify(value);
+    return String(value);
+  };
+  const accessAuditReport=accessAuditRows.map(a=>{
+    const before=a.before||{},after=a.after||{},keys=[...new Set([...Object.keys(before),...Object.keys(after)])].filter(k=>!["createdAt","updatedAt","auditId","revision"].includes(k)&&JSON.stringify(before[k]??null)!==JSON.stringify(after[k]??null));
+    const details=table(["Campo","Antes","Depois"],keys.map(k=>tr([k,accessAuditValue(k,before[k]),accessAuditValue(k,after[k])])));
+    return `<details class="event"><summary>${esc(accessAuditDate(a.at))} • ${esc(a.action||"Alteração")} • ${esc(after.name||before.name||a.target||"Usuário")}</summary><p>${esc(after.email||before.email||"E-mail não informado")}<br>Motivo: ${esc(a.reason||"Não informado")}<br>UID: ${esc(a.target||"—")}</p>${details}</details>`;
+  }).join("")||empty("Nenhuma alteração de permissão registrada.");
   const accessLabel = (u) => u.enabled !== false && u.role === "operator" && (u.permissions||[]).includes("gamesView") ? "Sim" : "Não";
-  return `<section class="card"><h2>Usuários e permissões</h2><p><strong>Administrador principal: ${esc(user?.email || "Wagner")}</strong><br>Sua conta é protegida. Esta tela não permite alterar, bloquear ou remover sua autoridade.</p><label>Link para solicitar acesso<input readonly value="${esc(link.href)}"></label><p><button type="button" data-access-copy>Copiar link de cadastro</button></p><p class="muted">Envie esse link ao novo operador. Para testar outra conta neste computador, use uma janela anônima.</p></section><section class="card"><h3>Solicitações e operadores</h3>${table(["Pessoa", "Situação", "Partidas para operar", "Cadastros esportivos", "Acompanha jogos", "Ação"], users.map((u) => `<tr><td>${esc(u.name || "Operador cadastrado")}<br><small>${esc(u.email || u.id)}</small></td><td>${esc(label(u))}</td><td>${(u.matches || []).length}</td><td>${esc(registrationPermissions(u.permissions||[]))}</td><td>${accessLabel(u)}</td><td><button type="button" data-access-edit="${esc(u.id)}">Revisar permissões</button></td></tr>`))}${users.length ? "" : empty("Nenhuma solicitação recebida ainda.")}</section>${editor}<section class="card"><h3>Últimos 50 registros de permissões</h3>${(state.accessAudit || []).map((a) => `<div class="event"><b>${esc(a.action)}</b><p>${esc(a.after?.name || a.target)} — ${esc(a.reason)}</p><small>${esc(a.at?.toDate ? a.at.toDate().toLocaleString("pt-BR") : "Aguardando confirmação do servidor")} • ${esc(a.after?.enabled ? "Ativo" : "Sem acesso ativo")} • ${(a.after?.matches || []).length} partida(s) para operar • Cadastros esportivos: ${esc(registrationPermissions(a.after?.permissions||[]))} • Acompanha jogos: ${(a.after?.permissions||[]).includes("gamesView")?"sim":"não"}</small></div>`).join("") || empty("Nenhuma alteração de permissão registrada nesta versão.")}</section>`;
+  return `<section class="card"><h2>Usuários e permissões</h2><p><strong>Administrador principal: ${esc(user?.email || "Wagner")}</strong><br>Sua conta é protegida. Esta tela não permite alterar, bloquear ou remover sua autoridade.</p><label>Link para solicitar acesso<input readonly value="${esc(link.href)}"></label><p><button type="button" data-access-copy>Copiar link de cadastro</button></p><p class="muted">Envie esse link ao novo operador. Para testar outra conta neste computador, use uma janela anônima.</p></section><section class="card"><h3>Solicitações e operadores</h3>${table(["Pessoa", "Situação", "Partidas para operar", "Cadastros esportivos", "Acompanha jogos", "Ação"], users.map((u) => `<tr><td>${esc(u.name || "Operador cadastrado")}<br><small>${esc(u.email || u.id)}</small></td><td>${esc(label(u))}</td><td>${(u.matches || []).length}</td><td>${esc(registrationPermissions(u.permissions||[]))}</td><td>${accessLabel(u)}</td><td><button type="button" data-access-edit="${esc(u.id)}">Revisar permissões</button></td></tr>`))}${users.length ? "" : empty("Nenhuma solicitação recebida ainda.")}</section>${editor}<section id="accessAuditReport" class="card"><h3>Últimos 50 registros de permissões</h3><p class="muted">Abra cada registro para conferir os valores anteriores e posteriores, a justificativa e o responsável.</p><div class="toolbar noprint"><button type="button" data-access-audit-print>Imprimir / salvar em PDF</button><button type="button" data-access-audit-json>Baixar registros (JSON)</button><button type="button" data-access-audit-excel>Baixar registros (Excel)</button></div><p class="muted">${accessAuditRows.length} de até 50 registros mais recentes.</p>${accessAuditReport}</section>`;
 }
 // EVENTOS DE INTERFACE — um único ponto de entrada para cada ação.
 document.addEventListener("submit", async (e) => {
@@ -1412,6 +1429,29 @@ document.addEventListener("click", async (e) => {
       try { await navigator.clipboard.writeText(url); toast("Link copiado."); }
       catch { toast("Selecione e copie o endereço exibido no campo Link para solicitar acesso."); }
       return;
+    }
+    if(b.hasAttribute("data-access-audit-print")){
+      if(role!=="admin")throw Error("Histórico exclusivo do administrador principal.");
+      document.body.classList.add("access-audit-print");
+      window.addEventListener("afterprint",()=>document.body.classList.remove("access-audit-print"),{once:true});
+      window.print();return;
+    }
+    if(b.hasAttribute("data-access-audit-json")){
+      if(role!=="admin")throw Error("Exportação exclusiva do administrador principal.");
+      const rows=(state.accessAudit||[]).slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
+      download("historico-permissoes.json",JSON.stringify({formato:"arena-historico-permissoes-v1",geradoEm:new Date().toISOString(),registros:rows},(_key,value)=>value?.toDate?value.toDate().toISOString():value,2));return;
+    }
+    if(b.hasAttribute("data-access-audit-excel")){
+      if(role!=="admin")throw Error("Exportação exclusiva do administrador principal.");
+      sheetReady();
+      const rows=(state.accessAudit||[]).slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
+      const wb=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows.map(a=>({
+        Data:a.at?.toDate?.().toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})||"Aguardando confirmação do servidor",
+        Ação:a.action||"",Usuário:a.after?.name||a.before?.name||"",Email:a.after?.email||a.before?.email||"",
+        UID:a.target||"",Responsável:a.actor||"",Motivo:a.reason||"",...auditChunks("Antes",a.before),...auditChunks("Depois",a.after)
+      }))),"Permissões");
+      XLSX.writeFile(wb,"historico-permissoes.xlsx");return;
     }
     if (b.dataset.quick) {
       await dispatch({
