@@ -707,22 +707,9 @@ hr {
 .report-sheet {
   position: relative;
 }
-.audit-screen-only {
-  display: none !important;
-}
-.audit-print-only {
-  display: block !important;
-}
-.audit-print-only .event {
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
 @media (max-width: 850px) {
   .live-console {
     grid-template-columns: 1fr;
-  }
-  .audit-print-only {
-    display: none;
   }
   .quick-score {
     padding: 22px 8px;
@@ -818,6 +805,16 @@ hr {
     break-inside: auto !important;
     page-break-inside: auto !important;
     box-shadow: none !important;
+  }
+  .audit-screen-only {
+    display: none !important;
+  }
+  .audit-print-only {
+    display: block !important;
+  }
+  .audit-print-only .event {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .report-sheet + .report-sheet {
     break-before: page;
@@ -958,6 +955,9 @@ hr {
     position: relative;
     z-index: 1;
   }
+}
+.audit-print-only {
+  display: none;
 }
 /* O filtro não deve empurrar ou quebrar o título do painel público. */
 .sectionhead > select {
