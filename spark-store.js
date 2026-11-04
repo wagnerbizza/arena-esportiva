@@ -208,9 +208,14 @@ export async function connectSpark({
     if (!isOwner()) throw Error("Auditoria exclusiva do administrador principal.");
     const snap = await F.getDocsFromServer(F.collection(database, "audit"));
     const removed=await F.getDocsFromServer(F.collection(database,"cleanupAudit"));
+    const access=await F.getDocsFromServer(F.collection(database,"accessAudit"));
     return [...snap.docs.map(d=>({ID:d.id,...d.data()})),...removed.docs.map(d=>{
       const r=d.data();return {ID:"limpeza-"+d.id,...r,revision:(r.before._revision||0)+1,
         detail:{type:"exclusão de teste",text:"Partida removida da central e do público. Histórico preservado.",reason:r.reason}};
+    }),...access.docs.map(d=>{
+      const r=d.data();return {ID:"acesso-"+d.id,entity:"users",target:r.target,actor:r.actor,at:r.at,
+        revision:r.after?.revision||0,detail:{type:r.action,text:"Alteração de acesso e permissões.",reason:r.reason},
+        before:r.before,after:r.after};
     })]
       .sort((a, b) => (a.at?.toMillis?.() || 0) - (b.at?.toMillis?.() || 0));
   }

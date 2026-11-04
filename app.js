@@ -942,6 +942,34 @@ function certificateDocument({name:person, role:participation, event, sport, pla
   if (!win) { toast("Permita janelas pop-up para gerar o certificado.", true); return; }
   win.document.open(); win.document.write(html); win.document.close();
 }
+let generalAuditRows=[],generalAuditLoaded=false,generalAuditBusy=false;
+function auditReportDate(value){
+ const date=value?.toDate?.()||new Date(value||0);
+ return Number.isNaN(date.getTime())?"Data não informada":date.toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"});
+}
+function auditReportValue(value){
+ if(value==null)return "—";
+ if(typeof value==="boolean")return value?"Sim":"Não";
+ if(Array.isArray(value))return value.length>6?`${value.length} itens`:value.join(", ")||"Nenhum";
+ const text=typeof value==="object"?JSON.stringify(value):String(value);
+ return text.length>180?text.slice(0,177)+"…":text;
+}
+function auditReportPreview(){
+ if(!generalAuditLoaded)return '<p class="muted">Clique em Consultar alterações para ver os registros do Firebase. A consulta inclui cadastros, partidas, configurações, permissões e exclusões.</p>';
+ const rows=generalAuditRows.slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
+ if(!rows.length)return empty("Nenhuma alteração registrada.");
+ const visible=rows.slice(0,100),entityNames={settings:"Configurações",teams:"Equipe",players:"Jogador",matches:"Partida",championships:"Campeonato",users:"Acesso de usuário"};
+ return `<p class="muted" role="status">${rows.length} alteração(ões) encontradas. ${rows.length>visible.length?"Exibindo as 100 mais recentes; a exportação inclui todas.":""} Os horários são de Brasília.</p>${visible.map(r=>{
+  const before=r.before||{},after=r.after||{},keys=[...new Set([...Object.keys(before),...Object.keys(after)])].filter(k=>!["_audit","_updatedAt","updatedAt","createdAt","revision","auditId"].includes(k)&&JSON.stringify(before[k]??null)!==JSON.stringify(after[k]??null));
+  const changes=keys.slice(0,30).map(k=>tr([k,auditReportValue(before[k]),auditReportValue(after[k])]));
+  const description=[r.detail?.text,r.detail?.reason?`Motivo: ${r.detail.reason}`:""].filter(Boolean).join(" • ");
+  const target=after.name||before.name||r.target||"—";
+  return `<details class="event"><summary>${esc(auditReportDate(r.at))} • ${esc(entityNames[r.entity]||r.entity||"Registro")} • ${esc(r.detail?.type||"Alteração")} • ${esc(target)}</summary><p>Responsável (UID): ${esc(r.actor||"Não informado")}<br>ID do registro: ${esc(r.target||"—")}${description?`<br>${esc(description)}`:""}</p>${changes.length?table(["Campo","Antes","Depois"],changes):'<p class="muted">Sem diferenças de campos disponíveis.</p>'}${keys.length>changes.length?`<small>Exibindo ${changes.length} de ${keys.length} campos alterados.</small>`:""}</details>`;
+ }).join("")}`;
+}
+function generalAuditPanel(){
+ return `<section class="card"><h2>Relatório geral de alterações</h2><p>Consulte as alterações registradas no Firebase: equipes, jogadores, campeonatos, partidas, configurações, permissões de operadores e exclusões de partidas de teste. A visualização mostra as 100 alterações mais recentes; o Excel baixa o histórico completo.</p><div class="toolbar"><button type="button" data-audit-view ${generalAuditBusy?"disabled":""}>${generalAuditBusy?"Consultando…":generalAuditLoaded?"Atualizar e visualizar alterações":"Consultar alterações"}</button><button type="button" data-audit-excel>Baixar relatório completo (Excel)</button></div><div id="generalAuditOutput">${auditReportPreview()}</div></section>`;
+}
 function reports() {
   return `${certificatePanel()}<div class="card noprint"><h2>Súmulas e relatórios</h2><div class="formgrid">${select(
     "Partida",
@@ -952,7 +980,7 @@ function reports() {
         (m) => m.id,
         (m) => name(m.home) + " × " + name(m.away) + " • " + format(m.date),
       ),
-  )}</div><div class="toolbar"><button data-report-pdf>Baixar súmula PDF</button><button data-report-print>Imprimir</button><button data-report-excel class="primary">Exportar Excel</button><button data-audit-excel>Exportar auditoria completa</button><button data-backup>Baixar cópia JSON</button></div><p class="muted">Use “Baixar súmula PDF” para o arquivo pronto ou “Imprimir” para abrir a janela de impressão. O Excel inclui resultados, elencos, eventos e parciais. A cópia JSON é para consulta; não há restauração automática nesta versão.</p></div><div id="reportOutput">${state.matches.map(reportMatch).join("") || empty("Cadastre uma partida para gerar a súmula.")}</div>`;
+  )}</div><div class="toolbar"><button data-report-pdf>Baixar súmula PDF</button><button data-report-print>Imprimir</button><button data-report-excel class="primary">Exportar Excel</button><button data-backup>Baixar cópia JSON</button></div><p class="muted">Use “Baixar súmula PDF” para o arquivo pronto ou “Imprimir” para abrir a janela de impressão. O Excel inclui resultados, elencos, eventos e parciais. A cópia JSON é para consulta; não há restauração automática nesta versão.</p></div>${role==="admin"?generalAuditPanel():""}<div id="reportOutput">${state.matches.map(reportMatch).join("") || empty("Cadastre uma partida para gerar a súmula.")}</div>`;
 }
 document.addEventListener("submit", event => {
   if (event.target?.id !== "arenaCertificateForm") return;
@@ -1567,7 +1595,19 @@ document.addEventListener("click", async (e) => {
         );
       }
       exportExcel();
+    } else if (b.hasAttribute("data-audit-view")) {
+      if (role !== "admin" || C.demo)
+        throw Error("O relatório oficial de alterações exige a conta de administrador conectada ao Firebase.");
+      generalAuditBusy=true;render();
+      try {
+        generalAuditRows=await cloud.auditRows();
+        generalAuditLoaded=true;
+      } finally {
+        generalAuditBusy=false;render();
+      }
     } else if (b.hasAttribute("data-audit-excel")) {
+      if (role !== "admin")
+        throw Error("Exportação exclusiva do administrador principal.");
       if (C.demo)
         throw Error(
           "Auditoria oficial está disponível após conectar ao Firebase.",
@@ -1595,6 +1635,15 @@ document.addEventListener("click", async (e) => {
         ),
         "Auditoria",
       );
+      const byEntity=Object.entries(rows.reduce((counts,r)=>{
+        const label={settings:"Configurações",teams:"Equipes",players:"Jogadores",matches:"Partidas",championships:"Campeonatos",users:"Acessos"}[r.entity]||r.entity||"Outros";
+        counts[label]=(counts[label]||0)+1;return counts;
+      },{})).map(([entidade,quantidade])=>({Entidade:entidade,Quantidade:quantidade}));
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([
+        {Informação:"Gerado em",Valor:new Date().toLocaleString("pt-BR")},
+        {Informação:"Total de alterações",Valor:rows.length},
+        ...byEntity.map(r=>({Informação:`Alterações em ${r.Entidade}`,Valor:r.Quantidade}))
+      ]),"Resumo");
       XLSX.writeFile(wb, "auditoria-esportiva.xlsx");
     } else if (b.hasAttribute("data-backup"))
       download("arena-copia.json", JSON.stringify(state, null, 2));
