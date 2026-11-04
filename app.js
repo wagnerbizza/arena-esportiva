@@ -112,19 +112,6 @@ function handleListFilter(e) {
       const active = b.dataset.listGroup === listFilters.matches.group;
       b.classList.toggle("primary", active); b.setAttribute("aria-pressed", String(active));
     });
-    document.addEventListener("click",event=>{
-     const button=event.target.closest("[data-certificate-json],[data-institutional-certificate-json]");
-     if(!button||role!=="admin")return;
-     try{
-      if(button.hasAttribute("data-institutional-certificate-json")){
-       download("certificado-institucional-dados.json",JSON.stringify({formato:"arena-certificado-dados-v1",tipo:"institucional",titular:"Wagner BIZZA",projeto:"Arena Esportiva",emissor:"WagnerBIZZA",data:new Date().toISOString()},null,2));return;
-      }
-      const form=$("#arenaCertificateForm");
-      if(!form?.reportValidity())return;
-      const values=Object.fromEntries(new FormData(form));
-      download("certificado-dados.json",JSON.stringify({formato:"arena-certificado-dados-v1",tipo:"participacao",dados:values,geradoEm:new Date().toISOString()},null,2));
-     }catch(error){toast(error.message,true);}
-    });
   }
   updateList(kind);
 }
@@ -1020,6 +1007,19 @@ document.addEventListener("submit", event => {
   const data = new FormData(event.target);
   certificateDocument({name:data.get("certificateName"),role:data.get("certificateRole"),event:data.get("certificateEvent"),sport:data.get("certificateSport"),place:data.get("certificatePlace"),date:new Date(data.get("certificateDate")+"T12:00:00").toLocaleDateString("pt-BR"),issuer:data.get("certificateIssuer")});
 });
+document.addEventListener("click",event=>{
+ const button=event.target.closest("[data-certificate-json],[data-institutional-certificate-json]");
+ if(!button||role!=="admin")return;
+ try{
+  if(button.hasAttribute("data-institutional-certificate-json")){
+   download("certificado-institucional-dados.json",JSON.stringify({formato:"arena-certificado-dados-v1",tipo:"institucional",titular:"Wagner BIZZA",projeto:"Arena Esportiva",emissor:"WagnerBIZZA",data:new Date().toISOString()},null,2));return;
+  }
+  const form=$("#arenaCertificateForm");
+  if(!form?.reportValidity())return;
+  const values=Object.fromEntries(new FormData(form));
+  download("certificado-dados.json",JSON.stringify({formato:"arena-certificado-dados-v1",tipo:"participacao",dados:values,geradoEm:new Date().toISOString()},null,2));
+ }catch(error){toast(error.message,true);}
+});
 document.addEventListener("click", event => {
   const button = event.target.closest("[data-institutional-certificate]");
   if (!button) return;
@@ -1876,7 +1876,7 @@ function helpFor(el) {
   if(el.matches("[data-backup]"))return "Baixa uma cópia JSON para consulta. Esta versão ainda não possui restauração automática.";
   if(el.matches("[data-access-edit]"))return "Permite ao administrador aprovar, bloquear, atribuir partidas e conceder permissões específicas de cadastro esportivo.";
   const key=el.dataset.section;
-  const sections={cleanup:"Prévia, cópia e exclusão de partidas de teste. Exclusivo do administrador principal.",standings:"Classificação do futebol calculada pelos jogos encerrados ou homologados de cada campeonato.",overview:"Resumo dos jogos atuais e consulta das finalizadas.",championships:"Cadastro de campeonatos e temporadas. Acesso do administrador ou de operadores autorizados.",createMatch:"Cadastro de uma nova partida. Acesso do administrador ou de operadores autorizados.",teams:"Cadastro e edição de equipes, técnicos, categorias e escudos.",players:"Cadastro do elenco, número, posição e titular ou reserva.",matches:"Acompanhamento dos jogos; placar e lances só podem ser alterados em partidas atribuídas.",imports:"Importa equipes ou jogadores por planilha ou texto, com prévia antes de confirmar.",reports:"Súmulas, PDF, Excel e cópia JSON. Acesso exclusivo do administrador principal.",settings:"Aparência pública do sistema: logo, título, cores e capa.",users:"Solicitações de acesso, aprovação, bloqueio, partidas atribuídas e permissões específicas.",account:"Identificação da conta conectada e formas de entrada vinculadas."};
+  const sections={cleanup:"Prévia, cópia e exclusão de partidas de teste. Exclusivo do administrador principal.",standings:"Classificação do futebol calculada pelos jogos encerrados ou homologados de cada campeonato.",overview:"Resumo dos jogos atuais e consulta das finalizadas.",championships:"Cadastro de campeonatos e temporadas. Acesso do administrador ou de operadores autorizados.",createMatch:"Cadastro de uma nova partida. Acesso do administrador ou de operadores autorizados.",teams:"Cadastro e edição de equipes, técnicos, categorias e escudos.",players:"Cadastro do elenco, número, posição e titular ou reserva.",matches:"Acompanhamento dos jogos; placar e lances só podem ser alterados em partidas atribuídas.",imports:"Importa equipes ou jogadores por planilha ou texto, com prévia antes de confirmar.",matchSheets:"Visualiza e exporta súmulas em PDF ou JSON. Exclusivo do administrador principal.",reports:"Visualiza resultados e exporta relatórios esportivos em PDF, Excel ou JSON.",auditReports:"Consulta todas as alterações administrativas e exporta em PDF, Excel ou JSON.",certificates:"Emite certificados e baixa a visualização em PDF ou seus dados em JSON.",settings:"Aparência pública do sistema: logo, título, cores e capa.",users:"Solicitações de acesso, aprovação, bloqueio, partidas atribuídas e permissões específicas.",account:"Identificação da conta conectada e formas de entrada vinculadas."};
   if(sections[key])return sections[key];
   if(el.tagName==="INPUT"||el.tagName==="TEXTAREA"||el.tagName==="SELECT"){
     const label=el.closest("label")?.childNodes[0]?.textContent?.trim()||el.getAttribute("aria-label")||"este campo";
