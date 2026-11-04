@@ -16,6 +16,7 @@ export async function connectSpark({
   // Permissão parcial de cadastro: não dá acesso à administração.
   const canManageRosters = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("rosters"));
   const canCreateMatches = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("matchesCreate"));
+  const canManageChampionships = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("championships"));
   const version = "11.0.2";
   const [fb, auth, F] = await Promise.all([
     import(`https://www.gstatic.com/firebasejs/${version}/firebase-app.js`),
@@ -130,6 +131,7 @@ export async function connectSpark({
       // Operador não consulta a coleção privada inteira: recebe cada partida autorizada.
       // Os jogadores disponíveis são os elencos congelados nessas partidas.
       if(canManageRosters())watchCollection("players",d=>state.players=d);
+      if(canManageChampionships())watchCollection("championships",d=>state.championships=d);
       if(canCreateMatches())watchCollection("publicMatches",d=>{state.matches=[...new Map([...d,...state.matches].map(m=>[m.id,m])).values()]});
       const ids = [...new Set(profile?.matches || [])];
       for (const id of ids) {
@@ -245,7 +247,8 @@ export async function connectSpark({
     if (!session || !authorized()) throw Error("Faça login com uma conta autorizada.");
     const rosterAction=canManageRosters()&&(["team","player"].includes(action.type)||(action.type==="import"&&["team","player"].includes(action.kind)));
     const matchCreation = action.type === "match" && !action.data?.id && canCreateMatches();
-    if (!isOwner() && !rosterAction && !matchCreation && (["team", "player", "settings", "match", "import", "correct", "championship", "championshipLink","teamArchive"].includes(action.type) ||
+    const championshipAction = action.type === "championship" && canManageChampionships();
+    if (!isOwner() && !rosterAction && !matchCreation && !championshipAction && (["team", "player", "settings", "match", "import", "correct", "championship", "championshipLink","teamArchive"].includes(action.type) ||
       !profile?.matches?.includes(action.matchId))) {
       throw Error("Sua conta não tem permissão para esta ação ou partida.");
     }
@@ -554,7 +557,7 @@ export async function connectSpark({
       if (!snap.exists()) throw Error("Solicitação não encontrada.");
       const before = snap.data();
       const granted=access==="active"?[...new Set(permissions===undefined?(before.permissions||[]):permissions)]:[];
-      if(granted.some(p=>!["rosters","matchesCreate"].includes(p)))throw Error("Permissão específica inválida.");
+      if(granted.some(p=>!["rosters","matchesCreate","championships"].includes(p)))throw Error("Permissão específica inválida.");
       const after = { id: userId, name: before.name || "Operador cadastrado", email: before.email || "",
         role: access === "pending" ? "pending" : "operator", enabled: access === "active", matches, permissions:granted,
         createdAt: before.createdAt || F.serverTimestamp(), updatedAt: F.serverTimestamp(),
