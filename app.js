@@ -119,7 +119,7 @@ document.addEventListener("input", (e) => { if (e.target.matches('[data-list-fil
 document.addEventListener("change", (e) => { if (e.target.matches('select[data-list-filter]')) handleListFilter(e); });
 
 
-// 2.2 — CAMPEONATOS E TEMPORADAS. Somente o administrador gerencia o cadastro.
+// 2.2 — CAMPEONATOS E TEMPORADAS. O cadastro pode ser delegado pelo administrador.
 // Cada edição tem seu próprio ID. Não são migrados nem apagados jogos antigos.
 let editedChampionshipId = "", championshipQuery = "", championshipStatus = "";
 const championshipTitle = (c) => `${c.name} • ${c.season}`;
@@ -173,6 +173,7 @@ document.addEventListener("input", (e) => {
 let systemLogoBusy = false, systemLogoVersion = 0;
 const canManageRosters = () => role === "admin" || (role === "operator" && operatorPermissions.includes("rosters"));
 const canCreateMatches = () => role === "admin" || (role === "operator" && operatorPermissions.includes("matchesCreate"));
+const canManageChampionships = () => role === "admin" || (role === "operator" && operatorPermissions.includes("championships"));
 const accountRole = () => C.demo ? "Demonstração local" : role === "admin" ? "Administrador principal" : role === "operator" ? "Operador" : "Aguardando autorização";
 const accountName = () => user?.displayName || (state.users || []).find((p) => p.id === user?.uid)?.name || user?.email?.split("@")[0] || "Conta conectada";
 // Títulos por contexto, sem alterar a identidade personalizada salva.
@@ -456,7 +457,7 @@ async function dispatch(a) {
   app.querySelectorAll("button").forEach((b) => (b.disabled = true));
   try {
     if (C.demo) {
-      if (trainingMode && role === "operator" && !((canManageRosters()&&(["team","player"].includes(a.type)||(a.type==="import"&&["team","player"].includes(a.kind))))||(canCreateMatches()&&a.type==="match"&&!a.data?.id)) && ["team","player","match","settings","import","championship","championshipLink","correct","teamArchive"].includes(a.type)) throw Error("Esta ação é do administrador na simulação. Troque o perfil para treinar essa função.");
+      if (trainingMode && role === "operator" && !((canManageRosters()&&(["team","player"].includes(a.type)||(a.type==="import"&&["team","player"].includes(a.kind))))||(canCreateMatches()&&a.type==="match"&&!a.data?.id)||(canManageChampionships()&&a.type==="championship")) && ["team","player","match","settings","import","championship","championshipLink","correct","teamArchive"].includes(a.type)) throw Error("Esta ação é do administrador na simulação. Troque o perfil para treinar essa função.");
       const latest = JSON.parse(localStorage.getItem(key)) || D.fresh();
       if (!["team", "player", "match", "settings", "import", "championship","teamArchive"].includes(a.type)) {
         const old = latest.matches.find((m) => m.id === a.matchId);
@@ -556,7 +557,7 @@ function render() {
     return;
   }
   // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
-  if (role !== "admin" && !["overview", "matches", "account", "documentation", ...(canManageRosters()?["teams","players","imports"]:[])].includes(section)) {
+  if (role !== "admin" && !["overview", "matches", "account", "documentation", ...(canManageRosters()?["teams","players","imports"]:[]), ...(canManageChampionships()?["championships"]:[])].includes(section)) {
     section = "overview";
     selected = "";
   }
@@ -611,7 +612,7 @@ function view() {
   if (section === "cleanup" && role === "admin") return cleanupPanel();
   if (section === "standings" && role === "admin") return standingsPanel();
   if (section === "account") return accountView();
-  if (section === "championships" && role === "admin") return championshipsView();
+  if (section === "championships" && canManageChampionships()) return championshipsView();
   if (section === "users" && role === "admin") return usersView();
   if (section === "overview")return overviewMatchView();
   if (section === "teams") return teamsDirectoryView();
@@ -2155,7 +2156,7 @@ const workspaceDefinitions=[
  {id:"documents",title:"Documentação",intro:"Guias, súmulas e relatórios",sections:["documentation","reports"]},
  {id:"administration",title:"Administração",intro:"Operadores, acessos e configurações",sections:["monitor","users","settings","cleanup"]}
 ];
-function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id)));}
+function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships"));}
 function workspaceNavigation(sections){
  const visible=workspaceDefinitions.filter(g=>allowedWorkspaceSections(g).length);
  const group=visible.find(g=>g.sections.includes(section))||visible[0];
