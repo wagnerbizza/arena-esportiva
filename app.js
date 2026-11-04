@@ -944,6 +944,7 @@ function certificateDocument({name:person, role:participation, event, sport, pla
 }
 let generalAuditRows=[],generalAuditLoaded=false,generalAuditBusy=false;
 function auditReportDate(value){
+ if(!value)return "Data não informada";
  const date=value?.toDate?.()||new Date(value||0);
  return Number.isNaN(date.getTime())?"Data não informada":date.toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"});
 }
