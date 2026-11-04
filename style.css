@@ -1110,7 +1110,7 @@ input[type="checkbox"]:focus-visible { outline:3px solid var(--focus); outline-o
 .accessibility-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; border:0; background:transparent; padding:4px 0; margin:12px 5%; }
 .accessibility-bar > button,.accessibility-bar > a { margin:0!important; }
 .preferences-entry { display:inline-flex; align-items:center; gap:8px; }
-.accessibility-float { position:fixed; right:18px; bottom:18px; display:grid; place-items:center; width:54px; height:54px; min-width:54px; padding:10px; border:2px solid var(--text); border-radius:50%; background:var(--panel); color:var(--text); box-shadow:0 4px 18px #0005; z-index:500; }
+.accessibility-float { position:fixed; right:18px; bottom:64px; display:grid; place-items:center; width:54px; height:54px; min-width:54px; padding:10px; border:2px solid var(--text); border-radius:50%; background:var(--panel); color:var(--text); box-shadow:0 4px 18px #0005; z-index:500; }
 #arenaPreferencesDialog { width:min(92vw,720px); max-width:calc(100vw - 24px); max-height:85vh; overflow:auto; padding:24px; margin:auto; border:2px solid var(--line); border-radius:14px; background:var(--panel); color:var(--text); box-sizing:border-box; }
 #arenaPreferencesDialog::backdrop { background:#0009; }
 .preferences-dialog-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
@@ -1122,7 +1122,7 @@ input[type="checkbox"]:focus-visible { outline:3px solid var(--focus); outline-o
  .account-popover { right:0; width:min(340px,calc(100vw - 32px)); }
  #arenaPreferencesDialog { padding:18px; }
  .preferences-dialog-heading { flex-wrap:wrap; }
- .accessibility-float { right:12px; bottom:12px; }
+ .accessibility-float { right:12px; bottom:64px; }
 }
 
 /* 21/22 — Áreas da central e painel público. */
