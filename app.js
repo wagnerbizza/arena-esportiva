@@ -538,7 +538,7 @@ function render() {
   document.documentElement.style.setProperty("--accent", state.settings.color);
   document.title = systemDisplayName()+" — "+(admin?panelDisplayName():"Jogos e Resultados");
   renderBrandAndIdentity();
-  document.body.classList.toggle("report-mode", admin && section === "reports");
+  document.body.classList.toggle("report-mode", admin && ["matchSheets","reports","auditReports"].includes(section));
   $("#logout")?.classList.toggle("hidden", C.demo || !user);
   if (admin && !C.demo && (!user || !role)) {
     app.innerHTML = accessView();
@@ -571,23 +571,25 @@ function render() {
     ["players", "Jogadores"],
     ["createMatch", "Cadastrar partida"],
     ["matches", "Acompanhar jogos"],
-    ["imports", "Importar"],
-    ["reports", "Súmulas e relatórios"],
+    ["matchSheets", "Súmulas"],
+    ["reports", "Relatórios esportivos"],
+    ["auditReports", "Relatório geral"],
+    ["certificates", "Certificados"],
     ["cleanup", "Limpeza de testes"],
     ["settings", "Configurações"],
     ["users", "Usuários e permissões"],
     ["account", "Minha conta"],
     ["documentation", "Guias e documentação"],
     ["monitor", "Operadores e partidas"],
+    ["imports", "Importar / exportar dados"],
   ];
   app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">${esc(systemDisplayName())}</span><h2>${esc(panelDisplayName())}</h2></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${workspaceNavigation(sections)}${locationTrail()}<div id="view">${view()}</div>`;
   if (busy || accessBusy) app.querySelectorAll("button").forEach((b) => (b.disabled = true));
-  if (section === "reports" && $("[name=reportMatch]")) {
+  if (["matchSheets","reports"].includes(section) && $("[name=reportMatch]")) {
     $("[name=reportMatch]").value = reportFilter;
-    $("#reportOutput").innerHTML = state.matches
-      .filter((m) => !reportFilter || m.id === reportFilter)
-      .map(reportMatch)
-      .join("");
+    $("#reportOutput").innerHTML = section==="matchSheets"
+      ? state.matches.filter((m) => !reportFilter || m.id === reportFilter).map(reportMatch).join("")
+      : sportsReportPreview();
   }
 }
 function publicMatches(filter) {
@@ -610,6 +612,8 @@ function publicMatches(filter) {
 function view() {
   if(section==="teams"&&selectedTeamId&&canManageRosters())return teamProfileView();
   if(section==="documentation")return documentationView();
+  if(section==="certificates")return role==="admin"?certificatePanel():empty("Certificados disponíveis somente para o administrador principal.");
+  if(section==="auditReports")return role==="admin"?generalAuditPanel():empty("Relatórios gerais disponíveis somente para o administrador principal.");
   if(section==="monitor"&&role==="admin")return operatorMonitor();
   if (section === "cleanup" && role === "admin") return cleanupPanel();
   if (section === "standings" && role === "admin") return standingsPanel();
@@ -636,6 +640,7 @@ function view() {
   if (section === "matches")
     return selected ? operate() : listPanel("matches");
   if (section === "imports") return importView();
+  if (section === "matchSheets") return matchSheetsView();
   if (section === "reports") return reports();
   if (section === "settings") return settingsView();
   return "";
@@ -921,7 +926,7 @@ function reportMatch(m) {
   return `<article class="card report-sheet"><div class="report-header" style="display:flex;align-items:center;gap:10px"><div style="display:flex;align-items:center;min-width:0">${organizationLogoMarkup}<div><span class="tag">SÚMULA DA PARTIDA</span><h2>${esc(m.competition || "Partida avulsa")} • ${esc(m.sport)}</h2></div></div><span class="report-brand">WagnerBIZZA</span></div><div class="report-score"><div>${badge(team(m.home))}<strong>${esc(name(m.home))}</strong></div><b>${sc.join(" × ")}</b><div>${badge(team(m.away))}<strong>${esc(name(m.away))}</strong></div></div><div class="report-meta"><p><b>Data:</b> ${esc(format(m.date))}<br><b>Local:</b> ${esc(m.place || "Não informado")}</p><p><b>Arbitragem / mesa:</b> ${esc(m.referees || "Não informada")}<br><b>Situação:</b> ${esc(m.status)} • <b>Etapa:</b> ${esc(m.stage)} • <b>Relógio:</b> ${m.clock ? M.clockText(m) : "Não utilizado"}</p></div>${m.publicNotice ? '<p class="report-alert"><b>Aviso:</b> ' + esc(m.publicNotice) + "</p>" : ""}${m.sets.length ? "<p><b>Parciais:</b> " + m.sets.map((s) => esc(s.score.join(" × "))).join(" / ") + "</p>" : ""}<div class="roster-grid">${roster}</div><h3>Histórico e ocorrências</h3><div class="tablewrap report-events"><table><thead><tr><th>Horário / jogo</th><th>Etapa</th><th>Acontecimento</th><th>Equipe / atleta</th><th>Descrição / motivo</th><th>Operador*</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Nenhum lançamento carregado.</td></tr>'}</tbody></table></div><small>* Identificador abreviado. A auditoria completa mantém a identificação integral de cada responsável. Horários dos lances referentes a ${esc(new Date(m.date).toLocaleDateString("pt-BR"))}.</small><section class="report-notes"><h3>Observações da súmula</h3><p>${esc(m.notes || "Sem observações.")}</p></section><section class="signatures"><div>Árbitro(a): __________________________</div><div>Mesa: __________________________</div><div>Responsável da equipe da casa: __________________________</div><div>Responsável da equipe visitante: __________________________</div><small>Súmula do sistema. Campos para assinatura em papel.</small></section></article>`;
 }
 function certificatePanel() {
-  return `<section class="card certificate-panel noprint"><span class="tag">EMISSÃO DE DOCUMENTOS</span><h2>Certificados</h2><p class="muted">Emita certificados personalizados para atletas, equipes, arbitragem e participantes. O documento é preparado para impressão ou para salvar como PDF.</p><form id="arenaCertificateForm"><div class="formgrid">${field("Nome completo do participante", "certificateName", "text", 'required maxlength="120" placeholder="Nome que aparecerá no certificado"')}${field("Participação / reconhecimento", "certificateRole", "text", 'required maxlength="120" value="Participação"')}${field("Evento / campeonato", "certificateEvent", "text", 'required maxlength="150" placeholder="Nome do evento ou campeonato"')}${field("Modalidade", "certificateSport", "text", 'maxlength="80" placeholder="Ex.: Futebol, Basquete, Vôlei"')}${field("Local", "certificatePlace", "text", 'maxlength="120" placeholder="Cidade ou local do evento"')}${field("Data de emissão", "certificateDate", "date", `required value="${new Date().toISOString().slice(0,10)}"`)}${field("Responsável pela emissão", "certificateIssuer", "text", 'required maxlength="100" value="WagnerBIZZA"')}</div><button class="primary" type="submit">Gerar certificado de participação / salvar em PDF</button></form><div class="certificate-institutional"><h3>Certificado institucional do projeto</h3><p>Documento de reconhecimento da idealização e do desenvolvimento da plataforma Arena Esportiva.</p><button type="button" data-institutional-certificate>Gerar certificado institucional</button></div><p class="muted">Cada emissão recebe um código identificador. Nesta etapa, o código identifica o documento, mas ainda não representa uma validação pública online nem um registro permanente no Firebase.</p></section>`;
+  return `<section class="card certificate-panel noprint"><span class="tag">EMISSÃO DE DOCUMENTOS</span><h2>Certificados</h2><p class="muted">Preencha os dados e abra a visualização de impressão para imprimir ou salvar o certificado em PDF. Também é possível baixar os dados preenchidos em JSON; o sistema não mantém um arquivo permanente de certificados emitidos.</p><form id="arenaCertificateForm"><div class="formgrid">${field("Nome completo do participante", "certificateName", "text", 'required maxlength="120" placeholder="Nome que aparecerá no certificado"')}${field("Participação / reconhecimento", "certificateRole", "text", 'required maxlength="120" value="Participação"')}${field("Evento / campeonato", "certificateEvent", "text", 'required maxlength="150" placeholder="Nome do evento ou campeonato"')}${field("Modalidade", "certificateSport", "text", 'maxlength="80" placeholder="Ex.: Futebol, Basquete, Vôlei"')}${field("Local", "certificatePlace", "text", 'maxlength="120" placeholder="Cidade ou local do evento"')}${field("Data de emissão", "certificateDate", "date", `required value="${new Date().toISOString().slice(0,10)}"`)}${field("Responsável pela emissão", "certificateIssuer", "text", 'required maxlength="100" value="WagnerBIZZA"')}</div><div class="toolbar"><button class="primary" type="submit">Visualizar / imprimir ou salvar em PDF</button><button type="button" data-certificate-json>Baixar dados do certificado (JSON)</button></div></form><div class="certificate-institutional"><h3>Certificado institucional do projeto</h3><p>Documento de reconhecimento da idealização e do desenvolvimento da plataforma Arena Esportiva.</p><div class="toolbar"><button type="button" data-institutional-certificate>Visualizar / imprimir em PDF</button><button type="button" data-institutional-certificate-json>Baixar dados institucionais (JSON)</button></div></div><p class="muted">Cada emissão recebe um código identificador. Nesta etapa, o código identifica o documento, mas ainda não representa uma validação pública online nem um registro permanente no Firebase.</p></section>`;
 }
 function certificateDocument({name:person, role:participation, event, sport, place, date, issuer, institutional=false}) {
   const code = "ARENA-" + new Date().getFullYear() + "-" + (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2,10)).replace(/-/g,"").slice(0,12).toUpperCase();
@@ -969,10 +974,10 @@ function auditReportPreview(){
  }).join("")}`;
 }
 function generalAuditPanel(){
- return `<section class="card"><h2>Relatório geral de alterações</h2><p>Consulte as alterações registradas no Firebase: equipes, jogadores, campeonatos, partidas, configurações, permissões de operadores e exclusões de partidas de teste. A visualização mostra as 100 alterações mais recentes; o Excel baixa o histórico completo.</p><div class="toolbar"><button type="button" data-audit-view ${generalAuditBusy?"disabled":""}>${generalAuditBusy?"Consultando…":generalAuditLoaded?"Atualizar e visualizar alterações":"Consultar alterações"}</button><button type="button" data-audit-excel>Baixar relatório completo (Excel)</button></div><div id="generalAuditOutput">${auditReportPreview()}</div></section>`;
+ return `<section class="card noprint"><h2>Relatório geral de alterações</h2><p>Consulte as alterações registradas no Firebase: equipes, jogadores, campeonatos, partidas, configurações, permissões de operadores e exclusões de partidas de teste. A visualização mostra as 100 alterações mais recentes; as exportações incluem o histórico completo.</p><div class="toolbar"><button type="button" data-audit-view ${generalAuditBusy?"disabled":""}>${generalAuditBusy?"Consultando…":generalAuditLoaded?"Atualizar e visualizar alterações":"Consultar alterações"}</button><button type="button" data-audit-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-audit-json>Baixar relatório completo (JSON)</button><button type="button" data-audit-excel>Baixar relatório completo (Excel)</button></div></section><div id="generalAuditOutput">${auditReportPreview()}</div>`;
 }
-function reports() {
-  return `${certificatePanel()}<div class="card noprint"><h2>Súmulas e relatórios</h2><div class="formgrid">${select(
+function reportMatchSelector() {
+ return `<div class="formgrid">${select(
     "Partida",
     "reportMatch",
     '<option value="">Todas as partidas</option>' +
@@ -981,7 +986,18 @@ function reports() {
         (m) => m.id,
         (m) => name(m.home) + " × " + name(m.away) + " • " + format(m.date),
       ),
-  )}</div><div class="toolbar"><button data-report-pdf>Baixar súmula PDF</button><button data-report-print>Imprimir</button><button data-report-excel class="primary">Exportar Excel</button><button data-backup>Baixar cópia JSON</button></div><p class="muted">Use “Baixar súmula PDF” para o arquivo pronto ou “Imprimir” para abrir a janela de impressão. O Excel inclui resultados, elencos, eventos e parciais. A cópia JSON é para consulta; não há restauração automática nesta versão.</p></div>${role==="admin"?generalAuditPanel():""}<div id="reportOutput">${state.matches.map(reportMatch).join("") || empty("Cadastre uma partida para gerar a súmula.")}</div>`;
+  )}</div>`;
+}
+function matchSheetsView() {
+ return `<section class="card noprint"><h2>Súmulas</h2><p>Escolha uma partida para visualizar sua súmula, imprimir ou salvar em PDF. A exportação JSON contém os dados das partidas selecionadas.</p>${reportMatchSelector()}<div class="toolbar"><button type="button" data-report-pdf>Visualizar / salvar súmula em PDF</button><button type="button" data-report-print>Imprimir visualização</button><button type="button" data-match-json>Baixar súmula (JSON)</button></div></section><div id="reportOutput">${state.matches.map(reportMatch).join("") || empty("Cadastre uma partida para gerar a súmula.")}</div>`;
+}
+function sportsReportPreview(){
+ const matches=state.matches.filter(m=>!reportFilter||m.id===reportFilter);
+ if(!matches.length)return empty("Nenhuma partida corresponde à seleção.");
+ return `<section class="card"><h3>Resultados das partidas • ${matches.length}</h3>${table(["Modalidade","Campeonato","Partida","Placar","Data","Local","Situação"],matches.map(m=>tr([m.sport,m.competition||"Partida avulsa",name(m.home)+" × "+name(m.away),gameResult(m).join(" × "),format(m.date),m.place||"Não informado",m.status])))}</section>`;
+}
+function reports() {
+ return `<section class="card noprint"><h2>Relatórios esportivos</h2><p>Visualize resultados das partidas e exporte os dados selecionados. O Excel detalhado contém resultados, elencos, eventos e parciais.</p>${reportMatchSelector()}<div class="toolbar"><button type="button" data-sports-report-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-report-excel class="primary">Baixar relatório (Excel)</button><button type="button" data-sports-report-json>Baixar relatório (JSON)</button></div></section><div id="reportOutput">${sportsReportPreview()}</div>`;
 }
 document.addEventListener("submit", event => {
   if (event.target?.id !== "arenaCertificateForm") return;
