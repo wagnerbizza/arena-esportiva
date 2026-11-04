@@ -2125,6 +2125,8 @@ function setupAccountTools(){
  details.remove();region.append(dialog);
  const icon='<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><circle cx="12" cy="4" r="2"/><path d="M3 8h18M12 7v7m0 0-5 7m5-7 5 7"/></svg>';
  region.insertAdjacentHTML("afterbegin",`<button type="button" class="preferences-entry" data-open-accessibility>${icon}<span>Preferências de leitura</span></button><button type="button" class="accessibility-float" data-open-accessibility aria-label="Abrir opções de acessibilidade" title="Acessibilidade">${icon}</button>`);
+ const headerActions=document.querySelector("header .header-actions"),openPanel=headerActions?.querySelector('a[href="index.html"]');
+ if(admin&&headerActions&&openPanel)openPanel.before(region.querySelector(".preferences-entry"));
  let returnFocus=null;
  const openPreferences=source=>{hideContextHelp();closeAccountMenu();returnFocus=source?.closest("#accountPopover")?$("#accountMenuToggle"):source?.closest("#publicTools")?$("#publicTools > summary"):source; if(!dialog.open)dialog.showModal();$("#arenaPreferencesTitle").focus();};
  dialog.addEventListener("close",()=>{hideContextHelp();if(returnFocus?.isConnected)returnFocus.focus();});
