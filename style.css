@@ -812,6 +812,9 @@ hr {
   .audit-print-only {
     display: block !important;
   }
+  .audit-print-title {
+    display: block !important;
+  }
   .audit-print-only .event {
     break-inside: avoid;
     page-break-inside: avoid;
@@ -957,6 +960,9 @@ hr {
   }
 }
 .audit-print-only {
+  display: none;
+}
+.audit-print-title {
   display: none;
 }
 /* O filtro não deve empurrar ou quebrar o título do painel público. */
