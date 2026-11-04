@@ -17,6 +17,7 @@ export async function connectSpark({
   const canManageRosters = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("rosters"));
   const canCreateMatches = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("matchesCreate"));
   const canManageChampionships = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("championships"));
+  const canViewAllGames = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("gamesView"));
   const version = "11.0.2";
   const [fb, auth, F] = await Promise.all([
     import(`https://www.gstatic.com/firebasejs/${version}/firebase-app.js`),
@@ -129,16 +130,23 @@ export async function connectSpark({
       watchCollection("publicMatches", (d) => (state.matches = d));
     } else {
       // Operador não consulta a coleção privada inteira: recebe cada partida autorizada.
+      // A lista pública é somente leitura; os documentos privados autorizados preservam os detalhes operacionais.
+      const publicGames = new Map(), assignedGames = new Map();
+      const publishOperatorGames = () => {
+        const visibleGames = new Map(publicGames);
+        for (const [id, game] of assignedGames) visibleGames.set(id, game);
+        state.matches = [...visibleGames.values()];
+      };
       // Os jogadores disponíveis são os elencos congelados nessas partidas.
       if(canManageRosters())watchCollection("players",d=>state.players=d);
       if(canManageChampionships())watchCollection("championships",d=>state.championships=d);
-      if(canCreateMatches())watchCollection("publicMatches",d=>{state.matches=[...new Map([...d,...state.matches].map(m=>[m.id,m])).values()]});
+      if(canViewAllGames()||canCreateMatches())watchCollection("publicMatches",d=>{publicGames.clear();for(const game of d)publicGames.set(game.id,game);publishOperatorGames();});
       const ids = [...new Set(profile?.matches || [])];
       for (const id of ids) {
         watchDoc("matches/" + id, (d) => {
-          state.matches = state.matches.filter((m) => m.id !== id);
-          if (d) state.matches.push(d);
-          if(!canManageRosters())state.players = [...new Map(state.matches.flatMap((m) => m.roster || [])
+          if(d)assignedGames.set(id,d);else assignedGames.delete(id);
+          publishOperatorGames();
+          if(!canManageRosters())state.players = [...new Map([...assignedGames.values()].flatMap((m) => m.roster || [])
             .map((p) => [p.id, p])).values()];
         });
       }
@@ -557,7 +565,7 @@ export async function connectSpark({
       if (!snap.exists()) throw Error("Solicitação não encontrada.");
       const before = snap.data();
       const granted=access==="active"?[...new Set(permissions===undefined?(before.permissions||[]):permissions)]:[];
-      if(granted.some(p=>!["rosters","matchesCreate","championships"].includes(p)))throw Error("Permissão específica inválida.");
+      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView"].includes(p)))throw Error("Permissão específica inválida.");
       const after = { id: userId, name: before.name || "Operador cadastrado", email: before.email || "",
         role: access === "pending" ? "pending" : "operator", enabled: access === "active", matches, permissions:granted,
         createdAt: before.createdAt || F.serverTimestamp(), updatedAt: F.serverTimestamp(),
