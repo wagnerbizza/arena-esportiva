@@ -707,9 +707,22 @@ hr {
 .report-sheet {
   position: relative;
 }
+.audit-screen-only {
+  display: none !important;
+}
+.audit-print-only {
+  display: block !important;
+}
+.audit-print-only .event {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
 @media (max-width: 850px) {
   .live-console {
     grid-template-columns: 1fr;
+  }
+  .audit-print-only {
+    display: none;
   }
   .quick-score {
     padding: 22px 8px;

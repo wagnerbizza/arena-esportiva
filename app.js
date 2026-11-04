@@ -112,6 +112,19 @@ function handleListFilter(e) {
       const active = b.dataset.listGroup === listFilters.matches.group;
       b.classList.toggle("primary", active); b.setAttribute("aria-pressed", String(active));
     });
+    document.addEventListener("click",event=>{
+     const button=event.target.closest("[data-certificate-json],[data-institutional-certificate-json]");
+     if(!button||role!=="admin")return;
+     try{
+      if(button.hasAttribute("data-institutional-certificate-json")){
+       download("certificado-institucional-dados.json",JSON.stringify({formato:"arena-certificado-dados-v1",tipo:"institucional",titular:"Wagner BIZZA",projeto:"Arena Esportiva",emissor:"WagnerBIZZA",data:new Date().toISOString()},null,2));return;
+      }
+      const form=$("#arenaCertificateForm");
+      if(!form?.reportValidity())return;
+      const values=Object.fromEntries(new FormData(form));
+      download("certificado-dados.json",JSON.stringify({formato:"arena-certificado-dados-v1",tipo:"participacao",dados:values,geradoEm:new Date().toISOString()},null,2));
+     }catch(error){toast(error.message,true);}
+    });
   }
   updateList(kind);
 }
@@ -965,13 +978,14 @@ function auditReportPreview(){
  const rows=generalAuditRows.slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
  if(!rows.length)return empty("Nenhuma alteração registrada.");
  const visible=rows.slice(0,100),entityNames={settings:"Configurações",teams:"Equipe",players:"Jogador",matches:"Partida",championships:"Campeonato",users:"Acesso de usuário"};
- return `<p class="muted" role="status">${rows.length} alteração(ões) encontradas. ${rows.length>visible.length?"Exibindo as 100 mais recentes; a exportação inclui todas.":""} Os horários são de Brasília.</p>${visible.map(r=>{
+ const details=items=>items.map(r=>{
   const before=r.before||{},after=r.after||{},keys=[...new Set([...Object.keys(before),...Object.keys(after)])].filter(k=>!["_audit","_updatedAt","updatedAt","createdAt","revision","auditId"].includes(k)&&JSON.stringify(before[k]??null)!==JSON.stringify(after[k]??null));
   const changes=keys.slice(0,30).map(k=>tr([k,auditReportValue(before[k]),auditReportValue(after[k])]));
   const description=[r.detail?.text,r.detail?.reason?`Motivo: ${r.detail.reason}`:""].filter(Boolean).join(" • ");
   const target=after.name||before.name||r.target||"—";
   return `<details class="event"><summary>${esc(auditReportDate(r.at))} • ${esc(entityNames[r.entity]||r.entity||"Registro")} • ${esc(r.detail?.type||"Alteração")} • ${esc(target)}</summary><p>Responsável (UID): ${esc(r.actor||"Não informado")}<br>ID do registro: ${esc(r.target||"—")}${description?`<br>${esc(description)}`:""}</p>${changes.length?table(["Campo","Antes","Depois"],changes):'<p class="muted">Sem diferenças de campos disponíveis.</p>'}${keys.length>changes.length?`<small>Exibindo ${changes.length} de ${keys.length} campos alterados.</small>`:""}</details>`;
- }).join("")}`;
+ }).join("");
+ return `<p class="muted" role="status">${rows.length} alteração(ões) encontradas. ${rows.length>visible.length?"Na tela, exibindo as 100 mais recentes; a impressão e as exportações incluem todas.":""} Os horários são de Brasília.</p><div class="audit-screen-only">${details(visible)}</div><div class="audit-print-only">${details(rows)}</div>`;
 }
 function generalAuditPanel(){
  return `<section class="card noprint"><h2>Relatório geral de alterações</h2><p>Consulte as alterações registradas no Firebase: equipes, jogadores, campeonatos, partidas, configurações, permissões de operadores e exclusões de partidas de teste. A visualização mostra as 100 alterações mais recentes; as exportações incluem o histórico completo.</p><div class="toolbar"><button type="button" data-audit-view ${generalAuditBusy?"disabled":""}>${generalAuditBusy?"Consultando…":generalAuditLoaded?"Atualizar e visualizar alterações":"Consultar alterações"}</button><button type="button" data-audit-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-audit-json>Baixar relatório completo (JSON)</button><button type="button" data-audit-excel>Baixar relatório completo (Excel)</button></div></section><div id="generalAuditOutput">${auditReportPreview()}</div>`;
@@ -1438,7 +1452,7 @@ document.addEventListener("click", async (e) => {
       selected = "";
       pendingImport = null;
       render();
-      if (section === "reports" && !C.demo) {
+      if (["matchSheets","reports"].includes(section) && !C.demo) {
         toast("Carregando históricos para as súmulas…");
         await cloud.loadHistory(state.matches.map((m) => m.id));
       }
@@ -1600,8 +1614,15 @@ document.addEventListener("click", async (e) => {
         })),
       );
       toast("PDF gerado.");
-    } else if (b.hasAttribute("data-report-print")) {
+    } else if (b.hasAttribute("data-report-print")||b.hasAttribute("data-sports-report-pdf")) {
       window.print();
+    } else if (b.hasAttribute("data-match-json")||b.hasAttribute("data-sports-report-json")) {
+      const matches=state.matches.filter(m=>!reportFilter||m.id===reportFilter);
+      if(!matches.length)throw Error("Não há partidas para exportar nesta seleção.");
+      download(b.hasAttribute("data-match-json")?"sumulas-esportivas.json":"relatorio-esportivo.json",JSON.stringify({
+        formato:b.hasAttribute("data-match-json")?"arena-sumulas-v1":"arena-relatorio-esportivo-v1",
+        geradoEm:new Date().toISOString(),partidas:matches
+      },(_key,value)=>value?.toDate?value.toDate().toISOString():value,2));
     } else if (b.hasAttribute("data-report-excel")) {
       if (!C.demo) {
         const filter = $("[name=reportMatch]").value;
@@ -1622,6 +1643,11 @@ document.addEventListener("click", async (e) => {
       } finally {
         generalAuditBusy=false;render();
       }
+    } else if (b.hasAttribute("data-audit-pdf")||b.hasAttribute("data-audit-json")) {
+      if(role!=="admin"||C.demo)throw Error("O relatório oficial exige a conta de administrador conectada ao Firebase.");
+      if(!generalAuditLoaded){generalAuditBusy=true;render();try{generalAuditRows=await cloud.auditRows();generalAuditLoaded=true;}finally{generalAuditBusy=false;render();}}
+      if(b.hasAttribute("data-audit-pdf"))window.print();
+      else download("relatorio-geral-alteracoes.json",JSON.stringify({formato:"arena-auditoria-v1",geradoEm:new Date().toISOString(),alteracoes:generalAuditRows},(_key,value)=>value?.toDate?value.toDate().toISOString():value,2));
     } else if (b.hasAttribute("data-audit-excel")) {
       if (role !== "admin")
         throw Error("Exportação exclusiva do administrador principal.");
@@ -1716,10 +1742,9 @@ document.addEventListener("change", async (e) => {
     }
     if (e.target.name === "reportMatch") {
       reportFilter = e.target.value;
-      $("#reportOutput").innerHTML = state.matches
-        .filter((m) => !reportFilter || m.id === reportFilter)
-        .map(reportMatch)
-        .join("");
+      $("#reportOutput").innerHTML = section==="matchSheets"
+        ? state.matches.filter((m) => !reportFilter || m.id === reportFilter).map(reportMatch).join("")
+        : sportsReportPreview();
     }
     if (e.target.name === "importKind") {
       pendingImport = null;
@@ -2226,8 +2251,8 @@ setupAccountTools();
 // 21 — Organização da central. Permissões continuam validadas pelo Firebase.
 const workspaceDefinitions=[
  {id:"games",title:"Jogos",intro:"Acompanhar e operar partidas",sections:["overview","matches","standings"]},
- {id:"records",title:"Cadastros",intro:"Equipes, jogadores, campeonatos e partidas",sections:["teams","players","imports","championships","createMatch"]},
- {id:"documents",title:"Documentação",intro:"Guias, súmulas e relatórios",sections:["documentation","reports"]},
+ {id:"records",title:"Cadastros",intro:"Equipes, jogadores, campeonatos e partidas",sections:["teams","players","championships","createMatch","imports"]},
+ {id:"documents",title:"Documentação",intro:"Guias e documentos separados por tipo",sections:["documentation","matchSheets","reports","auditReports","certificates"]},
  {id:"administration",title:"Administração",intro:"Operadores, acessos e configurações",sections:["monitor","users","settings","cleanup"]}
 ];
 function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canCreateMatches()&&id==="createMatch"));}
@@ -2240,7 +2265,7 @@ function workspaceNavigation(sections){
 function documentationView(){
  const central=new URL("painel.html",location.href);central.search="";
  const pub=new URL("index.html",location.href);pub.search="";
- return `<section class="card"><span class="tag">GUIAS E DOCUMENTOS</span><h2>Central de documentação</h2><p>Encontre orientações e os endereços para usar a Arena em outros computadores. Cada pessoa usa sua própria conta.</p><div class="documentation-grid"><article><h3>Operar uma partida</h3><ol><li>Em Jogos → Acompanhar jogos, abra uma partida atribuída à sua conta.</li><li>Inicie o jogo, confira as equipes e registre os lances.</li><li>Use pausas e avisos para informar interrupções. Ao terminar, encerre a partida.</li></ol><button type="button" data-section="matches">Acompanhar jogos</button></article><article><h3>Usar em outro computador</h3><p>Abra o link da central em um navegador com internet. Entre com sua conta Google vinculada ou e-mail e senha. Não é necessário instalar VS Code ou GitHub para operar os jogos.</p><p><a href="${esc(central.href)}" target="_blank" rel="noopener">Abrir central</a> · <a href="${esc(pub.href)}" target="_blank" rel="noopener">Abrir painel público</a></p></article><article><h3>Conta e leitura</h3><p>No menu Minha conta, confira o perfil, os métodos de entrada e a redefinição de senha. Aparência e acessibilidade muda tema, texto e contraste apenas neste navegador.</p><button type="button" data-open-accessibility>Abrir acessibilidade</button></article>${role==="admin"?'<article><h3>Súmulas e relatórios</h3><p>Consulte PDF, Excel, auditoria e cópia JSON. As cópias JSON são para consulta; ainda não há restauração automática.</p><button type="button" data-section="reports">Abrir súmulas e relatórios</button></article><article><h3>Compartilhar ou entregar o sistema</h3><p>Para colaboração, aprove contas e atribua partidas. Para outra organização independente, use uma cópia do código com GitHub e Firebase próprios. Transferir esta instalação exige revisar a propriedade e o UID principal no código e nas regras; transferir só o repositório não troca esse administrador.</p></article><article><h3>Limpeza de testes</h3><p>Remova somente a partida conferida, após baixar a cópia. Histórico e contas são preservados. Não é uma lixeira e não há restauração automática.</p><button type="button" data-section="cleanup">Abrir limpeza de testes</button></article>':""}</div></section>`;
+ return `<section class="card"><span class="tag">GUIAS E DOCUMENTOS</span><h2>Documentação</h2><p>As funções de documentos estão separadas por finalidade. Escolha abaixo para abrir a visualização e as opções próprias de cada tipo. Os arquivos são preparados na hora; a emissão de certificados não fica arquivada no sistema.</p><div class="documentation-grid"><article><h3>Orientações e acesso</h3><p>Como operar jogos, acessar a central em outro computador e usar sua conta.</p><button type="button" data-section="documentation">Abrir guias</button></article><article><h3>Súmulas</h3><p>Visualize partidas, imprima ou salve em PDF e baixe os dados em JSON.</p><button type="button" data-section="matchSheets">Abrir súmulas</button></article>${role==="admin"?'<article><h3>Relatórios esportivos</h3><p>Resultados das partidas com saída em PDF, Excel ou JSON.</p><button type="button" data-section="reports">Abrir relatórios</button></article><article><h3>Relatório geral de alterações</h3><p>Consulte o histórico administrativo e exporte em PDF, Excel ou JSON.</p><button type="button" data-section="auditReports">Abrir relatório geral</button></article><article><h3>Certificados</h3><p>Preencha os dados e visualize, imprima ou salve como PDF. Baixe os dados do certificado em JSON.</p><button type="button" data-section="certificates">Abrir certificados</button></article><article><h3>Limpeza de testes</h3><p>Remova somente a partida conferida, após baixar a cópia. Histórico e contas são preservados. Não é uma lixeira e não há restauração automática.</p><button type="button" data-section="cleanup">Abrir limpeza de testes</button></article><article><h3>Compartilhar ou entregar o sistema</h3><p>Para colaboração, aprove contas e atribua partidas. Para outra organização independente, use uma cópia do código com GitHub e Firebase próprios. Transferir esta instalação exige revisar a propriedade e o UID principal no código e nas regras; transferir só o repositório não troca esse administrador.</p></article>':""}<article><h3>Operar uma partida</h3><ol><li>Em Jogos → Acompanhar jogos, abra uma partida atribuída à sua conta.</li><li>Inicie o jogo, confira as equipes e registre os lances.</li><li>Use pausas e avisos para informar interrupções. Ao terminar, encerre a partida.</li></ol><button type="button" data-section="matches">Acompanhar jogos</button></article><article><h3>Usar em outro computador</h3><p>Abra o link da central em um navegador com internet. Entre com sua conta Google vinculada ou e-mail e senha. Não é necessário instalar VS Code ou GitHub para operar os jogos.</p><p><a href="${esc(central.href)}" target="_blank" rel="noopener">Abrir central</a> · <a href="${esc(pub.href)}" target="_blank" rel="noopener">Abrir painel público</a></p></article><article><h3>Conta e leitura</h3><p>No menu Minha conta, confira o perfil, os métodos de entrada e a redefinição de senha. Aparência e acessibilidade muda tema, texto e contraste apenas neste navegador.</p><button type="button" data-open-accessibility>Abrir acessibilidade</button></article></div></section>`;
 }
 function operatorMonitor(){
  if(role!=="admin")return "";
@@ -2512,14 +2537,17 @@ const navigationDescriptions={
  standings:{label:"Classificação",description:"Consultar tabela e classificação do campeonato de futebol.",keywords:"tabela ranking saldo vitorias pontos"},
  teams:{label:"Equipes",description:"Consultar e editar times, escudos, técnicos e elencos.",keywords:"time equipe bandeira escudo tecnico treinador modalidades arquivar reativar ficha elenco historico"},
  players:{label:"Jogadores",description:"Cadastrar e editar atletas, camisa, posição e titular/reserva.",keywords:"jogador atleta numero camisa posicao titular reserva banco elenco"},
- imports:{label:"Importar",description:"Trazer equipes e jogadores de planilha ou texto.",keywords:"importacao arquivo csv excel xlsx colar lista nomes"},
  documentation:{label:"Guias e documentação",description:"Orientações e links para usar em outro computador.",keywords:"ajuda manual guia documento link computador compartilhar"},
- reports:{label:"Súmulas e relatórios",description:"Consultar súmulas, emitir certificados e exportar PDF, Excel e auditoria.",keywords:"certificado certificação participação institucional atleta equipe campeonato evento sumula relatorio pdf excel exportar baixar backup copia json auditoria historico"},
+ matchSheets:{label:"Súmulas",description:"Visualizar súmulas de partidas e salvar em PDF ou JSON.",keywords:"sumula partida jogo imprimir pdf json evento histórico"},
+ reports:{label:"Relatórios esportivos",description:"Consultar resultados e baixar relatório em PDF, Excel ou JSON.",keywords:"relatorio esportivo placar resultado equipe campeonato pdf excel json exportar"},
+ auditReports:{label:"Relatório geral",description:"Consultar alterações administrativas e exportar em PDF, Excel ou JSON.",keywords:"auditoria alterações historico administrativo acesso permissao pdf excel json"},
+ certificates:{label:"Certificados",description:"Emitir certificados e salvar a visualização em PDF ou os dados em JSON.",keywords:"certificado certificação participação institucional atleta equipe campeonato evento pdf json"},
  monitor:{label:"Operadores e partidas",description:"Consultar operadores e distribuição dos jogos.",keywords:"monitoramento operador atribuicao distribuicao responsavel"},
  users:{label:"Usuários e permissões",description:"Aprovar, bloquear e definir acessos dos operadores.",keywords:"usuario conta acesso permissao convite cadastro link aprovar bloquear autorizar"},
  settings:{label:"Configurações",description:"Alterar título, cor, capa, logo e identidade visual.",keywords:"logotipo logo favicon icone aba titulo nome cor imagem capa configuracao"},
  cleanup:{label:"Limpeza de testes",description:"Conferir cópia e excluir partidas de teste com registro.",keywords:"limpeza teste excluir apagar exclusoes historico"},
- account:{label:"Minha conta",description:"Identificação, segurança, redefinição de senha e vínculo Google.",keywords:"email senha recuperar google vincular login conta sair"}
+ account:{label:"Minha conta",description:"Identificação, segurança, redefinição de senha e vínculo Google.",keywords:"email senha recuperar google vincular login conta sair"},
+ imports:{label:"Importar / exportar dados",description:"Importar equipes e jogadores por planilha ou texto.",keywords:"importacao exportacao arquivo csv excel xlsx colar lista nomes"}
 };
 function navigationSearchResults(){
  if(!navigationQuery.trim())return "";
