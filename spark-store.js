@@ -140,7 +140,7 @@ export async function connectSpark({
       // Os jogadores disponíveis são os elencos congelados nessas partidas.
       if(canManageRosters())watchCollection("players",d=>state.players=d);
       if(canManageChampionships())watchCollection("championships",d=>state.championships=d);
-      if(canViewAllGames()||canCreateMatches())watchCollection("publicMatches",d=>{publicGames.clear();for(const game of d)publicGames.set(game.id,game);publishOperatorGames();});
+      if(canViewAllGames())watchCollection("publicMatches",d=>{publicGames.clear();for(const game of d)publicGames.set(game.id,game);publishOperatorGames();});
       const ids = [...new Set(profile?.matches || [])];
       for (const id of ids) {
         watchDoc("matches/" + id, (d) => {
