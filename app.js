@@ -2322,7 +2322,7 @@ function removedRows(){
  const logs=C.demo?(state.cleanupAudit||[]):removedHistory;
  const q=searchText(removedQuery);
  return logs.filter(r=>{
-  const m=r.before||{};
+  const m=r.before||r;
   return (!removedSport||m.sport===removedSport)&&(!q||searchText([removedTeam(m.home),removedTeam(m.away),m.competition,m.sport,r.reason,r.target,r.actor,removedDate(r.at)].join(" ")).includes(q));
  }).slice().sort((a,b)=>removedTime(b.at)-removedTime(a.at));
 }
@@ -2331,11 +2331,16 @@ function removedResults(){
  if(removedLoading)return '<p role="status">Consultando histórico…</p>';
  if(removedError)return `<p role="alert">${esc(removedError)} Use Atualizar histórico para tentar novamente.</p>`;
  if(!removedLoaded)return '<p class="muted">Clique em Ver partidas excluídas para consultar o histórico privado.</p>';
- const rows=removedRows();
- return `<p role="status">${rows.length} exclusão(ões) nesta visualização. Horários de Brasília. ${C.demo?"Dados locais da demonstração.":"Dados da última consulta; use Atualizar histórico para buscar alterações."}</p>${rows.length?table(["Excluída em","Partida","Modalidade","Campeonato","Placar","Motivo","Responsável"],rows.map(r=>{
-  const m=r.before||{},score=Array.isArray(m.score)?m.score.join(" × "):"—";
-  return tr([removedDate(r.at),removedTeam(m.home)+" × "+removedTeam(m.away),m.sport||"—",m.competition||"Sem campeonato",score,r.reason||"—",r.actor==="demonstração"?"Demonstração":r.actor===user?.uid?"Administrador principal":r.actor||"Não informado"]);
- })):empty(removedQuery||removedSport?"Nenhuma exclusão corresponde aos filtros.":"Nenhuma partida excluída registrada neste ambiente.")}`;
+ const rows=removedRows(),now=Date.now();
+ return `<p role="status">${rows.length} registro(s) nesta visualização. Jogos na lixeira podem ser recuperados por 30 dias. ${C.demo?"Dados locais da demonstração.":"Dados da última consulta; use Atualizar lixeira para buscar alterações."}</p>${rows.length?`<div class="trash-list">${rows.map(r=>{
+  const m=r.before||r,score=Array.isArray(m.score)?m.score.join(" × "):"—",expires=removedTime(r.expiresAt),legacy=!r.state,state=r.state||(r.before?"antiga":"purgado");
+  const labels={lixeira:"Na lixeira",restaurada:"Recuperada",purgando:"Purga pendente",purgado:"Purgada definitivamente",antiga:"Registro antigo"};
+  const canRestore=state==="lixeira"&&expires>now&&!!r.before;
+  const canPurge=(state==="lixeira"&&expires>0&&expires<=now)||state==="purgando";
+  const actions=`${canRestore?`<button type="button" data-trash-restore="${esc(r.target)}">Recuperar</button>`:""}${canPurge?`<button type="button" class="danger-button" data-trash-purge="${esc(r.target)}">${state==="purgando"?"Retomar purga":"Purgar definitivamente"}</button>`:""}`;
+  const expiry=state==="lixeira"?(expires>now?`Recuperável até ${esc(removedDate(r.expiresAt))}`:"Prazo vencido; aguardando purga manual"):state==="purgando"?"Purga iniciada; pode ser retomada":"";
+  return `<article class="trash-record"><div class="trash-record-heading"><div><strong>${esc(removedTeam(m.home))} × ${esc(removedTeam(m.away))}</strong><small>${esc(m.sport||"—")} • ${esc(m.competition||"Sem campeonato")} • ${esc(score)}</small></div><span class="trash-state trash-state-${esc(state)}">${esc(labels[state]||state)}</span></div><p>Removida em ${esc(removedDate(r.at))}${expiry?` • ${expiry}`:""}</p><p>Motivo: ${esc(r.reason||"Não informado")}${r.purgeReason?`<br>Motivo da purga: ${esc(r.purgeReason)}`:""}</p>${legacy?'<small>Exclusão anterior à lixeira recuperável; este registro não tem prazo de restauração.</small>':""}<div class="trash-record-actions">${actions||"<small>Sem ações disponíveis.</small>"}</div><small>Responsável: ${esc(r.actor==="demonstração"?"Demonstração":r.actor===user?.uid?"Administrador principal":r.actor||"Não informado")}</small></article>`;
+ }).join("")}</div>`:empty(removedQuery||removedSport?"Nenhuma exclusão corresponde aos filtros.":"Nenhuma partida na lixeira.")}`;
 }
 function removedHistoryPanel(){
  resetRemovedContext();
