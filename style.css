@@ -458,6 +458,53 @@ a:focus-visible {
   font-size: 12px;
   color: var(--muted);
 }
+.match-events {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #34434e;
+  border-radius: 6px;
+  background: #091117;
+  font-size: 12px;
+}
+.match-events > strong {
+  display: block;
+  margin-bottom: 8px;
+}
+.match-events ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.match-events li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2px 8px;
+  padding-top: 7px;
+  border-top: 1px solid #26343d;
+}
+.match-events li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.match-events li span,
+.match-events li small {
+  color: var(--muted);
+}
+.match-events li strong {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.match-events li small {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+}
+.match-events > small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+}
 .match-meta {
   color: var(--muted);
   font-size: 12px;

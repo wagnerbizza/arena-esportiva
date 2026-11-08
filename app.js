@@ -380,6 +380,42 @@ function eventDescription(e) {
   return text || reason || "—";
 }
 
+function matchEventSummary(m) {
+  if (!admin || !Array.isArray(m.events) || !m.events.length) return "";
+  const corrected = new Set(
+    m.events.filter((e) => e.correctionOf).map((e) => e.correctionOf),
+  );
+  const relevant = m.events.filter(
+    (e) =>
+      (e.type === "ponto" && e.value > 0 && !corrected.has(e.id)) ||
+      [
+        "cartão amarelo",
+        "cartão vermelho",
+        "falta",
+        "substituição",
+        "tempo",
+        "observação",
+      ].includes(e.type),
+  );
+  if (!relevant.length) return "";
+  const shown = relevant.slice(-5).reverse();
+  const rows = shown
+    .map((e) => {
+      const athlete = m.roster.find((p) => p.id === e.player);
+      const playerName = athlete
+        ? `${athlete.number ? athlete.number + " • " : ""}${athlete.name}`
+        : "Atleta não informado";
+      const teamName = [0, 1].includes(e.side)
+        ? name([m.home, m.away][e.side])
+        : "";
+      const label = eventLabel(e, m);
+      return `<li><span>${esc(label)}${teamName ? " • " + esc(teamName) : ""}</span><strong>${esc(playerName)}</strong>${e.text ? `<small>${esc(e.text)}</small>` : ""}</li>`;
+    })
+    .join("");
+  const remaining = relevant.length - shown.length;
+  return `<section class="match-events" aria-label="Lances da partida"><strong>Gols e ocorrências</strong><ul>${rows}</ul>${remaining ? `<small>+ ${remaining} lance(s) anterior(es)</small>` : ""}</section>`;
+}
+
 function field(label, name, type = "text", extra = "") {
   // Senhas nunca entram na cópia de formulários, mesmo quando visíveis.
   if (type === "password") {
@@ -528,7 +564,7 @@ function matchCard(m, button = false) {
     sc = gameResult(m),
     a = team(m.home),
     b = team(m.away);
-  return `<article class="card match-card ${m.status === "Ao vivo" ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${m.status === "Ao vivo" ? "live" : ""}">${m.status === "Ao vivo" ? "● " : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score"><div>${badge(a)}<div class="name">${esc(a.name)}</div></div><strong>${sc[0]} <span class="muted">:</span> ${sc[1]}</strong><div>${badge(b)}<div class="name">${esc(b.name)}</div></div></div>${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button data-open="${m.id}">Operar partida →</button>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
+  return `<article class="card match-card ${m.status === "Ao vivo" ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${m.status === "Ao vivo" ? "live" : ""}">${m.status === "Ao vivo" ? "● " : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score"><div>${badge(a)}<div class="name">${esc(a.name)}</div></div><strong>${sc[0]} <span class="muted">:</span> ${sc[1]}</strong><div>${badge(b)}<div class="name">${esc(b.name)}</div></div></div>${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button data-open="${m.id}">Operar partida →</button>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
 }
 
 function render() {
@@ -1507,6 +1543,14 @@ document.addEventListener("click", async (e) => {
       if (["matchSheets","reports"].includes(section) && !C.demo) {
         toast("Carregando históricos para as súmulas…");
         await cloud.loadHistory(state.matches.map((m) => m.id));
+      } else if (section === "matches" && !C.demo && role === "admin") {
+        const monitored = state.matches
+          .filter((m) => !["Agendada", "Adiada"].includes(m.status))
+          .map((m) => m.id);
+        if (monitored.length) {
+          toast("Carregando lances das partidas…");
+          await cloud.loadHistory(monitored);
+        }
       }
     } else if (b.dataset.open) {
       selected = b.dataset.open;
