@@ -818,6 +818,8 @@ export async function connectSpark({
     },
     previewCleanup,
     deleteTestMatch,
+    restoreDeletedMatch,
+    purgeDeletedMatch,
     canOperate: (id) =>
       isOwner() || (authorized() && profile?.matches?.includes(id)),
     close: () => {
