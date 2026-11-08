@@ -2619,9 +2619,27 @@ document.addEventListener("click",e=>{
 let overviewGameScope="active";
 function scopeMatches(matches,scope){return matches.filter(m=>scope==="all"||(scope==="finished"?finalStatuses.includes(m.status):!finalStatuses.includes(m.status)));}
 function matchScopeButtons(area,value){return `<div class="list-groups" aria-label="Visualização dos jogos">${[["active","Atuais e próximas"],["finished","Finalizadas"],["all","Todas"]].map(([scope,label])=>`<button type="button" data-match-scope="${scope}" data-scope-area="${area}" class="${value===scope?"primary":""}" aria-pressed="${value===scope}">${label}</button>`).join("")}</div>`;}
-function quickActionCards(){
+const shortcutStorageKey = "arena-shortcuts-v1";
+function getStoredShortcuts(){
+  try {
+    const raw = localStorage.getItem(shortcutStorageKey);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function saveStoredShortcuts(value){
+  try {
+    localStorage.setItem(shortcutStorageKey, JSON.stringify(value));
+  } catch {
+    // Sem armazenamento persistente, segue com a ordem padrão.
+  }
+}
+function getShortcutCatalog(){
   const actions = [];
   if (role === "admin") {
+    actions.push({ id: "overview", label: "Home", detail: "Resumo geral" });
     actions.push({ id: "createMatch", label: "Nova partida", detail: "Programar jogo" });
     actions.push({ id: "championships", label: "Novo campeonato", detail: "Criar edição" });
     actions.push({ id: "teams", label: "Equipes", detail: "Cadastrar times" });
@@ -2645,10 +2663,57 @@ function quickActionCards(){
     if (canManageRosters()) {
       actions.push({ id: "imports", label: "Importar", detail: "Planilha de cadastros" });
     }
+    actions.push({ id: "overview", label: "Home", detail: "Resumo geral" });
   }
-  if (!actions.length) return "";
-  return `<section class="card"><h2>Atalhos rápidos</h2><p class="muted">Ações mais usadas por ${role === "admin" ? "o administrador" : "o operador"}. Todos os acessos seguem as permissões atribuídas.</p><div class="grid">${actions.map(({id,label,detail})=>`<button type="button" data-section="${id}" class="shortcut-panel"><strong>${esc(label)}</strong><small>${esc(detail)}</small></button>`).join("")}</div></section>`;
+  return actions.filter((action) => action.id && (action.id === "overview" || role === "admin" || ["teams","players","championships","createMatch","matches","imports"].includes(action.id)));
 }
+function getVisibleShortcuts(){
+  const catalog = getShortcutCatalog();
+  const stored = getStoredShortcuts() || { order: [], hidden: {} };
+  const ordered = stored.order && stored.order.length ? stored.order : catalog.map((a) => a.id);
+  const hidden = stored.hidden || {};
+  const visible = [];
+  for (const id of ordered) {
+    const match = catalog.find((action) => action.id === id);
+    if (!match) continue;
+    if (hidden[id]) continue;
+    visible.push(match);
+  }
+  for (const item of catalog) {
+    if (!visible.some((action) => action.id === item.id) && !hidden[item.id]) visible.push(item);
+  }
+  return visible;
+}
+function persistShortcutOrder(ids){
+  const stored = getStoredShortcuts() || { order: [], hidden: {} };
+  const hidden = stored.hidden || {};
+  saveStoredShortcuts({ order: ids, hidden });
+}
+function toggleShortcut(id, hide = false){
+  const stored = getStoredShortcuts() || { order: [], hidden: {} };
+  const hidden = stored.hidden || {};
+  if (hide) hidden[id] = true; else delete hidden[id];
+  const order = (stored.order && stored.order.length ? stored.order : getShortcutCatalog().map((action) => action.id));
+  if (!order.includes(id)) order.push(id);
+  saveStoredShortcuts({ order, hidden });
+}
+function moveShortcut(id, dir){
+  const visible = getVisibleShortcuts();
+  const index = visible.findIndex((item) => item.id === id);
+  if (index < 0) return;
+  const targetIndex = Math.max(0, Math.min(visible.length - 1, index + dir));
+  const reordered = [...visible];
+  const [moved] = reordered.splice(index, 1);
+  reordered.splice(targetIndex, 0, moved);
+  const order = reordered.map((item) => item.id);
+  persistShortcutOrder(order);
+}
+function quickActionCards(){
+  const actions = getVisibleShortcuts();
+  if (!actions.length) return "";
+  return `<section class="card"><h2>Atalhos rápidos</h2><div class="shortcut-toolbar"><button type="button" data-shortcut-customize class="secondary-button">Personalizar atalhos</button></div><p class="muted">Ações mais usadas por ${role === "admin" ? "o administrador" : "o operador"}. Todos os acessos seguem as permissões atribuídas.</p><div class="grid">${actions.map(({id,label,detail})=>`<div class="shortcut-panel"><div class="shortcut-header"><button type="button" data-section="${id}" class="shortcut-primary"><strong>${esc(label)}</strong><small>${esc(detail)}</small></button><div class="shortcut-tools"><button type="button" data-shortcut-move="up" data-shortcut-target="${id}" title="Mover para cima" aria-label="Mover ${esc(label)} para cima">↑</button><button type="button" data-shortcut-move="down" data-shortcut-target="${id}" title="Mover para baixo" aria-label="Mover ${esc(label)} para baixo">↓</button><button type="button" data-shortcut-hide="${id}" title="Ocultar atalho" aria-label="Ocultar ${esc(label)}">✕</button></div></div></div>`).join("")}</div></section>`;
+}
+
 function overviewMatchView(){
  const rows=scopeMatches(state.matches,overviewGameScope).slice().sort((a,b)=>{if(overviewGameScope!=="finished"){const priority=m=>m.status==="Ao vivo"?0:m.status==="Pausada"?1:2;const d=priority(a)-priority(b);if(d)return d;}return overviewGameScope==="finished"?new Date(b.date)-new Date(a.date):new Date(a.date)-new Date(b.date);});
  return `${quickActionCards()}<div class="grid">${[["Equipes",state.teams.length],["Jogadores",state.players.length],["Partidas ao vivo",state.matches.filter(m=>m.status==="Ao vivo").length]].map(([label,n])=>`<div class="card"><span class="muted">${label}</span><div class="kpi">${n}</div></div>`).join("")}</div><section class="card"><h2>Quadra e campo</h2>${matchScopeButtons("overview",overviewGameScope)}<p class="muted">Jogos encerrados ficam em Finalizadas. Esta seleção muda apenas a visualização.</p></section><div class="grid">${rows.slice(0,6).map(m=>matchCard(m,true)).join("")||empty(overviewGameScope==="active"?"Nenhuma partida atual. Consulte Finalizadas ou programe um novo jogo.":"Nenhuma partida nesta seleção.")}</div>${rows.length>6?'<p>Exibindo seis partidas. Abra Jogos → Acompanhar jogos para consultar a lista completa.</p>':""}`;
@@ -2658,6 +2723,38 @@ document.addEventListener("click",e=>{
  if(b.dataset.scopeArea==="overview")overviewGameScope=b.dataset.matchScope;
  if(b.dataset.scopeArea==="team")teamGameScope=b.dataset.matchScope;
  render();
+});
+document.addEventListener("click",e=>{
+  const customize=e.target.closest("[data-shortcut-customize]");
+  if(customize){
+    const current = getVisibleShortcuts();
+    const all = getShortcutCatalog();
+    const stored = getStoredShortcuts() || { order: [], hidden: {} };
+    const hidden = stored.hidden || {};
+    const choices = all.map((item) => ({ ...item, hidden: !!hidden[item.id] || !current.some((x) => x.id === item.id) }));
+    const html = `<section class="card"><h2>Personalizar atalhos</h2><p class="muted">Ocultar ou reorganizar ações rápidas, sem alterar as permissões da conta.</p><div class="shortcut-config">${choices.map((item) => `<div class="shortcut-config-row ${item.hidden ? "is-hidden" : ""}"><span><strong>${esc(item.label)}</strong><small>${esc(item.detail)}</small></span><div class="shortcut-config-actions"><button type="button" data-shortcut-hide="${item.id}" ${item.hidden ? "" : "class=\"primary\""}>${item.hidden ? "Mostrar" : "Ocultar"}</button></div></div>`).join("")}</div><div class="toolbar"><button type="button" data-shortcut-reset class="primary">Restaurar padrão</button><button type="button" data-section="overview">Voltar para tela inicial</button></div></section>`;
+    const panel = document.getElementById("view");
+    if (panel) panel.innerHTML = html;
+    return;
+  }
+  const move = e.target.closest("[data-shortcut-move]");
+  if (move) {
+    const dir = move.dataset.shortcutMove === "up" ? -1 : 1;
+    moveShortcut(move.dataset.shortcutTarget, dir);
+    render();
+    return;
+  }
+  const hide = e.target.closest("[data-shortcut-hide]");
+  if (hide && hide.dataset.shortcutHide) {
+    toggleShortcut(hide.dataset.shortcutHide, !getStoredShortcuts()?.hidden?.[hide.dataset.shortcutHide]);
+    render();
+    return;
+  }
+  const reset = e.target.closest("[data-shortcut-reset]");
+  if (reset) {
+    saveStoredShortcuts({ order: [], hidden: {} });
+    render();
+  }
 });
 
 // 29 — Navegação expansível e busca local. Resultados respeitam o perfil atual.
