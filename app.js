@@ -2344,8 +2344,39 @@ function removedResults(){
 }
 function removedHistoryPanel(){
  resetRemovedContext();
- return `<section aria-labelledby="removedHistoryHeading"><h3 id="removedHistoryHeading">Partidas excluídas</h3><p>Consulta exclusiva do administrador principal. Os registros permanecem preservados; esta lista não é uma lixeira e não oferece restauração automática.</p><button type="button" data-removed-load ${removedLoading?"disabled":""}>${removedLoaded||removedError?"Atualizar histórico":"Ver partidas excluídas"}</button><div class="formgrid"><label>Buscar no histórico<input type="search" data-removed-query value="${esc(removedQuery)}" placeholder="Equipe, campeonato, motivo, data ou identificador"></label><label>Modalidade no histórico<select data-removed-sport><option value="">Todas as modalidades</option>${["Futebol","Futsal","Basquete","Vôlei","Vôlei de praia","Handebol"].map(s=>`<option value="${esc(s)}" ${s===removedSport?"selected":""}>${esc(s)}</option>`).join("")}</select></label></div><div id="removedResults">${removedResults()}</div></section>`;
+ return `<section aria-labelledby="removedHistoryHeading"><h3 id="removedHistoryHeading">Lixeira e histórico de remoções</h3><p>Consulta exclusiva do administrador principal. Recupere jogos dentro de 30 dias. Depois do prazo, purgue manualmente para liberar o snapshot e os detalhes da auditoria; fica apenas o registro resumido da remoção.</p><button type="button" data-removed-load ${removedLoading?"disabled":""}>${removedLoaded||removedError?"Atualizar lixeira":"Ver lixeira"}</button><div class="formgrid"><label>Buscar no histórico<input type="search" data-removed-query value="${esc(removedQuery)}" placeholder="Equipe, campeonato, motivo, data ou identificador"></label><label>Modalidade no histórico<select data-removed-sport><option value="">Todas as modalidades</option>${["Futebol","Futsal","Basquete","Vôlei","Vôlei de praia","Handebol"].map(s=>`<option value="${esc(s)}" ${s===removedSport?"selected":""}>${esc(s)}</option>`).join("")}</select></label></div><div id="removedResults">${removedResults()}</div></section>`;
 }
+let trashActionBusy=false;
+document.addEventListener("click",async e=>{
+ const restore=e.target.closest("[data-trash-restore]"),purge=e.target.closest("[data-trash-purge]");
+ if((!restore&&!purge)||trashActionBusy)return;
+ if(role!=="admin")return;
+ const button=restore||purge,id=button.dataset.trashRestore||button.dataset.trashPurge;
+ try{
+  const item=removedRows().find(row=>row.target===id);
+  if(!item)throw Error("Registro não encontrado. Atualize a lixeira.");
+  if(restore){
+   if(!confirm("Recuperar esta partida? Ela voltará aos painéis com o placar e a súmula preservados."))return;
+   const reason=prompt("Justificativa para recuperar a partida (5 a 500 caracteres):");if(reason===null)return;
+   if(C.demo){
+    if(item.state!=="lixeira"||removedTime(item.expiresAt)<=Date.now()||!item.before)throw Error("Prazo de recuperação encerrado ou partida indisponível.");
+    const restored={...item.before,_revision:(item.before._revision||0)+1,_updatedBy:"demonstração"};
+    state.matches.push(restored);item.before=null;item.after=null;item.state="restaurada";item.restoredBy="demonstração";item.restoredAt=new Date().toISOString();
+    state.demoAudit=state.demoAudit||[];state.demoAudit.push({target:id,entity:"matches",actor:"demonstração",at:new Date().toISOString(),detail:{type:"recuperação",reason},before:null,after:restored});trainingMode?trainingStore(state):localStorage.setItem(key,JSON.stringify(state));
+   }else await cloud.restoreDeletedMatch(id,reason);
+   toast("Partida recuperada e publicada novamente.");
+  }else{
+   if(C.demo)throw Error("A purga definitiva não está disponível na demonstração.");
+   if(!confirm("Esta ação é irreversível. A partida e os detalhes completos da auditoria serão apagados; ficará apenas o registro resumido da remoção. Continuar?"))return;
+   const reason=prompt("Justificativa da purga definitiva (5 a 500 caracteres):",item.purgeReason||"");if(reason===null)return;
+   await cloud.purgeDeletedMatch(id,reason);
+   toast("Purga concluída. A partida não pode mais ser recuperada.");
+  }
+  removedLoaded=false;removedHistory=[];removedError="";refresh();
+  if(!C.demo){const rows=await cloud.cleanupHistory();removedHistory=rows;removedLoaded=true;refresh();}
+ }catch(error){toast(error.message,true);}
+ finally{trashActionBusy=false;}
+});
 document.addEventListener("click",async e=>{
  if(!e.target.closest("[data-removed-load]")||removedLoading||role!=="admin")return;
  resetRemovedContext();const context=removedContextKey(),request=++removedRequest;
