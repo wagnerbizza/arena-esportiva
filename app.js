@@ -2277,7 +2277,7 @@ document.addEventListener("submit",async e=>{
   if(C.demo){
    const m=state.matches.find(m=>m.id===plan.matchId);
    if(!m||JSON.stringify(m)!==JSON.stringify(plan.before)||Date.now()-plan.createdAt>600000)throw Error("A partida mudou ou a prévia expirou. Gere uma nova prévia.");
-   state.cleanupAudit=state.cleanupAudit||[];state.cleanupAudit.push({target:m.id,reason,before:m,after:null,at:new Date().toISOString(),actor:"demonstração"});
+  state.cleanupAudit=state.cleanupAudit||[];state.cleanupAudit.push({target:m.id,entity:"matches",reason,before:m,after:null,at:new Date().toISOString(),actor:"demonstração",state:"lixeira",expiresAt:new Date(Date.now()+30*24*60*60*1000),home:m.home,away:m.away,sport:m.sport,competition:m.competition||"",status:m.status,score:m.score});
    state.matches=state.matches.filter(x=>x.id!==m.id);
    if(trainingMode)trainingStore(state);else localStorage.setItem(key,JSON.stringify(state));
    render();
