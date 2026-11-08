@@ -32,7 +32,7 @@ service cloud.firestore {
   function publicTeam(t) { return { 'id':t.id,'name':t.name,'short':t.short,'badge':t.badge,'category':t.category,'_revision':t._revision,'_updatedAt':t._updatedAt }; }
   function publicSettings(t) { return t.keys().hasAny(['logo']) ? {'logo':t.logo,'id':t.id,'title':t.title,'subtitle':t.subtitle,'color':t.color,'banner':t.banner,'_revision':t._revision,'_updatedAt':t._updatedAt} : {'id':t.id,'title':t.title,'subtitle':t.subtitle,'color':t.color,'banner':t.banner,'_revision':t._revision,'_updatedAt':t._updatedAt}; }
   function emptyClock() { return {'baseMs':0,'mode':'up','durationMs':0,'segments':{},'current':'','running':false}; }
-  function publicMatch(m) { return m.keys().hasAny(['championshipId']) ? {'championshipId':m.championshipId,'clock':m.get('clock',emptyClock()),'publicNotice':m.get('publicNotice',''),'id':m.id,'home':m.home,'away':m.away,'sport':m.sport,'date':m.date,'place':m.place,'competition':m.competition,'stage':m.stage,'status':m.status,'sets':m.sets,'score':m.score,'_revision':m._revision,'_updatedAt':m._updatedAt} : {'clock':m.get('clock',emptyClock()),'publicNotice':m.get('publicNotice',''),'id':m.id,'home':m.home,'away':m.away,'sport':m.sport,'date':m.date,'place':m.place,'competition':m.competition,'stage':m.stage,'status':m.status,'sets':m.sets,'score':m.score,'_revision':m._revision,'_updatedAt':m._updatedAt}; }
+  function publicMatch(m) { return m.keys().hasAny(['championshipId']) ? {'championshipId':m.championshipId,'clock':m.get('clock',emptyClock()),'publicNotice':m.get('publicNotice',''),'id':m.id,'home':m.home,'away':m.away,'sport':m.sport,'date':m.date,'place':m.place,'competition':m.competition,'stage':m.stage,'status':m.status,'sets':m.sets,'score':m.score,'publicEvents':m.get('publicEvents',[]),'_revision':m._revision,'_updatedAt':m._updatedAt} : {'clock':m.get('clock',emptyClock()),'publicNotice':m.get('publicNotice',''),'id':m.id,'home':m.home,'away':m.away,'sport':m.sport,'date':m.date,'place':m.place,'competition':m.competition,'stage':m.stage,'status':m.status,'sets':m.sets,'score':m.score,'publicEvents':m.get('publicEvents',[]),'_revision':m._revision,'_updatedAt':m._updatedAt}; }
   function publishedTeam(d,id) { return getAfter(/databases/$(database)/documents/publicTeams/$(id)).data == publicTeam(d); }
   function publishedSettings(d) { return getAfter(/databases/$(database)/documents/publicSettings/main).data == publicSettings(d); }
   function publishedMatch(d,id) { return getAfter(/databases/$(database)/documents/publicMatches/$(id)).data == publicMatch(d); }
@@ -59,6 +59,34 @@ service cloud.firestore {
     && d.sport in ['Futebol','Futsal','Basquete','Vôlei','Vôlei de praia','Handebol']
     && d.status in ['Planejado','Em andamento','Encerrado'];
   }
+  function publicEventSchema(e) {
+   return e is map && e.keys().hasAll(['id','type','side','value','player','playerName','number','correctionOf'])
+    && e.keys().hasOnly(['id','type','side','value','player','playerName','number','correctionOf'])
+    && nonempty(e.id,100) && e.type in ['ponto','cartão amarelo','cartão vermelho','falta','substituição','tempo']
+    && e.side in [0,1] && e.value is int && e.value >= -3 && e.value <= 3
+    && bounded(e.player,150) && bounded(e.playerName,150) && bounded(e.number,8) && bounded(e.correctionOf,100)
+    && (e.player == '' ? (e.playerName == '' && e.number == '') : nonempty(e.playerName,150));
+  }
+  function publicEventsSchema(events) {
+   return events is list && events.size() <= 5
+    && (events.size() < 1 || publicEventSchema(events[0]))
+    && (events.size() < 2 || publicEventSchema(events[1]))
+    && (events.size() < 3 || publicEventSchema(events[2]))
+    && (events.size() < 4 || publicEventSchema(events[3]))
+    && (events.size() < 5 || publicEventSchema(events[4]));
+  }
+  function publicEventFlow(d,b,e) {
+   let oldEvents = b.get('publicEvents',[]);
+   let nextEvents = d.get('publicEvents',[]);
+   let item = nextEvents[nextEvents.size()-1];
+   return oldEvents is list && oldEvents.size() <= 5
+    && nextEvents is list && nextEvents.size() > 0 && nextEvents.size() <= 5
+    && publicEventSchema(item)
+    && ((oldEvents.size() < 5 && nextEvents == oldEvents.concat([item]))
+     || (oldEvents.size() == 5 && nextEvents == [oldEvents[1],oldEvents[2],oldEvents[3],oldEvents[4],item]))
+    && item.id == d._audit && item.type == e.type && item.side == e.side && item.value == e.value
+    && item.player == e.player && item.correctionOf == e.correctionOf;
+  }
   function championshipLink(d,creating) {
    let id = d.get('championshipId','');
    return bounded(id,100) && (id == '' || (exists(/databases/$(database)/documents/championships/$(id))
@@ -73,7 +101,7 @@ service cloud.firestore {
     && (d.get('championshipId','') != '' || d.competition == b.competition);
   }
   function matchSchema(d,id) {
-   return meta(d,id) && d.keys().hasOnly(['id','home','away','sport','date','place','competition','championshipId','referees','stage','status','sets','notes','roster','rosterTeams','coaches','score','clock','publicNotice','_revision','_audit','_updatedAt','_updatedBy'])
+    return meta(d,id) && d.keys().hasOnly(['id','home','away','sport','date','place','competition','championshipId','referees','stage','status','sets','notes','roster','rosterTeams','coaches','score','clock','publicNotice','publicEvents','_revision','_audit','_updatedAt','_updatedBy'])
     && championshipLink(d,true)
     && nonempty(d.home,100) && nonempty(d.away,100) && d.home != d.away
     && d.sport in ['Futebol','Futsal','Basquete','Vôlei','Vôlei de praia','Handebol'] && nonempty(d.date,150)
@@ -82,7 +110,7 @@ service cloud.firestore {
     && d.score is list && d.score.size() == 2 && d.score[0] is int && d.score[1] is int && d.score[0] >= 0 && d.score[1] >= 0
     && d.sets is list && d.sets.size() <= 20 && bounded(d.notes,5000)
     && d.roster is list && d.roster.size() <= 80 && d.rosterTeams is map && d.rosterTeams.size() <= 80
-    && d.coaches is list && d.coaches.size() == 2 && d.get('clock',emptyClock()) == emptyClock() && d.get('publicNotice','') == '';
+    && d.coaches is list && d.coaches.size() == 2 && publicEventsSchema(d.get('publicEvents',[])) && d.get('clock',emptyClock()) == emptyClock() && d.get('publicNotice','') == '';
   }
   function detailSchema(e) {
    return e.keys().hasAll(['type','side','value','player','stage','text','reason','correctionOf','from','to','setIndex'])
@@ -95,10 +123,30 @@ service cloud.firestore {
   function unlocked(b) { return !(b.status in ['Encerrada','Homologada','Cancelada']); }
   function stageDetail(e,b) { return e.stage == b.stage && e.setIndex == b.sets.size(); }
   function athlete(e,b) { return e.side in [0,1] && (e.player == '' || (e.player in b.rosterTeams && b.rosterTeams[e.player] == (e.side == 0 ? b.home : b.away))); }
+  function publicEventMatchesAudit(item,matchId) {
+   let record = get(/databases/$(database)/documents/audit/$(item.id)).data;
+   let event = record.detail;
+   return record.entity == 'matches' && record.target == matchId
+    && event.type == item.type && event.side == item.side && event.value == item.value
+    && event.player == item.player && event.correctionOf == item.correctionOf
+    && athlete(event,record.after);
+  }
+  function publicEventHistory(events,matchId) {
+   return publicEventsSchema(events)
+    && (events.size() < 1 || publicEventMatchesAudit(events[0],matchId))
+    && (events.size() < 2 || publicEventMatchesAudit(events[1],matchId))
+    && (events.size() < 3 || publicEventMatchesAudit(events[2],matchId))
+    && (events.size() < 4 || publicEventMatchesAudit(events[3],matchId))
+    && (events.size() < 5 || publicEventMatchesAudit(events[4],matchId));
+  }
+  function publishPublicEvents(d,b,e) {
+   return admin() && e.type == 'publicação de lances' && changedOnly(d,b,['publicEvents'])
+    && publicEventHistory(d.get('publicEvents',[]),b.id);
+  }
   function scoreDelta(d,b,e) { return d.score == (e.side == 0 ? [b.score[0]+e.value,b.score[1]] : [b.score[0],b.score[1]+e.value]); }
   function normalPoint(d,b,e) {
    return e.type == 'ponto' && e.correctionOf == '' && athlete(e,b) && e.value in (b.sport == 'Basquete' ? [1,2,3] : [1])
-    && b.status == 'Ao vivo' && changedOnly(d,b,['score']) && scoreDelta(d,b,e);
+    && b.status == 'Ao vivo' && changedOnly(d,b,['score','publicEvents']) && scoreDelta(d,b,e) && publicEventFlow(d,b,e);
   }
   function reversal(d,b,e) {
    let original = get(/databases/$(database)/documents/audit/$(e.correctionOf)).data;
@@ -108,7 +156,7 @@ service cloud.firestore {
     && original.detail.correctionOf == '' && original.detail.setIndex == b.sets.size()
     && e.side == original.detail.side && e.value == -original.detail.value && e.player == original.detail.player
     && marker.eventId == e.correctionOf && marker.matchId == b.id && marker.actionId == d._audit && marker.at == request.time
-    && changedOnly(d,b,['score']) && scoreDelta(d,b,e) && d.score[0] >= 0 && d.score[1] >= 0;
+    && changedOnly(d,b,['score','publicEvents']) && scoreDelta(d,b,e) && publicEventFlow(d,b,e) && d.score[0] >= 0 && d.score[1] >= 0;
   }
   // Segmentos de tempo recebem horários DO SERVIDOR, não do computador do operador.
   // Atualizar os segundos na tela não cria gravações ou leituras por segundo.
@@ -156,7 +204,8 @@ service cloud.firestore {
   }
   function otherEvent(d,b,e) {
    return unlocked(b) && (
-    (e.type in ['cartão amarelo','cartão vermelho','falta','substituição','tempo','observação'] && b.status == 'Ao vivo' && athlete(e,b) && e.value == 0 && changedOnly(d,b,[]))
+    (e.type in ['cartão amarelo','cartão vermelho','falta','substituição','tempo'] && b.status == 'Ao vivo' && athlete(e,b) && e.value == 0 && changedOnly(d,b,['publicEvents']) && publicEventFlow(d,b,e))
+    || (e.type == 'observação' && b.status == 'Ao vivo' && athlete(e,b) && e.value == 0 && changedOnly(d,b,[]))
     || (e.type == 'aviso' && changedOnly(d,b,['publicNotice']) && d.publicNotice == e.text && bounded(d.publicNotice,300))
     || (e.type == 'etapa' && changedOnly(d,b,['stage']) && d.stage == e.to && d.stage == e.text && nonempty(d.stage,40))
     || (e.type == 'súmula' && changedOnly(d,b,['notes']) && d.notes == e.text)
@@ -167,7 +216,7 @@ service cloud.firestore {
   }
   function validMatchUpdate(d,b) {
    let e = logData(d).detail;
-   return stageDetail(e,b) && (e.type == 'campeonato' ? relinkChampionship(d,b,e) : (e.type == 'status' ? statusChange(d,b,e) : (e.type == 'cronômetro' ? clockCommand(d,b,e) : (e.type == 'ponto' ? (e.correctionOf == '' ? normalPoint(d,b,e) : reversal(d,b,e)) : otherEvent(d,b,e)))));
+   return stageDetail(e,b) && (e.type == 'publicação de lances' ? publishPublicEvents(d,b,e) : (e.type == 'campeonato' ? relinkChampionship(d,b,e) : (e.type == 'status' ? statusChange(d,b,e) : (e.type == 'cronômetro' ? clockCommand(d,b,e) : (e.type == 'ponto' ? (e.correctionOf == '' ? normalPoint(d,b,e) : reversal(d,b,e)) : otherEvent(d,b,e))))));
   }
   // Cadastro solicita acesso; somente o titular aprova ou bloqueia.
   // A conta principal nunca pode ser alterada por esta coleção.
@@ -258,28 +307,99 @@ service cloud.firestore {
    return owner() && !(b.status in ['Ao vivo','Pausada','Suspensa'])
     && b.get('clock',emptyClock()).running == false
     && a.target == id && a.entity == 'matches' && a.actor == request.auth.uid
-    && a.at == request.time && a.before == b && a.after == null
+    && a.at == request.time && a.state == 'lixeira' && a.expiresAt is timestamp
+    && a.expiresAt > request.time && a.before == b && a.after == null
     && nonempty(a.reason,500) && a.reason.size() >= 5
     && !existsAfter(/databases/$(database)/documents/matches/$(id))
     && !existsAfter(/databases/$(database)/documents/publicMatches/$(id));
   }
+  function restoreMatch(d,id) {
+   let archived=get(/databases/$(database)/documents/cleanupAudit/$(id)).data;
+   let updated=getAfter(/databases/$(database)/documents/cleanupAudit/$(id)).data;
+   let audit=logData(d);
+   return owner() && archived.state == 'lixeira' && archived.expiresAt is timestamp
+    && archived.expiresAt > request.time && archived.before is map
+    && d.diff(archived.before).affectedKeys().hasOnly(['_revision','_audit','_updatedAt','_updatedBy'])
+    && d._revision == archived.before._revision + 1 && meta(d,id)
+    && updated.state == 'restaurada' && updated.before == null && updated.after == null
+    && updated.restoredAuditId == d._audit && updated.restoredBy == request.auth.uid
+    && audit.entity == 'matches' && audit.target == id && audit.actor == request.auth.uid
+    && audit.detail.type == 'recuperação' && nonempty(audit.detail.reason,500)
+    && audit.after == d && pair(d,'matches',id,null) && publishedMatch(d,id);
+  }
+  function cleanupAuditBase(d,id) {
+   return d.keys().hasAll(['target','entity','actor','at','reason','before','after','state','expiresAt','home','away','sport','competition','status','score'])
+    && d.keys().hasOnly(['target','entity','actor','at','reason','before','after','state','expiresAt','home','away','sport','competition','status','score','restoredBy','restoredAt','restoredAuditId','purgeReason','purgeStartedBy','purgeStartedAt','purgedBy','purgedAt'])
+    && d.target == id && d.entity == 'matches' && d.actor is string
+    && nonempty(d.reason,500) && d.home is string && d.away is string
+    && d.sport is string && d.competition is string && d.status is string
+    && d.score is list && d.score.size() == 2;
+  }
+  function restoreCleanupRecord(id) {
+   let m=getAfter(/databases/$(database)/documents/matches/$(id)).data;
+   let a=getAfter(/databases/$(database)/documents/audit/$(request.resource.data.restoredAuditId)).data;
+   let d=request.resource.data;
+   return owner() && resource.data.state == 'lixeira' && resource.data.expiresAt > request.time
+    && cleanupAuditBase(d,id) && d.state == 'restaurada' && d.before == null && d.after == null
+    && d.expiresAt == resource.data.expiresAt && d.reason == resource.data.reason
+    && d.at == resource.data.at && d.actor == resource.data.actor
+    && d.home == resource.data.home && d.away == resource.data.away && d.sport == resource.data.sport
+    && d.competition == resource.data.competition && d.status == resource.data.status && d.score == resource.data.score
+    && d.restoredBy == request.auth.uid && d.restoredAt == request.time
+    && a.entity == 'matches' && a.target == id && a.actor == request.auth.uid
+    && a.detail.type == 'recuperação' && a.after == m && m._audit == d.restoredAuditId;
+  }
+  function startCleanupPurge(id) {
+   let d=request.resource.data;
+   return owner() && resource.data.state == 'lixeira' && resource.data.expiresAt <= request.time
+    && cleanupAuditBase(d,id) && d.state == 'purgando' && d.before == null && d.after == null
+    && d.expiresAt == resource.data.expiresAt && d.reason == resource.data.reason
+    && d.at == resource.data.at && d.actor == resource.data.actor
+    && d.home == resource.data.home && d.away == resource.data.away && d.sport == resource.data.sport
+    && d.competition == resource.data.competition && d.status == resource.data.status && d.score == resource.data.score
+    && nonempty(d.purgeReason,500) && d.purgeReason.size() >= 5
+    && d.purgeStartedBy == request.auth.uid && d.purgeStartedAt == request.time;
+  }
+  function finishCleanupPurge(id) {
+   let d=request.resource.data;
+   return owner() && resource.data.state == 'purgando' && cleanupAuditBase(d,id)
+    && d.state == 'purgado' && d.before == null && d.after == null
+    && d.expiresAt == resource.data.expiresAt && d.reason == resource.data.reason
+    && d.at == resource.data.at && d.actor == resource.data.actor
+    && d.home == resource.data.home && d.away == resource.data.away && d.sport == resource.data.sport
+    && d.competition == resource.data.competition && d.status == resource.data.status && d.score == resource.data.score
+    && d.purgeReason == resource.data.purgeReason
+    && d.purgeStartedBy == resource.data.purgeStartedBy && d.purgeStartedAt == resource.data.purgeStartedAt
+    && d.purgedBy == request.auth.uid && d.purgedAt == request.time;
+  }
   match /cleanupAudit/{id} {
    allow read: if owner();
-   allow create: if owner()
-    && request.resource.data.keys().hasOnly(['target','entity','actor','at','reason','before','after'])
+   allow create: if owner() && cleanupAuditBase(request.resource.data,id)
     && exists(/databases/$(database)/documents/matches/$(id))
+    && request.resource.data.state == 'lixeira' && request.resource.data.before == get(/databases/$(database)/documents/matches/$(id)).data
+    && request.resource.data.after == null && request.resource.data.at == request.time
+    && request.resource.data.actor == request.auth.uid && request.resource.data.expiresAt is timestamp
+    && request.resource.data.expiresAt > request.time
+    && request.resource.data.home == get(/databases/$(database)/documents/matches/$(id)).data.home
+    && request.resource.data.away == get(/databases/$(database)/documents/matches/$(id)).data.away
+    && request.resource.data.sport == get(/databases/$(database)/documents/matches/$(id)).data.sport
+    && request.resource.data.competition == get(/databases/$(database)/documents/matches/$(id)).data.competition
+    && request.resource.data.status == get(/databases/$(database)/documents/matches/$(id)).data.status
+    && request.resource.data.score == get(/databases/$(database)/documents/matches/$(id)).data.score
     && cleanupAllowed(id,get(/databases/$(database)/documents/matches/$(id)).data);
-   allow update,delete: if false;
+   allow update: if restoreCleanupRecord(id) || startCleanupPurge(id) || finishCleanupPurge(id);
+   allow delete: if false;
   }
   match /matches/{id} {
    allow get: if operatorFor(id) || (matchCreator() && !exists(/databases/$(database)/documents/matches/$(id)));
    allow list: if admin();
-   allow create: if matchCreator() && matchSchema(request.resource.data,id) && request.resource.data._revision == 1
-    && exists(/databases/$(database)/documents/teams/$(request.resource.data.home)) && exists(/databases/$(database)/documents/teams/$(request.resource.data.away))
-    && get(/databases/$(database)/documents/teams/$(request.resource.data.home)).data.get('archived',false) == false
-    && get(/databases/$(database)/documents/teams/$(request.resource.data.away)).data.get('archived',false) == false
-    && request.resource.data.score == [0,0] && request.resource.data.sets == [] && request.resource.data.status == 'Agendada' && request.resource.data.notes == ''
-    && pair(request.resource.data,'matches',id,null) && publishedMatch(request.resource.data,id);
+  allow create: if (matchCreator() && matchSchema(request.resource.data,id) && request.resource.data._revision == 1
+   && exists(/databases/$(database)/documents/teams/$(request.resource.data.home)) && exists(/databases/$(database)/documents/teams/$(request.resource.data.away))
+   && get(/databases/$(database)/documents/teams/$(request.resource.data.home)).data.get('archived',false) == false
+   && get(/databases/$(database)/documents/teams/$(request.resource.data.away)).data.get('archived',false) == false
+   && request.resource.data.score == [0,0] && request.resource.data.sets == [] && request.resource.data.status == 'Agendada' && request.resource.data.notes == ''
+   && pair(request.resource.data,'matches',id,null) && publishedMatch(request.resource.data,id))
+   || (restoreMatch(request.resource.data,id));
    allow update: if operatorFor(id) && meta(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1
     && pair(request.resource.data,'matches',id,resource.data) && publishedMatch(request.resource.data,id) && validMatchUpdate(request.resource.data,resource.data);
    allow delete: if cleanupAllowed(id,resource.data);
@@ -309,7 +429,9 @@ service cloud.firestore {
     && request.resource.data.after._audit == id && request.resource.data.after._updatedAt == request.time
     && request.resource.data.revision == request.resource.data.after._revision
     && request.resource.data.before == (exists(/databases/$(database)/documents/$(request.resource.data.entity)/$(request.resource.data.target)) ? get(/databases/$(database)/documents/$(request.resource.data.entity)/$(request.resource.data.target)).data : null);
-   allow update, delete: if false;
+  allow delete: if owner() && resource.data.entity == 'matches'
+   && get(/databases/$(database)/documents/cleanupAudit/$(resource.data.target)).data.state == 'purgando';
+  allow update: if false;
   }
   match /corrections/{id} {
    allow read: if admin();
@@ -317,7 +439,9 @@ service cloud.firestore {
     && request.resource.data.eventId == id && request.resource.data.actor == request.auth.uid && request.resource.data.at == request.time
     && getAfter(/databases/$(database)/documents/audit/$(request.resource.data.actionId)).data.detail.correctionOf == id
     && getAfter(/databases/$(database)/documents/matches/$(request.resource.data.matchId)).data._audit == request.resource.data.actionId;
-   allow update, delete: if false;
+  allow update: if false;
+  allow delete: if owner() && resource.data.matchId is string
+   && get(/databases/$(database)/documents/cleanupAudit/$(resource.data.matchId)).data.state == 'purgando';
   }
   match /{document=**} { allow read, write: if false; }
  }
