@@ -336,7 +336,6 @@
       status,
       sets,
       score,
-      publicEvents: m.publicEvents || [],
       _revision,
       _updatedAt,
     } = m;
@@ -355,6 +354,7 @@
       status,
       sets,
       score,
+      publicEvents: m.publicEvents || [],
       _revision,
       _updatedAt,
     };
