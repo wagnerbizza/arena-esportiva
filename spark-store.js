@@ -302,7 +302,7 @@ export async function connectSpark({
   async function deleteTestMatch(plan,reason,confirmation) {
     if(!isOwner())throw Error("Limpeza exclusiva do administrador principal.");
     reason=String(reason||"").trim();
-    if(confirmation!=="EXCLUIR"||reason.length<5||reason.length>500)throw Error("Digite EXCLUIR e informe um motivo de 5 a 500 caracteres.");
+    if(confirmation!=="LIXEIRA"||reason.length<5||reason.length>500)throw Error("Digite LIXEIRA e informe um motivo de 5 a 500 caracteres.");
     if(!plan||Date.now()-plan.createdAt>600000)throw Error("Prévia expirada. Gere uma nova prévia e cópia.");
     const ref=F.doc(database,"matches",plan.matchId), log=F.doc(database,"cleanupAudit",plan.matchId);
     await F.runTransaction(database,async tx=>{
@@ -339,8 +339,9 @@ export async function connectSpark({
       tx.update(cleanupRef,{...archived,before:null,after:null,state:"restaurada",restoredBy:session.uid,restoredAt:F.serverTimestamp(),restoredAuditId:auditId});
     });
   }
-  async function purgeDeletedMatch(matchId) {
+  async function purgeDeletedMatch(matchId, reason) {
     if (!isOwner()) throw Error("Somente o administrador principal pode purgar partidas.");
+    reason=String(reason||"").trim();
     const cleanupRef=F.doc(database,"cleanupAudit",matchId);
     let snap=await F.getDocFromServer(cleanupRef);
     if(!snap.exists())throw Error("Registro da lixeira não encontrado.");
@@ -348,15 +349,17 @@ export async function connectSpark({
     if(record.state==="lixeira"){
       const expiresAt=record.expiresAt?.toMillis?.()||new Date(record.expiresAt||0).getTime();
       if(!Number.isFinite(expiresAt)||expiresAt>Date.now())throw Error("A recuperação só termina após 30 dias.");
+      if(reason.length<5||reason.length>500)throw Error("Informe a justificativa de purga, entre 5 e 500 caracteres.");
       await F.runTransaction(database,async tx=>{
         const current=await tx.get(cleanupRef);
         if(!current.exists()||current.data().state!=="lixeira")throw Error("O estado da lixeira mudou. Atualize e tente novamente.");
         const archived=current.data();
-        tx.update(cleanupRef,{...archived,before:null,after:null,state:"purgando",purgeStartedBy:session.uid,purgeStartedAt:F.serverTimestamp()});
+        tx.update(cleanupRef,{...archived,before:null,after:null,state:"purgando",purgeReason:reason,purgeStartedBy:session.uid,purgeStartedAt:F.serverTimestamp()});
       });
       snap=await F.getDocFromServer(cleanupRef);record=snap.data();
     }
     if(record.state!=="purgando"&&record.state!=="purgado")throw Error("A partida não está pronta para purga.");
+    if(record.state==="purgando"&&reason&&reason!==record.purgeReason)throw Error("Use a mesma justificativa registrada para retomar esta purga.");
     if(record.state==="purgado")return;
     const history=await F.getDocsFromServer(F.query(F.collection(database,"audit"),F.where("target","==",matchId)));
     for(let offset=0;offset<history.docs.length;offset+=400){
