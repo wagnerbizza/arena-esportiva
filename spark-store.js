@@ -369,6 +369,14 @@ export async function connectSpark({
     }
     const remaining=await F.getDocsFromServer(F.query(F.collection(database,"audit"),F.where("target","==",matchId)));
     if(!remaining.empty)throw Error("A purga foi interrompida. Use Retomar purga para concluir.");
+    const corrections=await F.getDocsFromServer(F.query(F.collection(database,"corrections"),F.where("matchId","==",matchId)));
+    for(let offset=0;offset<corrections.docs.length;offset+=400){
+      const batch=F.writeBatch(database);
+      for(const row of corrections.docs.slice(offset,offset+400))batch.delete(row.ref);
+      await batch.commit();
+    }
+    const remainingCorrections=await F.getDocsFromServer(F.query(F.collection(database,"corrections"),F.where("matchId","==",matchId)));
+    if(!remainingCorrections.empty)throw Error("A purga foi interrompida. Use Retomar purga para concluir.");
     await F.runTransaction(database,async tx=>{
       const current=await tx.get(cleanupRef);
       if(!current.exists()||current.data().state!=="purgando")throw Error("O estado da purga mudou. Atualize o histórico.");
