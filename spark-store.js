@@ -10,7 +10,7 @@ export async function connectSpark({
   onConnection,
 }) {
   // A mesma identidade está protegida nas regras do Firestore.
-  const OWNER_UID = "PiL1z5pudHU96PqY6tyLwkVaqA22";
+  const OWNER_UID = "mwYVHBGiEJSYfKimTiBUMzcWHhn1";
   const isOwner = () => session?.uid === OWNER_UID;
   const authorized = () => isOwner() || (profile?.role === "operator" && profile.enabled !== false && session?.emailVerified === true);
   // Permissão parcial de cadastro: não dá acesso à administração.
