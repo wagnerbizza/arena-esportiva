@@ -571,8 +571,37 @@ function matchCard(m, button = false) {
   const points = D.score(m),
     sc = gameResult(m),
     a = team(m.home),
-    b = team(m.away);
-  return `<article class="card match-card ${m.status === "Ao vivo" ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${m.status === "Ao vivo" ? "live" : ""}">${m.status === "Ao vivo" ? "● " : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score"><div>${badge(a)}<div class="name">${esc(a.name)}</div></div><strong>${sc[0]} <span class="muted">:</span> ${sc[1]}</strong><div>${badge(b)}<div class="name">${esc(b.name)}</div></div></div>${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button data-open="${m.id}">Operar partida →</button>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
+    b = team(m.away),
+    isLive = m.status === "Ao vivo",
+    isFinished = ["Encerrada", "Homologada"].includes(m.status);
+  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score"><div>${badge(a)}<div class="name">${esc(a.name)}</div></div><strong>${sc[0]} <span class="muted">:</span> ${sc[1]}</strong><div>${badge(b)}<div class="name">${esc(b.name)}</div></div></div>${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button data-open="${m.id}">Operar partida →</button>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
+}
+
+function liveStatusPanel(context) {
+  const active = state.matches.filter((match) => ["Ao vivo", "Pausada", "Suspensa"].includes(match.status))
+    .sort((a, b) => (a.status === "Ao vivo" ? 0 : 1) - (b.status === "Ao vivo" ? 0 : 1) || a.date.localeCompare(b.date));
+  const upcoming = state.matches.filter((match) => ["Agendada", "Adiada"].includes(match.status))
+    .slice().sort((a, b) => a.date.localeCompare(b.date))[0];
+  const liveCount = active.filter((match) => match.status === "Ao vivo").length;
+  const accessibleActive = context !== "admin" || role === "admin" ? active : active.filter((match) => cloud?.canOperate(match.id));
+  const statusText = liveCount
+    ? `${liveCount} jogo${liveCount === 1 ? "" : "s"} ao vivo agora`
+    : active.length
+      ? `Nenhum jogo ao vivo • ${active.length} interrompido${active.length === 1 ? "" : "s"}`
+      : "Nenhum jogo ao vivo no momento";
+  const detail = upcoming
+    ? `${name(upcoming.home)} × ${name(upcoming.away)} • ${esc(format(upcoming.date))}`
+    : active.length || liveCount
+      ? "Confira a situação e os controles da partida."
+      : "Não há partidas em andamento ou programadas.";
+  const jumpButtons = accessibleActive.map((match) => {
+    const attribute = context === "admin" ? `data-live-jump="${esc(match.id)}"` : `data-public-live-jump="${esc(match.id)}"`;
+    return `<button type="button" class="live-jump-button" ${attribute}><span>${esc(name(match.home))} × ${esc(name(match.away))}</span><small>${esc(match.status)} • ${esc(match.sport)}</small></button>`;
+  }).join("");
+  const fallback = context === "admin"
+    ? '<button type="button" class="live-status-action" data-section="matches">Ver partidas</button>'
+    : `<button type="button" class="live-status-action" data-public-area="${upcoming ? "schedule" : "live"}">${upcoming ? "Abrir agenda" : "Ver jogos ao vivo"}</button>`;
+  return `<section class="live-status-panel ${liveCount ? "has-live-games" : "no-live-games"}" aria-label="Situação dos jogos"><div class="live-status-copy"><span class="live-status-indicator" aria-hidden="true"><span class="live-status-dot"></span></span><div><h2>${esc(statusText)}</h2><p>${detail}</p></div></div><div class="live-status-actions">${jumpButtons || fallback}</div></section>`;
 }
 
 function render() {
@@ -590,7 +619,7 @@ function render() {
     return;
   }
   if (!admin) {
-    app.innerHTML = `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section><div class="sectionhead"><h2>Acompanhe os jogos</h2><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
+    app.innerHTML = `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section>${liveStatusPanel("public")}<div class="sectionhead"><h2>Acompanhe os jogos</h2><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
       D.SPORTS,
       (x) => x,
       (x) => x,
@@ -627,7 +656,7 @@ function render() {
     ["monitor", "Operadores e partidas"],
     ["imports", "Importar"],
   ];
-  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">${esc(systemDisplayName())}</span><h2>${esc(panelDisplayName())}</h2></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${workspaceNavigation(sections)}${locationTrail()}<div id="view">${view()}</div>`;
+  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">${esc(systemDisplayName())}</span><h2>${esc(panelDisplayName())}</h2></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${liveStatusPanel("admin")}${workspaceNavigation(sections)}${locationTrail()}<div id="view">${view()}</div>`;
   if (busy || accessBusy) app.querySelectorAll("button").forEach((b) => (b.disabled = true));
   if (["matchSheets","reports"].includes(section) && $("[name=reportMatch]")) {
     $("[name=reportMatch]").value = reportFilter;
