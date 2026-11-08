@@ -310,7 +310,7 @@
       value: e.value,
       player: e.player,
       playerName: athlete?.name || "",
-      number: athlete?.number || "",
+      number: String(athlete?.number || ""),
       correctionOf: e.correctionOf || "",
     };
     m.publicEvents = [...(m.publicEvents || []), event].slice(-5);

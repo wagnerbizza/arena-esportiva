@@ -166,6 +166,68 @@ export async function connectSpark({
           ? M.elapsed(a.after, a.at?.toMillis?.() || Date.now())
           : null,
       }));
+  async function publishPublicEvents(matchId, history) {
+    const publicTypes = new Set([
+      "ponto",
+      "cartão amarelo",
+      "cartão vermelho",
+      "falta",
+      "substituição",
+      "tempo",
+    ]);
+    const reference = F.doc(database, "matches", matchId),
+      actionId = uid(),
+      auditRef = F.doc(database, "audit", actionId),
+      publicRef = F.doc(database, "publicMatches", matchId);
+    await F.runTransaction(database, async (tx) => {
+      const snap = await tx.get(reference);
+      if (!snap.exists()) return;
+      const before = snap.data();
+      if (history.at(-1)?.revision !== before._revision) return;
+      const publicEvents = history
+        .filter((e) => publicTypes.has(e.type))
+        .map((e) => {
+          const athlete = (before.roster || []).find((p) => p.id === e.player);
+          return {
+            id: e.id,
+            type: e.type,
+            side: e.side,
+            value: e.value,
+            player: e.player,
+            playerName: athlete?.name || "",
+            number: String(athlete?.number || ""),
+            correctionOf: e.correctionOf || "",
+          };
+        })
+        .slice(-5);
+      if (JSON.stringify(publicEvents) === JSON.stringify(before.publicEvents || []))
+        return;
+      const next = {
+        ...before,
+        publicEvents,
+        _revision: before._revision + 1,
+        _audit: actionId,
+        _updatedBy: session.uid,
+        _updatedAt: F.serverTimestamp(),
+      };
+      const detail = M.detail("publicação de lances");
+      detail.stage = before.stage;
+      detail.setIndex = before.sets.length;
+      detail.text = "Atualização dos lances publicados no placar";
+      tx.set(reference, next);
+      tx.set(publicRef, M.publicMatch(next));
+      tx.set(auditRef, {
+        entity: "matches",
+        target: matchId,
+        actor: session.uid,
+        at: F.serverTimestamp(),
+        revision: next._revision,
+        detail,
+        before,
+        after: next,
+      });
+    });
+  }
   async function loadHistory(ids, { live = false } = {}) {
     if (!isOwner()) throw Error("Histórico e auditoria são exclusivos do administrador principal.");
     historyStop?.();
@@ -180,6 +242,9 @@ export async function connectSpark({
       const snap = await F.getDocsFromServer(q);
       if(!isOwner()||epoch!==generation)return;
       cache.set(id, events(snap));
+    }
+    if (live && ids.length === 1) {
+      await publishPublicEvents(ids[0], cache.get(ids[0]) || []);
     }
     publish();
     if (live && ids.length === 1) {
