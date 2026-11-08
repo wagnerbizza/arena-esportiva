@@ -2619,9 +2619,39 @@ document.addEventListener("click",e=>{
 let overviewGameScope="active";
 function scopeMatches(matches,scope){return matches.filter(m=>scope==="all"||(scope==="finished"?finalStatuses.includes(m.status):!finalStatuses.includes(m.status)));}
 function matchScopeButtons(area,value){return `<div class="list-groups" aria-label="Visualização dos jogos">${[["active","Atuais e próximas"],["finished","Finalizadas"],["all","Todas"]].map(([scope,label])=>`<button type="button" data-match-scope="${scope}" data-scope-area="${area}" class="${value===scope?"primary":""}" aria-pressed="${value===scope}">${label}</button>`).join("")}</div>`;}
+function quickActionCards(){
+  const actions = [];
+  if (role === "admin") {
+    actions.push({ id: "createMatch", label: "Nova partida", detail: "Programar jogo" });
+    actions.push({ id: "championships", label: "Novo campeonato", detail: "Criar edição" });
+    actions.push({ id: "teams", label: "Equipes", detail: "Cadastrar times" });
+    actions.push({ id: "players", label: "Jogadores", detail: "Cadastrar elenco" });
+    actions.push({ id: "users", label: "Operadores", detail: "Aprovar acessos" });
+    actions.push({ id: "settings", label: "Configurações", detail: "Logo e identidade" });
+  } else {
+    if (canManageRosters()) {
+      actions.push({ id: "teams", label: "Equipes", detail: "Cadastrar e editar" });
+      actions.push({ id: "players", label: "Jogadores", detail: "Atualizar elenco" });
+    }
+    if (canManageChampionships()) {
+      actions.push({ id: "championships", label: "Campeonatos", detail: "Gerenciar temporadas" });
+    }
+    if (canCreateMatches()) {
+      actions.push({ id: "createMatch", label: "Nova partida", detail: "Programar jogo" });
+    }
+    if (canViewAllGames() || role === "operator") {
+      actions.push({ id: "matches", label: "Acompanhar jogos", detail: "Consultar partidas" });
+    }
+    if (canManageRosters()) {
+      actions.push({ id: "imports", label: "Importar", detail: "Planilha de cadastros" });
+    }
+  }
+  if (!actions.length) return "";
+  return `<section class="card"><h2>Atalhos rápidos</h2><div class="grid">${actions.map(({id,label,detail})=>`<button type="button" data-section="${id}" class="shortcut-panel"><strong>${esc(label)}</strong><small>${esc(detail)}</small></button>`).join("")}</div></section>`;
+}
 function overviewMatchView(){
  const rows=scopeMatches(state.matches,overviewGameScope).slice().sort((a,b)=>{if(overviewGameScope!=="finished"){const priority=m=>m.status==="Ao vivo"?0:m.status==="Pausada"?1:2;const d=priority(a)-priority(b);if(d)return d;}return overviewGameScope==="finished"?new Date(b.date)-new Date(a.date):new Date(a.date)-new Date(b.date);});
- return `<div class="grid">${[["Equipes",state.teams.length],["Jogadores",state.players.length],["Partidas ao vivo",state.matches.filter(m=>m.status==="Ao vivo").length]].map(([label,n])=>`<div class="card"><span class="muted">${label}</span><div class="kpi">${n}</div></div>`).join("")}</div><section class="card"><h2>Quadra e campo</h2>${matchScopeButtons("overview",overviewGameScope)}<p class="muted">Jogos encerrados ficam em Finalizadas. Esta seleção muda apenas a visualização.</p></section><div class="grid">${rows.slice(0,6).map(m=>matchCard(m,true)).join("")||empty(overviewGameScope==="active"?"Nenhuma partida atual. Consulte Finalizadas ou programe um novo jogo.":"Nenhuma partida nesta seleção.")}</div>${rows.length>6?'<p>Exibindo seis partidas. Abra Jogos → Acompanhar jogos para consultar a lista completa.</p>':""}`;
+ return `${quickActionCards()}<div class="grid">${[["Equipes",state.teams.length],["Jogadores",state.players.length],["Partidas ao vivo",state.matches.filter(m=>m.status==="Ao vivo").length]].map(([label,n])=>`<div class="card"><span class="muted">${label}</span><div class="kpi">${n}</div></div>`).join("")}</div><section class="card"><h2>Quadra e campo</h2>${matchScopeButtons("overview",overviewGameScope)}<p class="muted">Jogos encerrados ficam em Finalizadas. Esta seleção muda apenas a visualização.</p></section><div class="grid">${rows.slice(0,6).map(m=>matchCard(m,true)).join("")||empty(overviewGameScope==="active"?"Nenhuma partida atual. Consulte Finalizadas ou programe um novo jogo.":"Nenhuma partida nesta seleção.")}</div>${rows.length>6?'<p>Exibindo seis partidas. Abra Jogos → Acompanhar jogos para consultar a lista completa.</p>':""}`;
 }
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-match-scope]");if(!b||!admin||!['active','finished','all'].includes(b.dataset.matchScope))return;
