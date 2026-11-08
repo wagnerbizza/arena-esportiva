@@ -521,7 +521,7 @@ a:focus-visible {
 }
 .status.is-finished {
   color: #9be2b8;
-  background: #382419;
+  background: #c81111;
 }
 .live-status-dot {
   display: inline-block;
