@@ -409,6 +409,33 @@ export async function connectSpark({
         action.type === "correct"
           ? F.doc(database, "corrections", action.eventId)
           : null;
+    const explainDeniedEvent = async (error) => {
+      if (action.type !== "event" || error.code !== "permission-denied")
+        return error;
+      try {
+        const snap = await F.getDocFromServer(reference);
+        if (!snap.exists()) return new Error("A partida não existe mais no servidor.");
+        const latest = snap.data();
+        let modelCheck = "válida";
+        try {
+          M.applyMatch(latest, { ...action, publicId: "diagnostic" });
+        } catch (validationError) {
+          modelCheck = validationError.message;
+        }
+        const events = latest.publicEvents;
+        const publicEventsValid = Array.isArray(events) && events.length <= 5 && events.every((event) =>
+          event && ["id","type","side","value","player","playerName","number","correctionOf"].every((key) => Object.hasOwn(event, key)));
+        const expectedTeam = [latest.home, latest.away][action.side];
+        const athleteMatches = !action.player || latest.rosterTeams?.[action.player] === expectedTeam;
+        const status = latest.status || "não informado";
+        const publicCount = Array.isArray(events) ? `${events.length}/5` : "lista inválida";
+        const diagnostic = new Error(`O Firebase recusou o lance; nada foi salvo. Servidor: ${status}, etapa ${latest.stage || "?"}, atleta compatível ${athleteMatches ? "sim" : "não"}, lances públicos ${publicCount} (${publicEventsValid ? "estrutura válida" : "estrutura antiga/inválida"}), validação do lance ${modelCheck}. Atualize a página antes de tentar novamente.`);
+        diagnostic.code = error.code;
+        return diagnostic;
+      } catch {
+        return error;
+      }
+    };
     // O mesmo ID é reutilizado nas tentativas internas da transação; nunca some pontos fora da transação.
     let attemptedRevision = -1;
     const commit = () =>
@@ -515,10 +542,10 @@ export async function connectSpark({
           entity !== "matches" ||
           prepared
         )
-          throw error;
+          throw await explainDeniedEvent(error);
         const latest = await F.getDocFromServer(reference);
         if (!latest.exists() || latest.data()._revision <= attemptedRevision)
-          throw error;
+          throw await explainDeniedEvent(error);
       }
     }
   }
