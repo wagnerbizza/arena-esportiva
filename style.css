@@ -492,10 +492,7 @@ a:focus-visible {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
 }
-:root.reduce-motion .live-status-dot,
-@media (prefers-reduced-motion: reduce) {
-  .live-status-dot { animation: none; }
-}
+:root.reduce-motion .live-status-dot { animation:none; }
 .match-top,
 .match-bottom {
   display: flex;
