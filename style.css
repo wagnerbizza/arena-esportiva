@@ -510,7 +510,7 @@ a:focus-visible {
   border-top: 3px solid #41515c;
 }
 .match-card.is-live {
-  border-top-color: #ff6258;
+  border-top-color: #0f8749;
 }
 .status.live {
   display: inline-flex;
