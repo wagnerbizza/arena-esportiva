@@ -520,7 +520,7 @@ a:focus-visible {
   background: #0f8749;
 }
 .status.is-finished {
-  color: #ea3e3e;
+  color: #f7f1f1;
   background: #c81111;
 }
 .live-status-dot {
