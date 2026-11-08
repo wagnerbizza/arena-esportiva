@@ -516,7 +516,7 @@ a:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: #ffb6af;
+  color: #13ae5e;
   background: #0f8749;
 }
 .status.is-finished {
