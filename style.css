@@ -374,6 +374,51 @@ summary {
 .danger {
   color: #ffaaaa;
 }
+.danger-button {
+  border-color: #9f4b47;
+  background: #482824;
+  color: #ffd2ce;
+}
+.danger-button:hover {
+  border-color: #ff8178;
+  background: #5a2c28;
+}
+.trash-list {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+}
+.trash-record {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,.02);
+}
+.trash-record p { margin: 0; overflow-wrap: anywhere; }
+.trash-record-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.trash-record-heading > div { display: grid; gap: 4px; min-width: 0; }
+.trash-record-heading > div strong { overflow-wrap: anywhere; }
+.trash-state {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #26313b;
+  color: var(--muted);
+  font-size: 12px;
+}
+.trash-state-lixeira { background: #3c3320; color: #f1d58a; }
+.trash-state-restaurada { background: #19382a; color: #9be2b8; }
+.trash-state-purgando { background: #482824; color: #ffd2ce; }
+.trash-state-purgado { background: #26313b; color: #a6b4c1; }
+.trash-record-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 footer {
   padding: 30px 5%;
   color: var(--muted);
