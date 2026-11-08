@@ -461,9 +461,9 @@ a:focus-visible {
 .match-events {
   margin-top: 14px;
   padding: 12px;
-  border: 1px solid #34434e;
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: #091117;
+  background: var(--input);
   font-size: 12px;
 }
 .match-events > strong {
@@ -482,7 +482,7 @@ a:focus-visible {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 2px 8px;
   padding-top: 7px;
-  border-top: 1px solid #26343d;
+  border-top: 1px solid var(--line);
 }
 .match-events li:first-child {
   padding-top: 0;
