@@ -2647,7 +2647,7 @@ function quickActionCards(){
     }
   }
   if (!actions.length) return "";
-  return `<section class="card"><h2>Atalhos rápidos</h2><div class="grid">${actions.map(({id,label,detail})=>`<button type="button" data-section="${id}" class="shortcut-panel"><strong>${esc(label)}</strong><small>${esc(detail)}</small></button>`).join("")}</div></section>`;
+  return `<section class="card"><h2>Atalhos rápidos</h2><p class="muted">Ações mais usadas por ${role === "admin" ? "o administrador" : "o operador"}. Todos os acessos seguem as permissões atribuídas.</p><div class="grid">${actions.map(({id,label,detail})=>`<button type="button" data-section="${id}" class="shortcut-panel"><strong>${esc(label)}</strong><small>${esc(detail)}</small></button>`).join("")}</div></section>`;
 }
 function overviewMatchView(){
  const rows=scopeMatches(state.matches,overviewGameScope).slice().sort((a,b)=>{if(overviewGameScope!=="finished"){const priority=m=>m.status==="Ao vivo"?0:m.status==="Pausada"?1:2;const d=priority(a)-priority(b);if(d)return d;}return overviewGameScope==="finished"?new Date(b.date)-new Date(a.date):new Date(a.date)-new Date(b.date);});

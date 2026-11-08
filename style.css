@@ -49,6 +49,33 @@ button:disabled {
   opacity: 0.5;
   cursor: wait;
 }
+.shortcut-panel {
+  background: linear-gradient(180deg, rgba(37, 52, 63, 0.95), rgba(24, 32, 39, 0.95));
+  border: 1px solid rgba(87, 213, 255, 0.5);
+  padding: 18px 16px;
+  min-height: 128px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.shortcut-panel:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(125, 214, 255, 0.2);
+}
+.shortcut-panel strong {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: #f3f8fb;
+}
+.shortcut-panel small {
+  color: var(--muted);
+  font-size: 12px;
+}
 a {
   color: var(--accent);
 }
