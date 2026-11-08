@@ -287,7 +287,33 @@
         e.to = m.stage;
       } else throw Error("Ação desconhecida.");
     }
+    appendPublicEvent(m, e, a.publicId || String(Number(current._revision || 0) + 1));
     return { match: m, detail: e };
+  }
+  function appendPublicEvent(m, e, id) {
+    if (
+      ![
+        "ponto",
+        "cartão amarelo",
+        "cartão vermelho",
+        "falta",
+        "substituição",
+        "tempo",
+      ].includes(e.type)
+    )
+      return;
+    const athlete = (m.roster || []).find((p) => p.id === e.player);
+    const event = {
+      id,
+      type: e.type,
+      side: e.side,
+      value: e.value,
+      player: e.player,
+      playerName: athlete?.name || "",
+      number: athlete?.number || "",
+      correctionOf: e.correctionOf || "",
+    };
+    m.publicEvents = [...(m.publicEvents || []), event].slice(-5);
   }
   function publicTeam(t) {
     const { id, name, short, badge, category, _revision, _updatedAt } = t;
@@ -310,6 +336,7 @@
       status,
       sets,
       score,
+      publicEvents: m.publicEvents || [],
       _revision,
       _updatedAt,
     } = m;

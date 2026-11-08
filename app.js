@@ -381,11 +381,16 @@ function eventDescription(e) {
 }
 
 function matchEventSummary(m) {
-  if (!admin || !Array.isArray(m.events) || !m.events.length) return "";
+  const events = Array.isArray(m.publicEvents)
+    ? m.publicEvents
+    : admin && Array.isArray(m.events)
+      ? m.events
+      : [];
+  if (!events.length) return "";
   const corrected = new Set(
-    m.events.filter((e) => e.correctionOf).map((e) => e.correctionOf),
+    events.filter((e) => e.correctionOf).map((e) => e.correctionOf),
   );
-  const relevant = m.events.filter(
+  const relevant = events.filter(
     (e) =>
       (e.type === "ponto" && e.value > 0 && !corrected.has(e.id)) ||
       [
@@ -401,10 +406,12 @@ function matchEventSummary(m) {
   const shown = relevant.slice(-5).reverse();
   const rows = shown
     .map((e) => {
-      const athlete = m.roster.find((p) => p.id === e.player);
+      const athlete = (m.roster || []).find((p) => p.id === e.player);
       const playerName = athlete
         ? `${athlete.number ? athlete.number + " • " : ""}${athlete.name}`
-        : "Atleta não informado";
+        : e.playerName
+          ? `${e.number ? e.number + " • " : ""}${e.playerName}`
+          : "Atleta não informado";
       const teamName = [0, 1].includes(e.side)
         ? name([m.home, m.away][e.side])
         : "";
@@ -519,10 +526,11 @@ async function dispatch(a) {
                 detail: old.events.find((e) => e.id === a.eventId),
               }
             : null;
-        const r = M.applyMatch(current, { ...a, championship: a.championshipId ? (latest.championships || []).find((c) => c.id === a.championshipId) : null }, original),
+        const publicId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+        const r = M.applyMatch(current, { ...a, publicId, championship: a.championshipId ? (latest.championships || []).find((c) => c.id === a.championshipId) : null }, original),
           event = {
             ...r.detail,
-            id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+            id: publicId,
             actor: "demo",
             at: new Date().toISOString(),
             gameMs: M.elapsed(r.match),

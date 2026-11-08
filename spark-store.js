@@ -394,7 +394,7 @@ export async function connectSpark({
           if (!before) throw Error("Partida não encontrada.");
           const result = M.applyMatch(
             before,
-            { ...action, championship },
+            { ...action, publicId: actionId, championship },
             original,
             F.serverTimestamp(),
           );
