@@ -2468,7 +2468,29 @@ function workspaceNavigation(sections){
  const visible=workspaceDefinitions.filter(g=>allowedWorkspaceSections(g).length);
  const group=visible.find(g=>g.sections.includes(section))||visible[0];
  const labels=Object.fromEntries(sections);
- const homeActions=`<nav class="workspace-home-actions noprint" aria-label="Ações rápidas de navegação"><button type="button" data-section="overview" class="${section === "overview" ? "primary" : ""}">Home</button>${group ? allowedWorkspaceSections(group).slice(0, 3).filter((id) => id !== "overview").map((id) => `<button type="button" data-section="${id}" class="${section === id ? "primary" : ""}">${esc(labels[id] || id)}</button>`).join("") : ""}</nav>`;
+ const related = {
+  overview: ["matches", "createMatch", "reports"],
+  matches: ["createMatch", "standings", "matchSheets"],
+  createMatch: ["matches", "teams", "championships"],
+  standings: ["matches", "championships", "reports"],
+  teams: ["players", "matches", "imports"],
+  players: ["teams", "imports", "matches"],
+  championships: ["standings", "matches", "createMatch"],
+  imports: ["teams", "players"],
+  matchSheets: ["matches", "reports", "documentation"],
+  reports: ["matchSheets", "auditReports", "documentation"],
+  auditReports: ["reports", "documentation"],
+  certificates: ["documentation", "reports"],
+  cleanup: ["auditReports", "matches"],
+  monitor: ["users", "matches"],
+  users: ["monitor", "matches"],
+  documentation: ["matches", "matchSheets", "reports"],
+ };
+ const allowed = new Set(visible.flatMap(allowedWorkspaceSections));
+ const shortcuts = ["overview", ...(related[section] || ["matches", "documentation"])]
+  .filter(id => allowed.has(id) && (id === "overview" || id !== section))
+  .slice(0, 4);
+ const homeActions = `<nav class="workspace-home-actions noprint" aria-label="Atalhos desta tela">${shortcuts.map(id => `<button type="button" data-section="${id}" ${id === section ? 'class="primary" aria-current="page"' : ""}>${id === "overview" ? "Home" : esc(labels[id] || id)}</button>`).join("")}</nav>`;
  return `${homeActions}<section class="navigation-finder noprint" aria-label="Encontrar função"><label for="functionSearch">O que você quer fazer?</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: gol, jogador, PDF, logo, permissões…" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><p class="muted">Digite para encontrar uma função ou expanda uma área pela seta abaixo.</p><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section><nav class="workspace-tabs workspace-disclosures noprint" style="--workspace-count:${visible.length}" aria-label="Áreas da central">${visible.map(g=>`<details name="arena-navigation" data-navigation-group="${g.id}" ${expandedNavigation.has(g.id)?"open":""} class="${group?.id===g.id&&section!=="account"?"current-area":""}"><summary><span><strong>${g.title}</strong><small>${g.intro}</small></span><span class="navigation-disclosure-action" aria-hidden="true"><span class="navigation-closed-label">Ver opções</span><span class="navigation-open-label">Fechar</span><svg class="navigation-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8 5 7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></summary><div class="navigation-options">${allowedWorkspaceSections(g).map(id=>`<button type="button" data-section="${id}" ${id===section?'aria-current="page"':""}><strong>${esc(labels[id]||id)}</strong><small>${esc(navigationDescriptions[id]?.description||"")}</small></button>`).join("")}</div></details>`).join("")}</nav>${section!=="account"?`<nav class="workspace-subtabs noprint" aria-label="Seções de ${esc(group.title)}">${allowedWorkspaceSections(group).map(id=>sections.find(s=>s[0]===id)).filter(Boolean).map(([id,label])=>`<button type="button" data-section="${id}" class="${section===id?"active":""}" ${section===id?'aria-current="page"':""}>${label}</button>`).join("")}</nav>`:""}`;
 }
 function documentationView(){

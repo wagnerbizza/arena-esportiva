@@ -141,6 +141,17 @@ button:disabled {
   gap: 10px;
   margin: 0 0 18px;
 }
+.workspace-home-actions button {
+  min-height: 44px;
+  max-width: 100%;
+  padding: .45rem .85rem;
+  overflow-wrap: anywhere;
+}
+.workspace-home-actions button:first-child { border-color: var(--accent); }
+.workspace-home-actions button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+@media (max-width: 480px) {
+  .workspace-home-actions button { flex: 1 1 8rem; }
+}
 a {
   color: var(--accent);
 }
