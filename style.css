@@ -1651,3 +1651,17 @@ body:not([data-admin="true"]) .accessibility-bar {margin:0;padding:0;min-height:
  body:not([data-admin="true"]) .public-header-actions {justify-content:flex-start;}
  body:not([data-admin="true"]) header .public-tools-options {left:0;right:auto;max-width:calc(100vw - 40px);}
 }
+/* Mantém Minha conta visível durante a rolagem da página. */
+.account-popover {
+  position: fixed;
+  inset: clamp(12px, 10dvh, 80px) max(16px, 5vw) auto auto;
+  width: min(380px, calc(100vw - 32px));
+  max-height: calc(100dvh - clamp(12px, 10dvh, 80px) - 16px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+@media (max-width: 700px) {
+  .account-popover { right: 16px; }
+}
