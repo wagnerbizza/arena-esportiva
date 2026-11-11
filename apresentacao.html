@@ -57,12 +57,33 @@
     #demo-preferences select { width: 100%; }
     #demo-preferences .demo-check { display: flex; align-items: center; gap: 8px; }
     #demo-preferences input[type="checkbox"] { width: auto; }
-    html[data-demo-contrast="true"] { --bg: #000; --panel: #141414; --text: #fff; --muted: #fff; --line: #aaa; }
-    html[data-theme="light"][data-demo-contrast="true"] { --bg: #fff; --panel: #fff; --text: #000; --muted: #111; --line: #333; }
+    :root[data-demo-contrast="true"] { --control: #202020; --input: #080808; --focus: #fff; --bg: #000; --panel: #141414; --text: #fff; --muted: #fff; --line: #aaa; }
+    :root[data-theme="light"][data-demo-contrast="true"] { --control: #eee; --input: #fff; --focus: #000; --bg: #fff; --panel: #fff; --text: #000; --muted: #111; --line: #333; }
     html[data-demo-motion="true"], html[data-demo-motion="true"] * { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+    :root[data-demo-contrast="true"] :is(.demo-card, .demo-links .button, button, select) {
+      border: 1px solid var(--line);
+    }
+    :root[data-demo-contrast="true"] :is(button:not(.demo-primary), .demo-links .button, select) {
+      color: var(--text);
+      background: var(--control);
+    }
+    :root[data-demo-contrast="true"] .demo-primary { background: var(--text); color: var(--bg); }
+    :root[data-demo-contrast="true"] :is(a, .demo-label, .demo-main h1 span, .demo-brand b) { color: var(--text); }
+    :root[data-demo-contrast="true"] :is(a, button, select, input):focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
+    }
+    :root[data-demo-contrast="true"] #demo-preferences::backdrop { background: #0006; }
+    body { font-size: 1rem; }
+    .demo-main h1 { font-size: clamp(1.75rem, calc(4vw * var(--demo-scale, 1)), 3rem); }
+    .demo-score { font-size: clamp(1.75rem, calc(5vw * var(--demo-scale, 1)), 2.625rem); }
+    #demo-preferences :is(label, select, button) { font-size: 1rem; }
+    @media (prefers-reduced-motion: reduce) {
+      html, html * { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+    }
   </style>
   <script src="config.js"></script>
-  <script src="apresentacao-arena.js" defer></script>
+  <script src="apresentacao-arena.js?v=2" defer></script>
 </head>
 <body>
   <header class="demo-header" id="inicio">

@@ -55,6 +55,7 @@ function applyReadingPreferences() {
   root.dataset.demoContrast = String(fields.contrast.checked);
   root.dataset.demoMotion = String(fields.motion.checked);
   root.style.fontSize = Number(fields.scale.value) * 100 + '%';
+  root.style.setProperty('--demo-scale', fields.scale.value);
   const custom = paletteColors[fields.palette.value]?.[fields.theme.value === 'light' ? 1 : 0];
   if (custom || systemAccent) root.style.setProperty('--accent', custom || systemAccent);
   else root.style.removeProperty('--accent');
