@@ -21,6 +21,8 @@ $RepositorioEsperado = "https://github.com/wagnerbizza/arena-esportiva.git"
 $ArquivosPermitidos = @(
     "index.html"
     "painel.html"
+    "apresentacao.html"
+    "apresentacao-arena.js"
     "app.js"
     "style.css"
     "config.js"
