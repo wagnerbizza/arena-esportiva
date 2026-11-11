@@ -1720,3 +1720,32 @@ header #systemBrand .system-logo {
   header > .header-actions { flex-basis: 100%; justify-content: flex-start; }
 }
 
+/* Arena: faixa da conta e menu em janelas estreitas. */
+@media (max-width: 980px) {
+  body[data-admin="true"] > header {
+    flex-wrap: wrap;
+  }
+
+  body[data-admin="true"] > header > .header-actions {
+    flex: 0 1 100%;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  body[data-admin="true"] #sessionIdentity {
+    flex: 0 0 100%;
+    box-sizing: border-box;
+    min-width: 0;
+    justify-content: space-between;
+  }
+
+  body[data-admin="true"] #accountPopover {
+    position: absolute;
+    inset: calc(100% + 8px) 0 auto auto;
+    width: min(380px, calc(90vw - 32px));
+    box-sizing: border-box;
+    max-height: min(60dvh, 600px);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+}
