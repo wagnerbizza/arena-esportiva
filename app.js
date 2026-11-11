@@ -175,7 +175,7 @@ const canManageRosters = () => role === "admin" || (role === "operator" && opera
 const canCreateMatches = () => role === "admin" || (role === "operator" && operatorPermissions.includes("matchesCreate"));
 const canManageChampionships = () => role === "admin" || (role === "operator" && operatorPermissions.includes("championships"));
 const canViewAllGames = () => role === "admin" || (role === "operator" && operatorPermissions.includes("gamesView"));
-const accountRole = () => C.demo ? "Demonstração local" : role === "admin" ? "Administrador principal" : role === "operator" ? "Operador" : "Aguardando autorização";
+const accountRole = () => C.demo ? "Demonstração local" : role === "admin" ? (user?.uid === cloud?.mainUID ? "Administrador principal" : "Administrador") : role === "operator" ? "Operador" : "Aguardando autorização";
 const accountName = () => user?.displayName || (state.users || []).find((p) => p.id === user?.uid)?.name || user?.email?.split("@")[0] || "Conta conectada";
 // Títulos por contexto, sem alterar a identidade personalizada salva.
 function systemDisplayName(){
@@ -1296,7 +1296,7 @@ let accessAuditExpanded = false;
 function usersView() {
   if (C.demo) return `<div class="card"><h2>Usuários e permissões</h2><p>Esta função utiliza as contas reais do Firebase e não está disponível na demonstração local.</p></div>`;
   const owner = cloud?.mainUID;
-  const users = (state.users || []).filter((u) => u.id !== owner).slice().sort((a,b) =>
+  const users = (state.users || []).filter((u) => u.id !== owner && !cloud?.isAdministratorUID?.(u.id)).slice().sort((a,b) =>
     Number(b.role === "pending") - Number(a.role === "pending") || (a.name || a.email || a.id).localeCompare(b.name || b.email || b.id));
   const label = (u) => u.role === "pending" ? "Aguardando aprovação" : u.role === "operator" ? u.enabled === false ? "Bloqueado" : "Operador aprovado" : "Perfil antigo — revisar";
   const link = new URL("painel.html", location.href);
@@ -1326,7 +1326,7 @@ function usersView() {
     return `<details class="event" ${accessAuditExpanded?"open":""}><summary>${esc(accessAuditDate(a.at))} • ${esc(a.action||"Alteração")} • ${esc(after.name||before.name||a.target||"Usuário")}</summary><p>${esc(after.email||before.email||"E-mail não informado")}<br>Motivo: ${esc(a.reason||"Não informado")}<br>UID: ${esc(a.target||"—")}</p>${details}</details>`;
   }).join("")||empty("Nenhuma alteração de permissão registrada.");
   const accessLabel = (u) => u.enabled !== false && u.role === "operator" && (u.permissions||[]).includes("gamesView") ? "Sim" : "Não";
-  return `<section class="card"><h2>Usuários e permissões</h2><p><strong>Administrador principal: ${esc(user?.email || "Wagner")}</strong><br>Sua conta é protegida. Esta tela não permite alterar, bloquear ou remover sua autoridade.</p><label>Link para solicitar acesso<input readonly value="${esc(link.href)}"></label><p><button type="button" data-access-copy>Copiar link de cadastro</button></p><p class="muted">Envie esse link ao novo operador. Para testar outra conta neste computador, use uma janela anônima.</p></section><section class="card"><h3>Solicitações e operadores</h3>${table(["Pessoa", "Situação", "Partidas para operar", "Cadastros esportivos", "Acompanha jogos", "Ação"], users.map((u) => `<tr><td>${esc(u.name || "Operador cadastrado")}<br><small>${esc(u.email || u.id)}</small></td><td>${esc(label(u))}</td><td>${(u.matches || []).length}</td><td>${esc(registrationPermissions(u.permissions||[]))}</td><td>${accessLabel(u)}</td><td><button type="button" data-access-edit="${esc(u.id)}">Revisar permissões</button></td></tr>`))}${users.length ? "" : empty("Nenhuma solicitação recebida ainda.")}</section>${editor}<section id="accessAuditReport" class="card"><h3>Últimos 50 registros de permissões</h3><p class="muted">Abra um registro para ver seus detalhes, ou expanda todos para revisar e imprimir o histórico completo.</p><div class="toolbar noprint"><button type="button" data-access-audit-expand>Expandir todos</button><button type="button" data-access-audit-collapse>Recolher todos</button><button type="button" data-access-audit-print>Imprimir / salvar em PDF</button><button type="button" data-access-audit-json>Baixar registros (JSON)</button><button type="button" data-access-audit-excel>Baixar registros (Excel)</button></div><p class="muted">${accessAuditRows.length} de até 50 registros mais recentes.</p>${accessAuditReport}</section>`;
+  return `<section class="card"><h2>Usuários e permissões</h2><p><strong>${esc(accountRole())}: ${esc(user?.email || "Wagner")}</strong><br>Sua conta é protegida. Esta tela não permite alterar, bloquear ou remover sua autoridade.</p><label>Link para solicitar acesso<input readonly value="${esc(link.href)}"></label><p><button type="button" data-access-copy>Copiar link de cadastro</button></p><p class="muted">Envie esse link ao novo operador. Para testar outra conta neste computador, use uma janela anônima.</p></section><section class="card"><h3>Solicitações e operadores</h3>${table(["Pessoa", "Situação", "Partidas para operar", "Cadastros esportivos", "Acompanha jogos", "Ação"], users.map((u) => `<tr><td>${esc(u.name || "Operador cadastrado")}<br><small>${esc(u.email || u.id)}</small></td><td>${esc(label(u))}</td><td>${(u.matches || []).length}</td><td>${esc(registrationPermissions(u.permissions||[]))}</td><td>${accessLabel(u)}</td><td><button type="button" data-access-edit="${esc(u.id)}">Revisar permissões</button></td></tr>`))}${users.length ? "" : empty("Nenhuma solicitação recebida ainda.")}</section>${editor}<section id="accessAuditReport" class="card"><h3>Últimos 50 registros de permissões</h3><p class="muted">Abra um registro para ver seus detalhes, ou expanda todos para revisar e imprimir o histórico completo.</p><div class="toolbar noprint"><button type="button" data-access-audit-expand>Expandir todos</button><button type="button" data-access-audit-collapse>Recolher todos</button><button type="button" data-access-audit-print>Imprimir / salvar em PDF</button><button type="button" data-access-audit-json>Baixar registros (JSON)</button><button type="button" data-access-audit-excel>Baixar registros (Excel)</button></div><p class="muted">${accessAuditRows.length} de até 50 registros mais recentes.</p>${accessAuditReport}</section>`;
 }
 // EVENTOS DE INTERFACE — um único ponto de entrada para cada ação.
 document.addEventListener("submit", async (e) => {
@@ -2456,7 +2456,7 @@ function documentationView(){
 }
 function operatorMonitor(){
  if(role!=="admin")return "";
- const people=(state.users||[]).filter(u=>u.id!==(cloud?.mainUID||user?.uid));
+ const people=(state.users||[]).filter(u=>u.id!==(cloud?.mainUID||user?.uid) && !cloud?.isAdministratorUID?.(u.id));
  const operators=people.filter(u=>u.role==="operator"&&u.enabled!==false),pending=people.filter(u=>u.role==="pending");
  const assigned=new Set(operators.flatMap(u=>u.matches||[]));
  const operational=state.matches.filter(m=>!["Encerrada","Homologada","Cancelada"].includes(m.status));

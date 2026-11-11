@@ -11,7 +11,8 @@ export async function connectSpark({
 }) {
   // A mesma identidade está protegida nas regras do Firestore.
   const OWNER_UID = "mwYVHBGiEJSYfKimTiBUMzcWHhn1";
-  const isOwner = () => session?.uid === OWNER_UID;
+  const administratorUIDs = new Set([OWNER_UID, "WLMZmXFVXFS8lJUG1KSN2sfEtq13"]);
+  const isOwner = () => administratorUIDs.has(session?.uid);
   const authorized = () => isOwner() || (profile?.role === "operator" && profile.enabled !== false && session?.emailVerified === true);
   // Permissão parcial de cadastro: não dá acesso à administração.
   const canManageRosters = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("rosters"));
@@ -620,7 +621,7 @@ export async function connectSpark({
   const mainUID = OWNER_UID;
   async function requestAccess(name) {
     const u = authentication.currentUser;
-    if (!u || u.uid === OWNER_UID) throw Error("Use uma conta de operador para solicitar acesso.");
+    if (!u || administratorUIDs.has(u.uid)) throw Error("Use uma conta de operador para solicitar acesso.");
     name = String(name || u.displayName || "").trim();
     if (!name || name.length > 100) throw Error("Informe seu nome, com até 100 caracteres.");
     const ref = F.doc(database, "users", u.uid);
@@ -687,7 +688,7 @@ export async function connectSpark({
       await auth.reload(u);
       await auth.getIdToken(u, true);
       // O login não cria permissões. O cadastro cria apenas solicitação pendente auditada.
-      if (registerIntent && u.uid !== OWNER_UID) {
+      if (registerIntent && !administratorUIDs.has(u.uid)) {
         if (!u.email) throw Error("O Google não informou um e-mail. Conclua a solicitação com outra forma de entrada.");
         await requestAccess(String(u.displayName || u.email.split("@")[0]).trim().slice(0,100));
       }
@@ -716,7 +717,7 @@ export async function connectSpark({
   }
   async function manageUser({ userId, access, matches, reason, permissions }) {
     if (!isOwner()) throw Error("Somente o administrador principal gerencia usuários.");
-    if (userId === OWNER_UID) throw Error("A conta principal está protegida e não pode ser alterada.");
+    if (administratorUIDs.has(userId)) throw Error("A conta administrativa está protegida e não pode ser alterada.");
     if (!["active", "blocked", "pending"].includes(access)) throw Error("Situação de acesso inválida.");
     reason = String(reason || "").trim();
     if (!reason || reason.length > 500) throw Error("Informe o motivo, com até 500 caracteres.");
@@ -754,7 +755,7 @@ export async function connectSpark({
     onSession(u, "", {status: "loading"});
     onData(state);
     if (!u) { onConnection("FIREBASE SPARK • pronto para entrar"); return; }
-    if (u.uid === OWNER_UID) {
+    if (administratorUIDs.has(u.uid)) {
       // O titular não depende de um campo editável no documento users.
       onSession(u, "admin", {status: "owner"});
       listen(true);
@@ -800,6 +801,7 @@ export async function connectSpark({
     F,
     send,
     mainUID,
+    isAdministratorUID: uid => administratorUIDs.has(uid),
     register,
     requestAccess,
     resendVerification,
