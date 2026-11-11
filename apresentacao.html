@@ -26,18 +26,42 @@
     @media (max-width: 760px) {
       .demo-hero, .demo-grid { grid-template-columns: minmax(0, 1fr); }
     }
+    .demo-brand { display: flex; align-items: center; gap: 10px; }
+    .demo-brand .system-logo:has(img[hidden]) { display: none; }
+    .demo-navigation { justify-content: flex-end; padding: 12px 5%; }
+    .demo-navigation > a { color: var(--muted); text-decoration: none; }
+    .demo-primary { background: var(--accent); color: #07161b; font-weight: 700; }
+    .demo-hero { padding-block: clamp(16px, 7vw, 90px); grid-template-columns: 1.2fr 1fr; }
+    .demo-main h1 { font: 700 clamp(28px, 4vw, 48px)/1.15 Inter, Arial, sans-serif; }
+    .demo-dialog { width: min(480px, calc(100% - 32px)); color: var(--text); }
+    .demo-dialog::backdrop { background: #000a; }
+    .demo-dialog form { margin-top: 16px; }
+    @media (max-width: 980px) { .demo-header > .demo-links { flex-basis: 100%; } }
+    @media (max-width: 680px) {
+      .demo-hero { grid-template-columns: minmax(0, 1fr); }
+      .demo-navigation { justify-content: flex-start; }
+    }
   </style>
+  <script src="config.js"></script>
   <script src="apresentacao-arena.js" defer></script>
 </head>
 <body>
   <header class="demo-header" id="inicio">
-    <a class="brand" href="apresentacao.html"><b>Arena • Central Esporte</b></a>
-    <nav class="demo-links" aria-label="Navegação da apresentação">
-      <a href="#recursos">Recursos</a>
-      <a href="#demonstracao">Demonstração</a>
-      <a class="button" href="painel.html">Área da organização ↗</a>
-    </nav>
+    <a class="brand demo-brand" href="#inicio">
+      <span class="system-logo"><img id="demo-logo" alt="" hidden></span>
+      <span class="brand-copy"><b id="demo-brand-name">Arena • Central Esporte</b><small>CENTRAL ESPORTIVA</small></span>
+    </a>
+    <div class="demo-links">
+      <button type="button" class="preferences-entry" data-demo-preferences><span aria-hidden="true">♿</span> Preferências de leitura</button>
+      <a class="button" href="painel.html">Área da organização →</a>
+    </div>
   </header>
+  <nav class="demo-links demo-navigation" aria-label="Navegação da apresentação">
+    <a href="#recursos">Recursos</a>
+    <a href="#como-funciona">Como funciona</a>
+    <a href="#demonstracao">Demonstrações</a>
+    <button type="button" class="demo-primary" data-demo-access>Acessar sistema</button>
+  </nav>
   <main class="demo-main">
     <section class="demo-hero" aria-labelledby="titulo">
       <div>
@@ -45,8 +69,8 @@
         <h1 id="titulo">Acompanhe cada <span>partida.</span></h1>
         <p>Consulte a agenda, acompanhe placares e veja os resultados da temporada. A organização pode cadastrar equipes, programar jogos e registrar o que acontece em quadra ou em campo.</p>
         <div class="demo-links">
-          <a class="button" href="index.html">Abrir painel público ↗</a>
-          <a href="#como-funciona">Como funciona ↓</a>
+          <button type="button" class="demo-primary" data-demo-access>Acessar sistema →</button>
+          <a class="button" href="#recursos">Conhecer recursos</a>
         </div>
       </div>
       <article class="demo-card" id="demonstracao" aria-labelledby="demo-titulo">
@@ -81,5 +105,20 @@
     </section>
   </main>
   <footer class="demo-footer"><a href="#inicio">Voltar ao início ↑</a></footer>
+  <button type="button" class="accessibility-float" data-demo-preferences aria-label="Preferências de leitura">♿</button>
+  <dialog class="demo-dialog demo-card" id="demo-access">
+    <h2>Como deseja acessar?</h2>
+    <div class="demo-links">
+      <a class="button" href="index.html">Painel público →</a>
+      <a class="button" href="painel.html">Área da organização →</a>
+    </div>
+    <form method="dialog"><button>Fechar</button></form>
+  </dialog>
+  <dialog class="demo-dialog demo-card" id="demo-preferences">
+    <h2>Preferências de leitura</h2>
+    <label for="demo-theme">Tema</label>
+    <select id="demo-theme"><option value="dark">Escuro</option><option value="light">Claro</option></select>
+    <form method="dialog"><button>Fechar</button></form>
+  </dialog>
 </body>
 </html>
