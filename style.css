@@ -1813,3 +1813,26 @@ body[data-admin="true"] .access-card:has(#login) {
   padding: 6px 10px !important;
   border-radius: 8px;
 }
+
+/* Minha conta: cartões no padrão do Arena. */
+#qi-conta .qi-account-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin: 16px 0;
+}
+#qi-conta .qi-account-fields > div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--qi-line);
+  border-radius: 10px;
+}
+#qi-conta .qi-account-fields dt {
+  font-size: 12px;
+  color: var(--qi-muted);
+  margin-bottom: 8px;
+}
+#qi-conta .qi-account-fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
