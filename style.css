@@ -1836,3 +1836,39 @@ body[data-admin="true"] .access-card:has(#login) {
   margin: 0;
   overflow-wrap: anywhere;
 }
+
+/* Indicadores do placar no painel público. */
+body:not([data-admin="true"]) .match-card .status.live {
+  background: #14663c;
+  color: #fff;
+}
+
+body:not([data-admin="true"]) .match-card .live-status-dot {
+  background: #63ffa2;
+  box-shadow: 0 0 0 3px #63ffa22e;
+  animation: arena-public-live-pulse 1.6s ease-in-out infinite;
+}
+
+body:not([data-admin="true"]) .match-card .status.is-finished {
+  background: #a31624;
+  color: #fff;
+}
+
+body:not([data-admin="true"]) .public-event-icon {
+  display: inline-block;
+  line-height: 1;
+  vertical-align: baseline;
+}
+
+@keyframes arena-public-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .4; }
+}
+
+:root.reduce-motion body:not([data-admin="true"]) .match-card .live-status-dot {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body:not([data-admin="true"]) .match-card .live-status-dot { animation: none; }
+}
