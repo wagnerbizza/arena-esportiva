@@ -77,7 +77,24 @@
     body { font-size: 1rem; }
     .demo-main h1 { font-size: clamp(1.75rem, calc(4vw * var(--demo-scale, 1)), 3rem); }
     .demo-score { font-size: clamp(1.75rem, calc(5vw * var(--demo-scale, 1)), 2.625rem); }
-    #demo-preferences :is(label, select, button) { font-size: 1rem; }
+    #demo-preferences { box-sizing: border-box; padding: clamp(16px, 3vw, 25px); }
+    #demo-preferences label { color: var(--muted); font-size: .8rem; }
+    #demo-preferences select { font-size: .875rem; min-height: 42px; }
+    #demo-preferences .demo-check { min-height: 28px; }
+    #demo-preferences .demo-check input {
+      width: .8125rem;
+      height: .8125rem;
+      min-height: 0;
+      padding: 0;
+      margin: 0 4px;
+      flex: 0 0 auto;
+    }
+    #demo-preferences .demo-preferences-heading button {
+      font-size: .875rem;
+      min-height: 40px;
+      min-width: 38px;
+      padding: 6px 10px;
+    }
     @media (prefers-reduced-motion: reduce) {
       html, html * { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
     }
