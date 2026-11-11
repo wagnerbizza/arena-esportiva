@@ -1749,3 +1749,30 @@ header #systemBrand .system-logo {
     overscroll-behavior-y: contain;
   }
 }
+/* Aproxima a tela de entrada do Arena à do Quiz. */
+body[data-admin="true"]:has(.access-card) #systemBrand .system-logo img {
+  width: 40px;
+  height: 40px;
+}
+
+body[data-admin="true"] .access-card:has(#login) {
+  border-top: 1px solid var(--line);
+  padding: clamp(20px, 4vw, 32px);
+}
+
+.access-card:has(#login) .google-button {
+  min-height: 40px;
+  padding: 8px 14px;
+  gap: 8px;
+  font: 700 .875rem Inter, Arial, sans-serif;
+}
+
+.access-card:has(#login) .google-symbol {
+  width: 18px;
+  height: 18px;
+}
+
+body[data-admin="true"]:has(.access-card #login) .accessibility-bar {
+  padding-block: 4px;
+  margin-block: 6px;
+}
