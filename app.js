@@ -175,6 +175,11 @@ const canManageRosters = () => role === "admin" || (role === "operator" && opera
 const canCreateMatches = () => role === "admin" || (role === "operator" && operatorPermissions.includes("matchesCreate"));
 const canManageChampionships = () => role === "admin" || (role === "operator" && operatorPermissions.includes("championships"));
 const canViewAllGames = () => role === "admin" || (role === "operator" && operatorPermissions.includes("gamesView"));
+async function sairParaApresentacao() {
+  if (!cloud || !window.confirm("Deseja sair da sua conta no Arena?")) return;
+  await cloud.auth.signOut(cloud.authentication);
+  window.location.replace("apresentacao.html");
+}
 const accountRole = () => C.demo ? "Demonstração local" : role === "admin" ? "Administrador" : role === "operator" ? "Operador" : "Aguardando autorização";
 const accountLabels = {
   mwYVHBGiEJSYfKimTiBUMzcWHhn1: { name: "Wagner Bizza", email: "wagnerbizza@gmail.com" },
@@ -1472,10 +1477,7 @@ document.addEventListener("click", async (e) => {
       await accessAction(async () => { await cloud.recoverPassword(user.email); toast("Enviamos as instruções de redefinição de senha para " + user.email + ". Confira também o spam."); }); return;
     }
     if (b.hasAttribute("data-account-exit")) {
-      if (cloud) {
-        await cloud.auth.signOut(cloud.authentication);
-        window.location.replace("apresentacao.html");
-      }
+      await sairParaApresentacao();
       return;
     }
     if (b.hasAttribute("data-remove-system-logo")) {
@@ -1519,8 +1521,8 @@ document.addEventListener("click", async (e) => {
       return;
     }
     if (b.hasAttribute("data-access-exit")) {
-      await cloud.auth.signOut(cloud.authentication);
-      authMode = "login"; render(); return;
+      await sairParaApresentacao();
+      return;
     }
     if (b.dataset.accessEdit) { managedUserId = b.dataset.accessEdit; render(); return; }
     if (b.hasAttribute("data-access-cancel")) { managedUserId = ""; render(); return; }
@@ -1849,7 +1851,7 @@ document.addEventListener("click", async (e) => {
       XLSX.writeFile(wb, "auditoria-esportiva.xlsx");
     } else if (b.hasAttribute("data-backup"))
       download("arena-copia.json", JSON.stringify(state, null, 2));
-    else if (b.id === "logout") await cloud.auth.signOut(cloud.authentication);
+    else if (b.id === "logout") await sairParaApresentacao();
   } catch (e) {
     toast(e.message, true);
   }
