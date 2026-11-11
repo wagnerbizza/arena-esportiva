@@ -426,12 +426,17 @@ function matchEventSummary(m) {
         ? name([m.home, m.away][e.side])
         : "";
       const label = eventLabel(e, m);
-      const icon = !admin && (e.type === "cartão amarelo" ? "🟨"
-        : e.type === "cartão vermelho" ? "🟥"
-        : e.type === "ponto" && (m.sport === "Futebol" || m.sport === "Futsal") ? "⚽" : "");
-      const eventMarkup = icon
-        ? `<span class="public-event-icon" role="img" aria-label="${esc(label)}" title="${esc(label)}">${icon}</span>`
-        : esc(label);
+      let icon = "";
+      if (!admin) {
+        const cardColor = e.type === "cartão amarelo" ? "#ffd43b"
+          : e.type === "cartão vermelho" ? "#ff5263" : "";
+        if (cardColor) {
+          icon = `<svg width="12" height="17" viewBox="0 0 12 17" aria-hidden="true" focusable="false" style="vertical-align:-.2em"><rect x="1" y="1" width="10" height="15" rx="1.5" fill="${cardColor}" stroke="#111" /></svg>`;
+        } else if (e.type === "ponto" && (m.sport === "Futebol" || m.sport === "Futsal")) {
+          icon = '<span aria-hidden="true">⚽</span>';
+        }
+      }
+      const eventMarkup = (icon ? icon + " " : "") + esc(label);
       return `<li><span>${eventMarkup}${teamName ? " • " + esc(teamName) : ""}</span><strong>${esc(playerName)}</strong>${e.text ? `<small>${esc(e.text)}</small>` : ""}</li>`;
     })
     .join("");
