@@ -15,6 +15,11 @@ function changeExample(direction) {
   stage.textContent = (current + 1) + ' de ' + examples.length + ' · ' + title;
   value.textContent = score;
   detail.textContent = description;
+  if (document.documentElement.dataset.demoMotion !== 'true' &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    for (const animation of value.parentElement.getAnimations()) animation.cancel();
+    value.parentElement.animate([{opacity: 0.55}, {opacity: 1}], {duration: 220, easing: 'ease-out'});
+  }
 }
 
 document.getElementById('demo-anterior').addEventListener('click', () => changeExample(-1));

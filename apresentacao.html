@@ -117,9 +117,32 @@
     .demo-header .demo-links > a.button { padding-inline: 14px; }
     .demo-navigation .demo-primary { font-size: .8rem; padding: 9px 13px; }
     .demo-hero .demo-primary { font-size: .8rem; font-weight: 500; padding-inline: 16px; }
+    .demo-header :is(a.button, button), .demo-navigation :is(a, button),
+    .demo-main :is(a.button, button), .accessibility-float {
+      transition: background-color 200ms ease, color 200ms ease,
+        border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+    }
+    @media (hover: hover) {
+      .demo-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 14px #0003; }
+    }
+    .demo-dialog[open] { animation: demo-enter 220ms ease-out both; }
+    .demo-dialog[open]::backdrop { animation: demo-fade 200ms ease-out both; }
+    @keyframes demo-enter {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes demo-fade { from { opacity: 0; } to { opacity: 1; } }
+    :root[data-demo-motion="true"] .demo-dialog::backdrop { animation: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .demo-dialog::backdrop { animation: none !important; }
+    }
+    :root[data-demo-motion="true"] .demo-primary:hover { transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .demo-primary:hover { transform: none; }
+    }
   </style>
   <script src="config.js"></script>
-  <script src="apresentacao-arena.js?v=2" defer></script>
+  <script src="apresentacao-arena.js?v=3" defer></script>
 </head>
 <body>
   <header class="demo-header" id="inicio">
