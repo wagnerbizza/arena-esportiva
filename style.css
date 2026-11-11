@@ -1872,3 +1872,36 @@ body:not([data-admin="true"]) .public-event-icon {
 @media (prefers-reduced-motion: reduce) {
   body:not([data-admin="true"]) .match-card .live-status-dot { animation: none; }
 }
+
+/* Ajuste apenas na impressão das súmulas. */
+@media print {
+  body:has(.report-sheet) .live-status-panel {
+    display: none !important;
+  }
+
+  .report-sheet .report-notes {
+    margin-top: 8px;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .report-sheet .report-notes h3 {
+    margin: 0 0 4px;
+  }
+
+  .report-sheet .report-notes p {
+    margin: 0 0 6px;
+  }
+
+  .report-sheet .signatures {
+    margin-top: 12px;
+    gap: 8px 12px;
+    line-height: 1.25;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-sheet .tablewrap :is(td, th) {
+    padding-block: 4px !important;
+  }
+}
