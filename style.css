@@ -1698,3 +1698,24 @@ body:not([data-admin="true"]) .accessibility-bar {margin:0;padding:0;min-height:
 body:has(#accountPopover:not([hidden])) .accessibility-float {
   visibility: hidden;
 }
+
+/* Acrescente ao final do style.css do Arena. */
+header #systemBrand {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  max-width: 100%;
+  gap: 10px;
+}
+
+header #systemBrand .system-logo {
+  flex: 0 0 54px;
+  width: 54px;
+  height: 54px;
+}
+
+@media (max-width: 980px) {
+  header:has(> #systemBrand) { flex-wrap: wrap; }
+  header > #systemBrand { flex-basis: 100%; }
+  header > .header-actions { flex-basis: 100%; justify-content: flex-start; }
+}
