@@ -1651,6 +1651,7 @@ body:not([data-admin="true"]) .accessibility-bar {margin:0;padding:0;min-height:
  body:not([data-admin="true"]) .public-header-actions {justify-content:flex-start;}
  body:not([data-admin="true"]) header .public-tools-options {left:0;right:auto;max-width:calc(100vw - 40px);}
 }
+
 /* Mantém Minha conta visível durante a rolagem da página. */
 .account-popover {
   position: fixed;
@@ -1664,4 +1665,36 @@ body:not([data-admin="true"]) .accessibility-bar {margin:0;padding:0;min-height:
 
 @media (max-width: 700px) {
   .account-popover { right: 16px; }
+}
+
+
+/* Aplica ao menu Minha conta o visual compacto do Quiz. */
+#accountPopover {
+  padding: 15px;
+  border-radius: 12px;
+  box-shadow: 0 16px 45px #0006;
+}
+
+#accountPopover nav {
+  gap: 7px;
+}
+
+#accountPopover nav .account-feature {
+  display: grid;
+  gap: 3px;
+  padding: 10px 14px;
+  text-align: left;
+}
+
+#accountPopover .account-feature strong {
+  font-size: 0.875rem;
+}
+
+#accountPopover .account-feature small {
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+body:has(#accountPopover:not([hidden])) .accessibility-float {
+  visibility: hidden;
 }
