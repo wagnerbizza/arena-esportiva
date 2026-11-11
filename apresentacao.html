@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conheça o Arena • Central Esporte</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    :root { --accent: #18c6e8; }
+    .demo-header, .demo-links { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+    .demo-header { justify-content: space-between; padding: 20px 5%; border-bottom: 1px solid var(--line); }
+    .demo-header a { text-decoration: none; }
+    .demo-main { display: grid; gap: clamp(32px, 7vw, 80px); }
+    .demo-hero, .demo-grid { display: grid; gap: 16px; }
+    .demo-hero { align-items: center; grid-template-columns: 1fr 1fr; }
+    .demo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .demo-main h1 { font-size: clamp(36px, 5vw, 64px); }
+    .demo-main h1 span, .demo-label { color: var(--accent); }
+    .demo-label { font-weight: 700; }
+    .demo-card { padding: clamp(16px, 3vw, 28px); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+    .demo-card p { color: var(--muted); }
+    .demo-card h3 { margin-bottom: 8px; }
+    .demo-score { font: 700 clamp(28px, 5vw, 42px) "Barlow Condensed", sans-serif; }
+    .demo-links :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .demo-footer { border-top: 1px solid var(--line); padding: 20px 5%; }
+    @media (max-width: 760px) {
+      .demo-hero, .demo-grid { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+  <script src="apresentacao-arena.js" defer></script>
+</head>
+<body>
+  <header class="demo-header" id="inicio">
+    <a class="brand" href="apresentacao.html"><b>Arena • Central Esporte</b></a>
+    <nav class="demo-links" aria-label="Navegação da apresentação">
+      <a href="#recursos">Recursos</a>
+      <a href="#demonstracao">Demonstração</a>
+      <a class="button" href="painel.html">Área da organização ↗</a>
+    </nav>
+  </header>
+  <main class="demo-main">
+    <section class="demo-hero" aria-labelledby="titulo">
+      <div>
+        <p class="demo-label">Central esportiva</p>
+        <h1 id="titulo">Acompanhe cada <span>partida.</span></h1>
+        <p>Consulte a agenda, acompanhe placares e veja os resultados da temporada. A organização pode cadastrar equipes, programar jogos e registrar o que acontece em quadra ou em campo.</p>
+        <div class="demo-links">
+          <a class="button" href="index.html">Abrir painel público ↗</a>
+          <a href="#como-funciona">Como funciona ↓</a>
+        </div>
+      </div>
+      <article class="demo-card" id="demonstracao" aria-labelledby="demo-titulo">
+        <h2 id="demo-titulo">Demonstração</h2>
+        <p>Exemplos fictícios para conhecer o painel.</p>
+        <div aria-live="polite" aria-atomic="true">
+          <p class="demo-label" id="demo-etapa">1 de 3 · Placar ao vivo</p>
+          <div class="demo-score" id="demo-valor">Aurora 2 × 1 Horizonte</div>
+          <p id="demo-info">Futebol · segundo tempo · 64 minutos.</p>
+        </div>
+        <div class="demo-links">
+          <button type="button" id="demo-anterior">← Anterior</button>
+          <button type="button" id="demo-proximo">Próximo →</button>
+        </div>
+      </article>
+    </section>
+    <section id="recursos">
+      <h2>O que você encontra no Arena</h2>
+      <div class="demo-grid">
+        <article class="demo-card"><h3>Agenda e locais</h3><p>Confira data, horário, modalidade e local de cada partida.</p></article>
+        <article class="demo-card"><h3>Placares e resultados</h3><p>Acompanhe os jogos em andamento e consulte partidas concluídas.</p></article>
+        <article class="demo-card"><h3>Classificação e súmulas</h3><p>Veja a classificação no painel público. Na central, a organização registra os eventos da partida e consulta a súmula.</p></article>
+      </div>
+    </section>
+    <section id="como-funciona">
+      <h2>Como funciona</h2>
+      <div class="demo-grid">
+        <article class="demo-card"><h3>A organização prepara</h3><p>Cadastra equipes, jogadores e partidas.</p></article>
+        <article class="demo-card"><h3>A equipe registra o jogo</h3><p>Atualiza o placar e registra os eventos da partida.</p></article>
+        <article class="demo-card"><h3>O público acompanha</h3><p>Consulta agenda, resultados e classificação.</p></article>
+      </div>
+    </section>
+  </main>
+  <footer class="demo-footer"><a href="#inicio">Voltar ao início ↑</a></footer>
+</body>
+</html>
