@@ -1472,7 +1472,11 @@ document.addEventListener("click", async (e) => {
       await accessAction(async () => { await cloud.recoverPassword(user.email); toast("Enviamos as instruções de redefinição de senha para " + user.email + ". Confira também o spam."); }); return;
     }
     if (b.hasAttribute("data-account-exit")) {
-      if (cloud) await cloud.auth.signOut(cloud.authentication); return;
+      if (cloud) {
+        await cloud.auth.signOut(cloud.authentication);
+        window.location.replace("apresentacao.html");
+      }
+      return;
     }
     if (b.hasAttribute("data-remove-system-logo")) {
       systemLogoVersion++; systemLogoBusy = false; setSystemLogoDraft("");
