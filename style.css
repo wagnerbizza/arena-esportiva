@@ -1776,3 +1776,40 @@ body[data-admin="true"]:has(.access-card #login) .accessibility-bar {
   padding-block: 4px;
   margin-block: 6px;
 }
+
+
+/* Padrao visual da entrada e das preferencias. */
+body[data-admin="true"] .access-card:has(#login) {
+  border: 1px solid var(--line) !important;
+  border-top: 3px solid var(--accent) !important;
+  border-radius: 16px !important;
+  padding: clamp(20px, 4vw, 32px) !important;
+}
+.access-card:has(#login) .google-button {
+  min-height: 44px !important;
+  padding: 8px 14px !important;
+  gap: 8px;
+  font: 600 .875rem Inter, Arial, sans-serif !important;
+  border-radius: 8px !important;
+}
+.preferences-dialog-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+.preferences-dialog-heading h2 {
+  min-width: 0;
+  margin: 0;
+  font: 700 1.25rem/1.25 Inter, Arial, sans-serif !important;
+}
+.preferences-dialog-heading button {
+  flex: 0 0 auto;
+  width: auto !important;
+  min-width: 40px;
+  min-height: 40px;
+  margin: 0 !important;
+  padding: 6px 10px !important;
+  border-radius: 8px;
+}
