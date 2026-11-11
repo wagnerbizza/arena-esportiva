@@ -27,13 +27,39 @@ for (const name of ['access', 'preferences']) {
   });
 }
 
-const theme = document.getElementById('demo-theme');
-try { theme.value = localStorage.getItem('arena_apresentacao_tema') === 'light' ? 'light' : 'dark'; } catch {}
-document.documentElement.dataset.theme = theme.value;
-theme.addEventListener('change', () => {
-  document.documentElement.dataset.theme = theme.value;
-  try { localStorage.setItem('arena_apresentacao_tema', theme.value); } catch {}
-});
+const root = document.documentElement;
+const paletteColors = {
+  blue: ['#7dd6ff', '#075985'],
+  violet: ['#d8b4fe', '#6b21a8'],
+  amber: ['#ffd477', '#854d0e'],
+};
+let systemAccent = '';
+const fields = {};
+for (const name of ['theme', 'palette', 'scale', 'contrast', 'motion']) {
+  const field = document.getElementById('demo-' + name);
+  const key = 'arena_apresentacao_' + (name === 'theme' ? 'tema' : name);
+  fields[name] = field;
+  try {
+    const value = localStorage.getItem(key);
+    if (field.type === 'checkbox') field.checked = value === 'true';
+    else if (Array.from(field.options).some(option => option.value === value)) field.value = value;
+  } catch {}
+  field.addEventListener('change', () => {
+    try { localStorage.setItem(key, field.type === 'checkbox' ? String(field.checked) : field.value); } catch {}
+    applyReadingPreferences();
+  });
+}
+
+function applyReadingPreferences() {
+  root.dataset.theme = fields.theme.value;
+  root.dataset.demoContrast = String(fields.contrast.checked);
+  root.dataset.demoMotion = String(fields.motion.checked);
+  root.style.fontSize = Number(fields.scale.value) * 100 + '%';
+  const custom = paletteColors[fields.palette.value]?.[fields.theme.value === 'light' ? 1 : 0];
+  if (custom || systemAccent) root.style.setProperty('--accent', custom || systemAccent);
+  else root.style.removeProperty('--accent');
+}
+applyReadingPreferences();
 
 async function loadBrand() {
   const config = window.CONFIG?.firebase;
@@ -48,7 +74,8 @@ async function loadBrand() {
   if (!branding) return;
   if (branding.title) document.getElementById('demo-brand-name').textContent = branding.title;
   if (/^#[0-9a-f]{6}$/i.test(branding.color || '')) {
-    document.documentElement.style.setProperty('--accent', branding.color);
+    systemAccent = branding.color;
+    applyReadingPreferences();
   }
   if (/^(https:\/\/|data:image\/(png|jpeg|webp);base64,)/i.test(branding.logo || '')) {
     const logo = document.getElementById('demo-logo');

@@ -26,6 +26,15 @@
     @media (max-width: 760px) {
       .demo-hero, .demo-grid { grid-template-columns: minmax(0, 1fr); }
     }
+    .demo-header .preferences-entry {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: transparent;
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--accent);
+    }
+    [data-demo-preferences] svg { flex: 0 0 auto; }
     .demo-brand { display: flex; align-items: center; gap: 10px; }
     .demo-brand .system-logo:has(img[hidden]) { display: none; }
     .demo-navigation { justify-content: flex-end; padding: 12px 5%; }
@@ -41,6 +50,16 @@
       .demo-hero { grid-template-columns: minmax(0, 1fr); }
       .demo-navigation { justify-content: flex-start; }
     }
+    #demo-preferences { width: min(720px, calc(100% - 32px)); max-height: 85dvh; overflow: auto; }
+    #demo-preferences .demo-preferences-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 18px; }
+    #demo-preferences h2 { font: 700 1.4rem Inter, Arial, sans-serif; margin: 0; }
+    #demo-preferences label { display: block; margin: 12px 0 6px; }
+    #demo-preferences select { width: 100%; }
+    #demo-preferences .demo-check { display: flex; align-items: center; gap: 8px; }
+    #demo-preferences input[type="checkbox"] { width: auto; }
+    html[data-demo-contrast="true"] { --bg: #000; --panel: #141414; --text: #fff; --muted: #fff; --line: #aaa; }
+    html[data-theme="light"][data-demo-contrast="true"] { --bg: #fff; --panel: #fff; --text: #000; --muted: #111; --line: #333; }
+    html[data-demo-motion="true"], html[data-demo-motion="true"] * { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
   </style>
   <script src="config.js"></script>
   <script src="apresentacao-arena.js" defer></script>
@@ -52,7 +71,7 @@
       <span class="brand-copy"><b id="demo-brand-name">Arena • Central Esporte</b><small>CENTRAL ESPORTIVA</small></span>
     </a>
     <div class="demo-links">
-      <button type="button" class="preferences-entry" data-demo-preferences><span aria-hidden="true">♿</span> Preferências de leitura</button>
+      <button type="button" class="preferences-entry" data-demo-preferences><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><circle cx="12" cy="4" r="2"/><path d="M3 8h18M12 7v7m0 0-5 7m5-7 5 7"/></svg> Preferências de leitura</button>
       <a class="button" href="painel.html">Área da organização →</a>
     </div>
   </header>
@@ -105,7 +124,7 @@
     </section>
   </main>
   <footer class="demo-footer"><a href="#inicio">Voltar ao início ↑</a></footer>
-  <button type="button" class="accessibility-float" data-demo-preferences aria-label="Preferências de leitura">♿</button>
+  <button type="button" class="accessibility-float" data-demo-preferences aria-label="Preferências de leitura"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><circle cx="12" cy="4" r="2"/><path d="M3 8h18M12 7v7m0 0-5 7m5-7 5 7"/></svg></button>
   <dialog class="demo-dialog demo-card" id="demo-access">
     <h2>Como deseja acessar?</h2>
     <div class="demo-links">
@@ -114,11 +133,19 @@
     </div>
     <form method="dialog"><button>Fechar</button></form>
   </dialog>
-  <dialog class="demo-dialog demo-card" id="demo-preferences">
-    <h2>Preferências de leitura</h2>
+  <dialog class="demo-dialog demo-card" id="demo-preferences" aria-labelledby="demo-preferences-title">
+    <form method="dialog" class="demo-preferences-heading">
+      <h2 id="demo-preferences-title">Preferências e acessibilidade</h2>
+      <button aria-label="Fechar preferências" autofocus>×</button>
+    </form>
     <label for="demo-theme">Tema</label>
     <select id="demo-theme"><option value="dark">Escuro</option><option value="light">Claro</option></select>
-    <form method="dialog"><button>Fechar</button></form>
+    <label for="demo-palette">Cor de destaque</label>
+    <select id="demo-palette"><option value="system">Cor do sistema</option><option value="blue">Azul</option><option value="violet">Roxo</option><option value="amber">Âmbar</option></select>
+    <label for="demo-scale">Tamanho do texto</label>
+    <select id="demo-scale"><option value="1">Padrão</option><option value="1.15">Ampliado</option><option value="1.3">Maior</option></select>
+    <label class="demo-check"><input type="checkbox" id="demo-contrast"> Alto contraste</label>
+    <label class="demo-check"><input type="checkbox" id="demo-motion"> Reduzir movimentos</label>
   </dialog>
 </body>
 </html>
