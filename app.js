@@ -426,7 +426,13 @@ function matchEventSummary(m) {
         ? name([m.home, m.away][e.side])
         : "";
       const label = eventLabel(e, m);
-      return `<li><span>${esc(label)}${teamName ? " • " + esc(teamName) : ""}</span><strong>${esc(playerName)}</strong>${e.text ? `<small>${esc(e.text)}</small>` : ""}</li>`;
+      const icon = !admin && (e.type === "cartão amarelo" ? "🟨"
+        : e.type === "cartão vermelho" ? "🟥"
+        : e.type === "ponto" && (m.sport === "Futebol" || m.sport === "Futsal") ? "⚽" : "");
+      const eventMarkup = icon
+        ? `<span class="public-event-icon" role="img" aria-label="${esc(label)}" title="${esc(label)}">${icon}</span>`
+        : esc(label);
+      return `<li><span>${eventMarkup}${teamName ? " • " + esc(teamName) : ""}</span><strong>${esc(playerName)}</strong>${e.text ? `<small>${esc(e.text)}</small>` : ""}</li>`;
     })
     .join("");
   const remaining = relevant.length - shown.length;
