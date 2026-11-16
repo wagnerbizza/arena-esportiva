@@ -602,6 +602,27 @@ async function dispatch(a) {
   }
 }
 // 2 — Visualização e navegação.
+document.addEventListener("click", async (event) => {
+  const control = event.target.closest("[data-public-visibility]");
+  if (!control || !admin || role !== "admin" || !cloud || C.demo) return;
+  const match = state.matches.find((item) => item.id === control.dataset.publicVisibility);
+  if (!match || !finalStatuses.includes(match.status)) return;
+  const hidden = !match.publicHidden;
+  const description = name(match.home) + " × " + name(match.away);
+  const question = hidden
+    ? "Ocultar " + description + " dos resultados e estatísticas públicas? A súmula e o histórico interno serão preservados."
+    : "Publicar novamente o resultado de " + description + "?";
+  if (!confirm(question)) return;
+  control.disabled = true;
+  try {
+    await dispatch({type:"matchVisibility", matchId:match.id, hidden});
+    toast(hidden ? "Partida ocultada do painel público." : "Partida republicada.");
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    control.disabled = false;
+  }
+});
 function matchCard(m, button = false) {
   const points = D.score(m),
     sc = gameResult(m),
@@ -609,7 +630,7 @@ function matchCard(m, button = false) {
     b = team(m.away),
     isLive = m.status === "Ao vivo",
     isFinished = ["Encerrada", "Homologada"].includes(m.status);
-  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score"><div>${badge(a)}<div class="name">${esc(a.name)}</div></div><strong>${sc[0]} <span class="muted">:</span> ${sc[1]}</strong><div>${badge(b)}<div class="name">${esc(b.name)}</div></div></div>${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
+  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score"><div>${badge(a)}<div class="name">${esc(a.name)}</div></div><strong>${sc[0]} <span class="muted">:</span> ${sc[1]}</strong><div>${badge(b)}<div class="name">${esc(b.name)}</div></div></div>${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && admin && role === "admin" && cloud && !C.demo && finalStatuses.includes(m.status) ? `<details><summary>Mais ações</summary><button type="button" data-public-visibility="${esc(m.id)}">${m.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button></details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
 }
 
 function liveStatusPanel(context) {
@@ -702,7 +723,7 @@ function render() {
 }
 function publicMatches(filter) {
   const list = state.matches.filter(m=>(!filter||m.sport===filter)&&
-    (publicArea==="live"?m.status==="Ao vivo":publicArea==="schedule"?["Agendada","Adiada"].includes(m.status):publicArea==="results"?finalStatuses.includes(m.status):publicArea==="active"?!finalStatuses.includes(m.status):true));
+    (publicArea==="live"?m.status==="Ao vivo":publicArea==="schedule"?["Agendada","Adiada"].includes(m.status):publicArea==="results"?finalStatuses.includes(m.status):!finalStatuses.includes(m.status)));
   return list.length
     ? list
         .slice()
@@ -2275,9 +2296,9 @@ document.addEventListener("click",e=>{
 // 17 — Limpeza de partidas de teste: prévia, cópia e confirmação explícita.
 let cleanupPlan=null,cleanupBusy=false,cleanupCopied=false;
 function cleanupPanel(){
- const eligible=state.matches.filter(m=>!["Ao vivo","Pausada","Suspensa"].includes(m.status)&&!m.clock?.running);
+ const eligible=state.matches.filter(m=>!m.championshipId&&!["Ao vivo","Pausada","Suspensa"].includes(m.status)&&!m.clock?.running);
  const p=cleanupPlan,m=p?.before;
- return `<section class="card"><h2>Lixeira e retenção de partidas</h2><p>Partidas concluídas podem ser movidas para a lixeira e recuperadas por 30 dias. O placar público é removido durante esse período. A purga definitiva após o prazo apaga a partida e os detalhes da súmula/auditoria, mantendo somente um registro resumido da remoção.</p><p><strong>Partidas ao vivo, pausadas, suspensas ou com relógio rodando não podem ser removidas.</strong> Antes de mover, baixe e confira uma cópia local.</p><label>Partida para conferir<select id="cleanupMatch">${eligible.map(m=>`<option value="${esc(m.id)}" ${p?.matchId===m.id?"selected":""}>${esc(name(m.home)+" × "+name(m.away)+" • "+m.sport+" • "+format(m.date)+" • "+m.status)}</option>`).join("")||'<option value="">Nenhuma partida disponível</option>'}</select></label><button type="button" data-cleanup-preview ${cleanupBusy||!eligible.length?"disabled":""}>Conferir partida antes de mover</button>${m?`<div class="public-notice"><h3>Prévia da lixeira</h3><p>${esc(name(m.home))} × ${esc(name(m.away))}<br>${esc(m.sport)} • ${esc(format(m.date))} • ${esc(m.status)}<br>${esc(m.competition||"Sem campeonato")}<br>Placar: ${esc(D.score(m).join(" × "))}<br>ID: ${esc(m.id)}</p><p>O jogo poderá ser recuperado por 30 dias. Depois desse prazo, a purga definitiva exige uma ação separada e não pode ser desfeita.</p><button type="button" data-cleanup-copy ${cleanupBusy?"disabled":""}>Baixar cópia desta partida</button><form id="cleanupConfirm"><label>Motivo para mover à lixeira<textarea name="cleanupReason" minlength="5" maxlength="500" required></textarea></label><label>Digite LIXEIRA para confirmar<input name="cleanupWord" autocomplete="off" required></label><label class="confirmation-check"><input type="checkbox" name="cleanupSaved" required><span>Baixei e conferi a cópia desta partida.</span></label><button type="submit" ${cleanupBusy||!cleanupCopied?"disabled":""}>Mover para a lixeira por 30 dias</button></form><button type="button" data-cleanup-cancel ${cleanupBusy?"disabled":""}>Cancelar prévia</button></div>`:""}<hr>${removedHistoryPanel()}<hr><button type="button" data-cleanup-history>Baixar histórico resumido (JSON)</button><p class="muted">A lixeira preserva uma cópia até o vencimento. A purga libera armazenamento, mas remove os detalhes completos da auditoria daquela partida.</p></section>`;
+ return `<section class="card"><h2>Lixeira e retenção de partidas</h2><p><strong>Partidas vinculadas a campeonatos são preservadas na limpeza de testes.</strong> Partidas avulsas elegíveis podem ser movidas para a lixeira e recuperadas por 30 dias. O placar público é removido durante esse período. A purga definitiva após o prazo apaga a partida e os detalhes da súmula/auditoria, mantendo somente um registro resumido da remoção.</p><p><strong>Partidas ao vivo, pausadas, suspensas ou com relógio rodando não podem ser removidas.</strong> Antes de mover, baixe e confira uma cópia local.</p><label>Partida para conferir<select id="cleanupMatch">${eligible.map(m=>`<option value="${esc(m.id)}" ${p?.matchId===m.id?"selected":""}>${esc(name(m.home)+" × "+name(m.away)+" • "+m.sport+" • "+format(m.date)+" • "+m.status)}</option>`).join("")||'<option value="">Nenhuma partida disponível</option>'}</select></label><button type="button" data-cleanup-preview ${cleanupBusy||!eligible.length?"disabled":""}>Conferir partida antes de mover</button>${m?`<div class="public-notice"><h3>Prévia da lixeira</h3><p>${esc(name(m.home))} × ${esc(name(m.away))}<br>${esc(m.sport)} • ${esc(format(m.date))} • ${esc(m.status)}<br>${esc(m.competition||"Sem campeonato")}<br>Placar: ${esc(D.score(m).join(" × "))}<br>ID: ${esc(m.id)}</p><p>O jogo poderá ser recuperado por 30 dias. Depois desse prazo, a purga definitiva exige uma ação separada e não pode ser desfeita.</p><button type="button" data-cleanup-copy ${cleanupBusy?"disabled":""}>Baixar cópia desta partida</button><form id="cleanupConfirm"><label>Motivo para mover à lixeira<textarea name="cleanupReason" minlength="5" maxlength="500" required></textarea></label><label>Digite LIXEIRA para confirmar<input name="cleanupWord" autocomplete="off" required></label><label class="confirmation-check"><input type="checkbox" name="cleanupSaved" required><span>Baixei e conferi a cópia desta partida.</span></label><button type="submit" ${cleanupBusy||!cleanupCopied?"disabled":""}>Mover para a lixeira por 30 dias</button></form><button type="button" data-cleanup-cancel ${cleanupBusy?"disabled":""}>Cancelar prévia</button></div>`:""}<hr>${removedHistoryPanel()}<hr><button type="button" data-cleanup-history>Baixar histórico resumido (JSON)</button><p class="muted">A lixeira preserva uma cópia até o vencimento. A purga libera armazenamento, mas remove os detalhes completos da auditoria daquela partida.</p></section>`;
 }
 document.addEventListener("click",async e=>{
  const b=e.target.closest("[data-cleanup-preview],[data-cleanup-copy],[data-cleanup-cancel],[data-cleanup-history]");
@@ -2372,9 +2393,9 @@ function removedResults(){
   const m=r.before||r,score=Array.isArray(m.score)?m.score.join(" × "):"—",expires=removedTime(r.expiresAt),legacy=!r.state,state=r.state||(r.before?"antiga":"purgado");
   const labels={lixeira:"Na lixeira",restaurada:"Recuperada",purgando:"Purga pendente",purgado:"Purgada definitivamente",antiga:"Registro antigo"};
   const canRestore=state==="lixeira"&&expires>now&&!!r.before;
-  const canPurge=(state==="lixeira"&&expires>0&&expires<=now)||state==="purgando";
+  const canPurge=(state==="lixeira"&&!!r.before&&!r.before.championshipId&&expires>0&&expires<=now)||state==="purgando";
   const actions=`${canRestore?`<button type="button" data-trash-restore="${esc(r.target)}">Recuperar</button>`:""}${canPurge?`<button type="button" class="danger-button" data-trash-purge="${esc(r.target)}">${state==="purgando"?"Retomar purga":"Purgar definitivamente"}</button>`:""}`;
-  const expiry=state==="lixeira"?(expires>now?`Recuperável até ${esc(removedDate(r.expiresAt))}`:"Prazo vencido; aguardando purga manual"):state==="purgando"?"Purga iniciada; pode ser retomada":"";
+  const expiry=state==="lixeira"?(expires>now?`Recuperável até ${esc(removedDate(r.expiresAt))}`:(r.before?.championshipId?"Prazo vencido; histórico da partida preservado":"Prazo vencido; aguardando purga manual")):state==="purgando"?"Purga iniciada; pode ser retomada":"";
   return `<article class="trash-record"><div class="trash-record-heading"><div><strong>${esc(removedTeam(m.home))} × ${esc(removedTeam(m.away))}</strong><small>${esc(m.sport||"—")} • ${esc(m.competition||"Sem campeonato")} • ${esc(score)}</small></div><span class="trash-state trash-state-${esc(state)}">${esc(labels[state]||state)}</span></div><p>Removida em ${esc(removedDate(r.at))}${expiry?` • ${expiry}`:""}</p><p>Motivo: ${esc(r.reason||"Não informado")}${r.purgeReason?`<br>Motivo da purga: ${esc(r.purgeReason)}`:""}</p>${legacy?'<small>Exclusão anterior à lixeira recuperável; este registro não tem prazo de restauração.</small>':""}<div class="trash-record-actions">${actions||"<small>Sem ações disponíveis.</small>"}</div><small>Responsável: ${esc(r.actor==="demonstração"?"Demonstração":r.actor===user?.uid?"Administrador principal":r.actor||"Não informado")}</small></article>`;
  }).join("")}</div>`:empty(removedQuery||removedSport?"Nenhuma exclusão corresponde aos filtros.":"Nenhuma partida na lixeira.")}`;
 }
@@ -2548,13 +2569,13 @@ function publicChallenge(){
  return `<section class="card sport-challenge"><span class="tag">INTERVALO ESPORTIVO</span><h2>Desafio rápido</h2><p>Uma brincadeira para aprender enquanto acompanha as partidas. Suas respostas ficam apenas nesta página.</p><p class="quiz-score">Seu placar: <strong>${quizHits} acerto(s) em ${quizAttempts} resposta(s)</strong></p><h3>${esc(q.question)}</h3><div class="toolbar">${q.answers.map((a,i)=>`<button type="button" data-sport-answer="${i}" ${answered?"disabled":""}>${esc(a)}</button>`).join("")}</div>${answered?`<p role="status"><strong>${Number(sportChallengeAnswer)===q.correct?"Acertou!":"Vamos aprender!"}</strong> ${esc(q.explanation)}</p><button type="button" data-sport-next>Próximo desafio</button>`:""}</section>`;
 }
 function publicHub(){
- const tabs=[["active","Jogos atuais"],["all","Todos os jogos"],["live","Ao vivo"],["schedule","Agenda"],["results","Resultados"],["standings","Classificação"],["fun","Diversão"]];
+ const tabs=[["active","Jogos atuais"],["live","Ao vivo"],["schedule","Agenda"],["results","Resultados"],["standings","Classificação"],["fun","Diversão"]];
  return `${publicStatistics()}${publicSportSummary()}<nav class="public-navigation" aria-label="Conteúdo do painel público">${tabs.map(([id,label])=>`<button type="button" data-public-area="${id}" class="${id===publicArea?"active":""}" ${id===publicArea?'aria-current="page"':""}>${label}</button>`).join("")}</nav><div id="publicHubContent">${publicHubContent()}</div>`;
 }
 function publicHubContent(){
  if(publicArea==="fun")return fanZone();
  if(publicArea==="standings")return standingsPanel()||empty("A classificação estará disponível quando houver partidas vinculadas a um campeonato de futebol.");
- return `${publicArea==="active"?'<p class="muted">Partidas encerradas, homologadas e canceladas ficam em <strong>Resultados</strong> ou <strong>Todos os jogos</strong>.</p>':""}<div id="publicMatches" class="grid">${publicMatches(publicFilter)}</div>${["active","all"].includes(publicArea)?'<section class="card public-locations"><h2>Esporte em diferentes locais</h2><p>Veja o local informado em cada partida. Use a modalidade, a agenda e os jogos ao vivo para acompanhar os eventos publicados pela organização.</p></section>':""}`;
+ return `${publicArea==="active"?'<p class="muted">Partidas encerradas, homologadas e canceladas ficam em <strong>Resultados</strong>.</p>':""}<div id="publicMatches" class="grid">${publicMatches(publicFilter)}</div>${publicArea==="active"?'<section class="card public-locations"><h2>Esporte em diferentes locais</h2><p>Veja o local informado em cada partida. Use a modalidade, a agenda e os jogos ao vivo para acompanhar os eventos publicados pela organização.</p></section>':""}`;
 }
 function googleSymbol(){return '<svg class="google-symbol" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.32 2.98-7.36Z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.41l-3.24-2.51c-.9.6-2.05.97-3.38.97-2.6 0-4.8-1.76-5.59-4.12H3.07v2.59A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.41 13.93a6 6 0 0 1 0-3.86V7.48H3.07a10 10 0 0 0 0 9.04l3.34-2.59Z"/><path fill="#EA4335" d="M12 5.95c1.47 0 2.78.5 3.82 1.5l2.86-2.87A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.93 5.48l3.34 2.59C7.2 7.7 9.4 5.95 12 5.95Z"/></svg>';}
 document.addEventListener("click",e=>{

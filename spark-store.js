@@ -216,7 +216,7 @@ export async function connectSpark({
       detail.setIndex = before.sets.length;
       detail.text = "Atualização dos lances publicados no placar";
       tx.set(reference, next);
-      tx.set(publicRef, M.publicMatch(next));
+      if (!next.publicHidden) tx.set(publicRef, M.publicMatch(next));
       tx.set(auditRef, {
         entity: "matches",
         target: matchId,
@@ -292,6 +292,7 @@ export async function connectSpark({
     const snap = await F.getDocFromServer(F.doc(database,"matches",matchId));
     if (!snap.exists()) throw Error("A partida já não existe. Atualize a lista.");
     const before=snap.data();
+    if(before.championshipId)throw Error("Partidas vinculadas a campeonatos são preservadas na limpeza de testes.");
     if(cleanupBlocked(before))throw Error("Encerre ou cancele a partida antes da limpeza.");
     const history=await F.getDocsFromServer(F.query(F.collection(database,"audit"),F.where("target","==",matchId)));
     return {matchId,revision:before._revision,before,createdAt:Date.now(),
@@ -312,11 +313,13 @@ export async function connectSpark({
       const before=snap.data();
       if(oldLog.exists())throw Error("Este identificador já tem registro de limpeza.");
       if(before._revision!==plan.revision||JSON.stringify(before)!==JSON.stringify(plan.before))throw Error("A partida mudou após a prévia. Gere nova prévia e cópia antes de excluir.");
+      if(before.championshipId)throw Error("Partidas vinculadas a campeonatos são preservadas na limpeza de testes.");
       if(cleanupBlocked(before))throw Error("Partida em operação. Limpeza bloqueada.");
       tx.set(log,{target:plan.matchId,entity:"matches",actor:session.uid,at:F.serverTimestamp(),reason,before,after:null,
         state:"lixeira",expiresAt:new Date(Date.now()+30*24*60*60*1000),home:before.home,away:before.away,
         sport:before.sport,competition:before.competition||"",status:before.status,score:before.score});
-      tx.delete(ref);tx.delete(F.doc(database,"publicMatches",plan.matchId));
+      tx.delete(ref);
+      if (!before.publicHidden) tx.delete(F.doc(database,"publicMatches",plan.matchId));
     });
     cache.delete(plan.matchId);
   }
@@ -335,7 +338,7 @@ export async function connectSpark({
       const before=archived.before,after={...before,_revision:before._revision+1,_audit:auditId,_updatedBy:session.uid,_updatedAt:F.serverTimestamp()};
       const detail=M.detail("recuperação");detail.stage=before.stage;detail.setIndex=before.sets.length;detail.reason=reason;detail.text="Partida recuperada da lixeira";
       tx.set(matchRef,after);
-      tx.set(publicRef,M.publicMatch(after));
+      if (!after.publicHidden) tx.set(publicRef,M.publicMatch(after));
       tx.set(auditRef,{entity:"matches",target:matchId,actor:session.uid,at:F.serverTimestamp(),revision:after._revision,detail,before:null,after});
       tx.update(cleanupRef,{...archived,before:null,after:null,state:"restaurada",restoredBy:session.uid,restoredAt:F.serverTimestamp(),restoredAuditId:auditId});
     });
@@ -355,6 +358,7 @@ export async function connectSpark({
         const current=await tx.get(cleanupRef);
         if(!current.exists()||current.data().state!=="lixeira")throw Error("O estado da lixeira mudou. Atualize e tente novamente.");
         const archived=current.data();
+        if(archived.before?.championshipId)throw Error("O histórico de uma partida vinculada a campeonato deve ser preservado.");
         tx.update(cleanupRef,{...archived,before:null,after:null,state:"purgando",purgeReason:reason,purgeStartedBy:session.uid,purgeStartedAt:F.serverTimestamp()});
       });
       snap=await F.getDocFromServer(cleanupRef);record=snap.data();
@@ -550,6 +554,18 @@ export async function connectSpark({
           if(!before)throw Error("Equipe não encontrada.");
           if((before.archived||false)===action.archived)throw Error("A equipe já está nesta situação.");
           next={...before,archived:action.archived};detail=M.detail(action.archived?"arquivamento":"reativação");detail.reason=String(action.reason).trim();detail.text=action.archived?"Equipe retirada de novos cadastros e jogos":"Equipe disponível novamente";
+        } else if (action.type === "matchVisibility") {
+          if (!isOwner()) throw Error("Somente o administrador principal controla a publicação.");
+          if (!before || !["Encerrada", "Homologada", "Cancelada"].includes(before.status))
+            throw Error("Selecione uma partida finalizada.");
+          const current = before.publicHidden === true;
+          if (typeof action.hidden !== "boolean" || current === action.hidden)
+            throw Error("A visibilidade já mudou. Atualize a lista.");
+          next = { ...before, publicHidden: action.hidden };
+          detail = M.detail("visibilidade pública");
+          detail.stage = before.stage;
+          detail.setIndex = before.sets.length;
+          detail.text = action.hidden ? "Partida ocultada do painel público" : "Partida republicada";
         } else {
           if (!before) throw Error("Partida não encontrada.");
           const result = M.applyMatch(
@@ -576,8 +592,11 @@ export async function connectSpark({
             F.doc(database, "publicSettings", target),
             M.publicSettings(next),
           );
-        if (entity === "matches")
-          tx.set(F.doc(database, "publicMatches", target), M.publicMatch(next));
+        if (entity === "matches") {
+          const publication = F.doc(database, "publicMatches", target);
+          if (!next.publicHidden) tx.set(publication, M.publicMatch(next));
+          else if (action.type === "matchVisibility") tx.delete(publication);
+        }
         tx.set(auditRef, {
           entity,
           target,
