@@ -205,13 +205,26 @@
   </main>
   <footer class="demo-footer"><a href="#inicio">Voltar ao início ↑</a></footer>
   <button type="button" class="accessibility-float" data-demo-preferences aria-label="Preferências de leitura"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><circle cx="12" cy="4" r="2"/><path d="M3 8h18M12 7v7m0 0-5 7m5-7 5 7"/></svg></button>
-  <dialog class="demo-dialog demo-card" id="demo-access">
-    <h2>Como deseja acessar?</h2>
-    <div class="demo-links">
-      <a class="button" href="index.html">Painel público →</a>
-      <a class="button" href="painel.html">Área da organização →</a>
+  <style>
+    #demo-access { width: min(560px, calc(100% - 32px)); box-sizing: border-box; max-height: calc(100dvh - 32px); overflow: auto; }
+    #demo-access .access-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    #demo-access .access-heading form { margin: 0; }
+    #demo-access .access-options { display: grid; gap: 10px; }
+    #demo-access .access-option { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 14px; border: 1px solid var(--line, #475569); border-radius: 12px; color: var(--text); text-decoration: none; }
+    #demo-access .access-option small { grid-column: 1; line-height: 1.45; }
+    #demo-access .access-option span { grid-area: 1 / 2 / 3; color: var(--accent); }
+    #demo-access .access-option:hover, #demo-access .access-option:focus-visible { outline: 2px solid var(--accent, currentColor); outline-offset: 2px; }
+  </style>
+  <dialog class="demo-dialog demo-card" id="demo-access" aria-labelledby="demo-access-title">
+    <div class="access-heading">
+      <h2 id="demo-access-title">Como deseja acessar?</h2>
+      <form method="dialog"><button type="submit" aria-label="Fechar janela de acesso">×</button></form>
     </div>
-    <form method="dialog"><button>Fechar</button></form>
+    <div class="access-options">
+      <a class="access-option" href="index.html"><strong>Sou espectador</strong><small>Veja a agenda, os placares e os resultados sem fazer login.</small><span aria-hidden="true">→</span></a>
+      <a class="access-option" href="painel.html"><strong>Sou operador</strong><small>Entre para acompanhar e operar as partidas atribuídas à sua conta.</small><span aria-hidden="true">→</span></a>
+      <a class="access-option" href="painel.html"><strong>Sou administrador</strong><small>Entre para gerenciar a competição, os acessos e os relatórios.</small><span aria-hidden="true">→</span></a>
+    </div>
   </dialog>
   <dialog class="demo-dialog demo-card" id="demo-preferences" aria-labelledby="demo-preferences-title">
     <form method="dialog" class="demo-preferences-heading">

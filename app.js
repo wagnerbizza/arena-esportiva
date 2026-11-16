@@ -2864,9 +2864,34 @@ function quickActionCards(){
   return `<section class="card"><h2>Atalhos rápidos</h2><div class="shortcut-toolbar"><button type="button" data-shortcut-customize class="secondary-button">Personalizar atalhos</button></div><p class="muted">Ações mais usadas por ${role === "admin" ? "o administrador" : "o operador"}. Todos os acessos seguem as permissões atribuídas.</p><div class="grid">${actions.map(({id,label,detail})=>`<div class="shortcut-panel"><div class="shortcut-header"><button type="button" data-section="${id}" class="shortcut-primary"><strong>${esc(label)}</strong><small>${esc(detail)}</small></button><div class="shortcut-tools"><button type="button" data-shortcut-move="up" data-shortcut-target="${id}" title="Mover para cima" aria-label="Mover ${esc(label)} para cima">↑</button><button type="button" data-shortcut-move="down" data-shortcut-target="${id}" title="Mover para baixo" aria-label="Mover ${esc(label)} para baixo">↓</button><button type="button" data-shortcut-hide="${id}" title="Ocultar atalho" aria-label="Ocultar ${esc(label)}">✕</button></div></div></div>`).join("")}</div></section>`;
 }
 
+function operatorStartPanel() {
+  const assigned = state.matches.filter(match =>
+    !finalStatuses.includes(match.status) &&
+    ((trainingMode && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(match.id))
+  ).sort((a, b) => Number(b.status === "Ao vivo") - Number(a.status === "Ao vivo") ||
+    String(a.date || "").localeCompare(String(b.date || "")));
+  const games = assigned.slice(0, 3).map(match =>
+    `<button type="button" class="shortcut-primary" data-open="${esc(match.id)}"><strong>${esc(name(match.home))} × ${esc(name(match.away))}</strong><small>${esc(match.status)} · ${esc(match.sport)} · ${esc(format(match.date))}</small><span>Operar partida →</span></button>`
+  ).join("");
+  const tasks = [
+    ["matches", "Acompanhar jogos", "Consulte as partidas disponíveis para sua conta."],
+    ["documentation", "Como operar", "Abra o guia antes de iniciar sua primeira partida."]
+  ];
+  if (canCreateMatches()) tasks.push(["createMatch", "Cadastrar partida", "Escolha as equipes, a modalidade e o horário."]);
+  if (canManageRosters()) {
+    tasks.push(["teams", "Equipes", "Confira ou atualize os times."]);
+    tasks.push(["players", "Jogadores", "Cadastre ou edite o elenco."]);
+  }
+  return `<section class="card"><h2>Minhas partidas para operar</h2>
+    ${games ? `<div class="grid">${games}</div>` : '<p class="muted">Nenhuma partida disponível para operação. Peça ao administrador para atribuir o jogo à sua conta.</p>'}
+  </section><section class="card"><h2>O que você quer fazer?</h2><div class="grid">
+    ${tasks.map(([id, title, detail]) => `<button type="button" class="shortcut-primary" data-section="${id}"><strong>${title}</strong><small>${detail}</small></button>`).join("")}
+  </div></section>`;
+}
+
 function overviewMatchView(){
  const rows=scopeMatches(state.matches,overviewGameScope).slice().sort((a,b)=>{if(overviewGameScope!=="finished"){const priority=m=>m.status==="Ao vivo"?0:m.status==="Pausada"?1:2;const d=priority(a)-priority(b);if(d)return d;}return overviewGameScope==="finished"?new Date(b.date)-new Date(a.date):new Date(a.date)-new Date(b.date);});
- return `${quickActionCards()}<div class="grid">${[["Equipes",state.teams.length],["Jogadores",state.players.length],["Partidas ao vivo",state.matches.filter(m=>m.status==="Ao vivo").length]].map(([label,n])=>`<div class="card"><span class="muted">${label}</span><div class="kpi">${n}</div></div>`).join("")}</div><section class="card"><h2>Quadra e campo</h2>${matchScopeButtons("overview",overviewGameScope)}<p class="muted">Jogos encerrados ficam em Finalizadas. Esta seleção muda apenas a visualização.</p></section><div class="grid">${rows.slice(0,6).map(m=>matchCard(m,true)).join("")||empty(overviewGameScope==="active"?"Nenhuma partida atual. Consulte Finalizadas ou programe um novo jogo.":"Nenhuma partida nesta seleção.")}</div>${rows.length>6?'<p>Exibindo seis partidas. Abra Jogos → Acompanhar jogos para consultar a lista completa.</p>':""}`;
+ return `${role === "operator" ? operatorStartPanel() : ""}${quickActionCards()}<div class="grid">${[["Equipes",state.teams.length],["Jogadores",state.players.length],["Partidas ao vivo",state.matches.filter(m=>m.status==="Ao vivo").length]].map(([label,n])=>`<div class="card"><span class="muted">${label}</span><div class="kpi">${n}</div></div>`).join("")}</div><section class="card"><h2>Quadra e campo</h2>${matchScopeButtons("overview",overviewGameScope)}<p class="muted">Jogos encerrados ficam em Finalizadas. Esta seleção muda apenas a visualização.</p></section><div class="grid">${rows.slice(0,6).map(m=>matchCard(m,true)).join("")||empty(overviewGameScope==="active"?"Nenhuma partida atual. Consulte Finalizadas ou programe um novo jogo.":"Nenhuma partida nesta seleção.")}</div>${rows.length>6?'<p>Exibindo seis partidas. Abra Jogos → Acompanhar jogos para consultar a lista completa.</p>':""}`;
 }
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-match-scope]");if(!b||!admin||!['active','finished','all'].includes(b.dataset.matchScope))return;
