@@ -1574,6 +1574,69 @@ async function accessAction(action) {
   finally { accessBusy = false; render(); }
 }
 let accessAuditExpanded = false;
+function operatorMatchPicker(operator) {
+  const selected = new Set(operator.matches || []);
+  const groups = [["scheduled","Agendadas"],["running","Em andamento"],["history","Histórico"]];
+  const rows = state.matches.slice().sort((a,b) => new Date(a.date) - new Date(b.date)).map((match) => {
+    const group = finalStatuses.includes(match.status) ? "history"
+      : ["Agendada","Adiada"].includes(match.status) ? "scheduled" : "running";
+    const teams = name(match.home) + " × " + name(match.away);
+    const date = format(match.date);
+    return `<label class="confirmation-check" data-assignment-row="${group}" data-assignment-hidden="${Boolean(match.publicHidden)}"
+      data-assignment-search="${esc(searchText([teams,match.competition,match.place,match.sport,match.status,date].join(" ")))}"
+      ${group === "scheduled" ? "" : 'hidden style="display:none"'}>
+      <input type="checkbox" name="assignedMatches" value="${esc(match.id)}" ${selected.has(match.id) ? "checked" : ""}>
+      <span><strong>${esc(teams)}</strong> · ${esc(match.status)} · ${esc(date)}
+      ${match.publicHidden ? " · Oculta do público" : ""}${selected.has(match.id) ? " · Já atribuída" : ""}
+      <br><small>${esc([match.sport,match.competition,match.place].filter(Boolean).join(" · "))}</small></span>
+    </label>`;
+  }).join("");
+  return `<fieldset data-assignment-picker><legend>Partidas que pode operar</legend>
+    <div class="row" role="group" aria-label="Situação da partida">${groups.map(([id,label]) =>
+      `<button type="button" data-assignment-group="${id}" aria-pressed="${id === "scheduled"}"
+        class="${id === "scheduled" ? "primary" : ""}">${label}</button>`).join("")}</div>
+    <label>Buscar partida<input type="search" data-assignment-query placeholder="Equipe, Copa, local ou modalidade"></label>
+    <label class="confirmation-check"><input type="checkbox" data-assignment-hidden-only><span>Exibir só partidas ocultas do público</span></label>
+    <p class="muted" data-assignment-count aria-live="polite">${selected.size} partida(s) selecionada(s)</p>
+    <div>${rows}</div>
+    <p class="muted" data-assignment-empty ${state.matches.some(m => ["Agendada","Adiada"].includes(m.status)) ? "hidden" : ""}>Nenhuma partida nesta seleção.</p>
+    <p class="muted">As marcações são mantidas ao trocar de grupo ou usar a busca.</p>
+  </fieldset>`;
+}
+
+function updateOperatorMatchPicker(picker) {
+  const group = picker.querySelector('[data-assignment-group][aria-pressed="true"]').dataset.assignmentGroup;
+  const query = searchText(picker.querySelector("[data-assignment-query]").value);
+  const hiddenOnly = picker.querySelector("[data-assignment-hidden-only]").checked;
+  let visible = 0;
+  for (const row of picker.querySelectorAll("[data-assignment-row]")) {
+    const show = row.dataset.assignmentRow === group && row.dataset.assignmentSearch.includes(query)
+      && (!hiddenOnly || row.dataset.assignmentHidden === "true");
+    row.hidden = !show;
+    row.style.display = show ? "" : "none";
+    visible += Number(show);
+  }
+  picker.querySelector("[data-assignment-empty]").hidden = visible > 0;
+  const count = picker.querySelectorAll('input[name="assignedMatches"]:checked').length;
+  picker.querySelector("[data-assignment-count]").textContent = count + " partida(s) selecionada(s)";
+}
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-assignment-group]");
+  if (!button) return;
+  const picker = button.closest("[data-assignment-picker]");
+  for (const tab of picker.querySelectorAll("[data-assignment-group]")) {
+    tab.setAttribute("aria-pressed", String(tab === button));
+    tab.classList.toggle("primary", tab === button);
+  }
+  updateOperatorMatchPicker(picker);
+});
+document.addEventListener("input", (event) => {
+  if (event.target.matches('[data-assignment-query],[data-assignment-hidden-only],input[name="assignedMatches"]')) {
+    updateOperatorMatchPicker(event.target.closest("[data-assignment-picker]"));
+  }
+});
+
 function usersView() {
   if (C.demo) return `<div class="card"><h2>Usuários e permissões</h2><p>Esta função utiliza as contas reais do Firebase e não está disponível na demonstração local.</p></div>`;
   const owner = cloud?.mainUID;
@@ -1588,7 +1651,7 @@ function usersView() {
   const editionOptions = editionChoices.map((title) => `<label class="confirmation-check">
     <input type="checkbox" name="followedEditions" value="${esc(title)}" ${followed.includes(title) ? "checked" : ""}>
     <span>${esc(title)}</span></label>`).join("") || "<p>Nenhum campeonato cadastrado.</p>";
-  const editor = editing ? `<section class="card"><h3>Permissões de ${esc(editing.name || editing.email || "Operador cadastrado")}</h3><p>${esc(editing.email || "E-mail não registrado no perfil antigo")}<br><small>UID: ${esc(editing.id)}</small></p><form id="access-user"><input type="hidden" name="userId" value="${esc(editing.id)}"><label>Situação do acesso<select name="access"><option value="pending" ${editing.role === "pending" ? "selected" : ""}>Aguardando aprovação</option><option value="active" ${editing.role === "operator" && editing.enabled !== false ? "selected" : ""}>Aprovar / manter operador ativo</option><option value="blocked" ${editing.role === "operator" && editing.enabled === false ? "selected" : ""}>Bloquear acesso</option></select></label><p class="muted">Mesmo aprovado, o operador precisa confirmar o e-mail. Nenhum operador pode promover usuários ou acessar seus relatórios.</p><label>Partidas que pode operar (Ctrl+clique para selecionar várias)<select name="assignedMatches" multiple size="6" style="width:100%;min-height:150px">${state.matches.map((m) => `<option value="${esc(m.id)}" ${(editing.matches || []).includes(m.id) ? "selected" : ""}>${esc(m.sport + " • " + name(m.home) + " × " + name(m.away) + " • " + (m.competition || format(m.date)))}</option>`).join("")}</select></label><p class="muted">Só poderá alterar o placar e registrar lances nas partidas selecionadas. A consulta de campeonatos é configurada abaixo.</p><fieldset><legend>Cadastros esportivos</legend><p class="muted">Conceda apenas os cadastros que este operador precisa administrar.</p><label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${(editing.permissions||[]).includes("rosters")?"checked":""}><span>Equipes e jogadores: cadastrar, editar e importar dados, inclusive técnicos e elencos.</span></label><label class="confirmation-check"><input type="checkbox" name="championshipPermission" ${(editing.permissions||[]).includes("championships")?"checked":""}><span>Campeonatos e temporadas: cadastrar e editar competições.</span></label><label class="confirmation-check"><input type="checkbox" name="matchCreatePermission" ${(editing.permissions||[]).includes("matchesCreate")?"checked":""}><span>Partidas: cadastrar novos jogos. Isso não concede operação dos jogos.</span></label></fieldset><fieldset><legend>Acompanhar jogos</legend><p>Selecione os campeonatos que o operador pode acompanhar pelo painel.</p>${editionOptions}<label class="confirmation-check"><input type="checkbox" name="gamesViewPermission" ${(editing.permissions||[]).includes("gamesView")?"checked":""}><span>Consultar todos os jogos publicados — próximos, ao vivo e encerrados — sem alterar placares. Para operar, selecione partidas na lista acima.</span></label></fieldset><label>Motivo da alteração<textarea name="reason" required maxlength="500" placeholder="Ex.: responsável pelos jogos da quadra 1"></textarea></label><p><button class="primary">Salvar permissões</button> <button type="button" data-access-cancel>Fechar edição</button></p></form></section>` : "";
+  const editor = editing ? `<section class="card"><h3>Permissões de ${esc(editing.name || editing.email || "Operador cadastrado")}</h3><p>${esc(editing.email || "E-mail não registrado no perfil antigo")}<br><small>UID: ${esc(editing.id)}</small></p><form id="access-user"><input type="hidden" name="userId" value="${esc(editing.id)}"><label>Situação do acesso<select name="access"><option value="pending" ${editing.role === "pending" ? "selected" : ""}>Aguardando aprovação</option><option value="active" ${editing.role === "operator" && editing.enabled !== false ? "selected" : ""}>Aprovar / manter operador ativo</option><option value="blocked" ${editing.role === "operator" && editing.enabled === false ? "selected" : ""}>Bloquear acesso</option></select></label><p class="muted">Mesmo aprovado, o operador precisa confirmar o e-mail. Nenhum operador pode promover usuários ou acessar seus relatórios.</p>${operatorMatchPicker(editing)}<fieldset><legend>Cadastros esportivos</legend><p class="muted">Conceda apenas os cadastros que este operador precisa administrar.</p><label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${(editing.permissions||[]).includes("rosters")?"checked":""}><span>Equipes e jogadores: cadastrar, editar e importar dados, inclusive técnicos e elencos.</span></label><label class="confirmation-check"><input type="checkbox" name="championshipPermission" ${(editing.permissions||[]).includes("championships")?"checked":""}><span>Campeonatos e temporadas: cadastrar e editar competições.</span></label><label class="confirmation-check"><input type="checkbox" name="matchCreatePermission" ${(editing.permissions||[]).includes("matchesCreate")?"checked":""}><span>Partidas: cadastrar novos jogos. Isso não concede operação dos jogos.</span></label></fieldset><fieldset><legend>Acompanhar jogos</legend><p>Selecione os campeonatos que o operador pode acompanhar pelo painel.</p>${editionOptions}<label class="confirmation-check"><input type="checkbox" name="gamesViewPermission" ${(editing.permissions||[]).includes("gamesView")?"checked":""}><span>Consultar todos os jogos publicados — próximos, ao vivo e encerrados — sem alterar placares. Para operar, selecione partidas na lista acima.</span></label></fieldset><label>Motivo da alteração<textarea name="reason" required maxlength="500" placeholder="Ex.: responsável pelos jogos da quadra 1"></textarea></label><p><button class="primary">Salvar permissões</button> <button type="button" data-access-cancel>Fechar edição</button></p></form></section>` : "";
   const registrationPermissions = (permissions) => [
     permissions.includes("rosters") && "Equipes e jogadores",
     permissions.includes("championships") && "Campeonatos",
