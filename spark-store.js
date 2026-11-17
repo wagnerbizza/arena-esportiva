@@ -142,6 +142,21 @@ export async function connectSpark({
       if(canManageRosters())watchCollection("players",d=>state.players=d);
       if(canManageChampionships())watchCollection("championships",d=>state.championships=d);
       if(canViewAllGames())watchCollection("publicMatches",d=>{publicGames.clear();for(const game of d)publicGames.set(game.id,game);publishOperatorGames();});
+      else {
+        for (const edition of profile?.followedEditions || []) {
+          const previous = new Set();
+          watchCollection("publicMatches", (games) => {
+            for (const id of previous) publicGames.delete(id);
+            previous.clear();
+            for (const game of games) {
+              if (!game.championshipId) continue;
+              previous.add(game.id);
+              publicGames.set(game.id, game);
+            }
+            publishOperatorGames();
+          }, [F.where("competition", "==", edition)]);
+        }
+      }
       const ids = [...new Set(profile?.matches || [])];
       for (const id of ids) {
         watchDoc("matches/" + id, (d) => {
@@ -737,7 +752,7 @@ export async function connectSpark({
       return {uid:beforeUID, alreadyLinked:false};
     } finally { googleBusy = false; }
   }
-  async function manageUser({ userId, access, matches, reason, permissions }) {
+  async function manageUser({ userId, access, matches, reason, permissions, followedEditions }) {
     if (!isOwner()) throw Error("Somente o administrador principal gerencia usuários.");
     if (administratorUIDs.has(userId)) throw Error("A conta administrativa está protegida e não pode ser alterada.");
     if (!["active", "blocked", "pending"].includes(access)) throw Error("Situação de acesso inválida.");
@@ -753,8 +768,15 @@ export async function connectSpark({
       const before = snap.data();
       const granted=access==="active"?[...new Set(permissions===undefined?(before.permissions||[]):permissions)]:[];
       if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView"].includes(p)))throw Error("Permissão específica inválida.");
+      const editions = access === "active"
+        ? [...new Set(followedEditions ?? before.followedEditions ?? [])] : [];
+      const known = new Set(state.championships.map((c) => c.name + " • " + c.season));
+      if (editions.length > 20 || editions.some((title) =>
+        !known.has(title) && !before.followedEditions?.includes(title))) {
+        throw Error("Selecione até 20 edições de campeonatos.");
+      }
       const after = { id: userId, name: before.name || "Operador cadastrado", email: before.email || "",
-        role: access === "pending" ? "pending" : "operator", enabled: access === "active", matches, permissions:granted,
+        role: access === "pending" ? "pending" : "operator", enabled: access === "active", matches, permissions:granted, followedEditions:editions,
         createdAt: before.createdAt || F.serverTimestamp(), updatedAt: F.serverTimestamp(),
         revision: (before.revision || 0) + 1, auditId: aid };
       const action = access === "blocked" ? "bloqueio" : access === "pending" ? "pendente" :
@@ -796,7 +818,7 @@ export async function connectSpark({
           typeof id === "string" && id.length > 0 && !id.includes("/"))));
       const status = !profile ? "incomplete" : profile.role === "operator" && profile.enabled === false ? "blocked" :
         !u.emailVerified ? "verify" : profile.role === "pending" ? "pending" : valid ? "operator" : "unauthorized";
-      onSession(u, valid ? "operator" : "", {status,permissions:valid?(profile?.permissions||[]):[]});
+      onSession(u, valid ? "operator" : "", {status,permissions:valid?(profile?.permissions||[]):[],followedEditions:valid?(profile?.followedEditions||[]):[]});
       onData(state);
       if (valid) listen(true);
 
