@@ -1276,8 +1276,12 @@ module.exports = QRCode;
 return module.exports;
 })();
 
-export function qrSvg(text) {
-  const code = new modules.index(-1, modules.QRErrorCorrectLevel.L);
+export function qrSvg(text, logo = "") {
+  if (logo && !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(logo)) {
+    throw Error("Formato de logo inválido para o QR Code.");
+  }
+  const level = logo ? modules.QRErrorCorrectLevel.H : modules.QRErrorCorrectLevel.L;
+  const code = new modules.index(-1, level);
   code.addData(text);
   code.make();
   const size = code.getModuleCount();
@@ -1287,5 +1291,8 @@ export function qrSvg(text) {
       if (code.isDark(y, x)) cells.push(`M${x + 4} ${y + 4}h1v1h-1z`);
     }
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size + 8} ${size + 8}" width="512" height="512" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="white"/><path d="${cells.join("")}" fill="black"/></svg>`;
+  const side = Math.max(3, Math.floor(size * 0.12));
+  const start = (size + 8 - side) / 2;
+  const badge = logo ? `<rect x="${start - 1}" y="${start - 1}" width="${side + 2}" height="${side + 2}" fill="white"/><image href="${logo}" x="${start}" y="${start}" width="${side}" height="${side}"/>` : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size + 8} ${size + 8}" width="512" height="512" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="white"/><path d="${cells.join("")}" fill="black"/>${badge}</svg>`;
 }

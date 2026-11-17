@@ -214,6 +214,7 @@ function shareEditionControls(edition = "") {
       <a href="${esc(url.href)}" target="_blank" rel="noopener">Abrir página pública</a>
       <button type="button" data-share-copy="${esc(url.href)}">Copiar link</button>
       <button type="button" data-share-qr="${esc(url.href)}">Baixar QR Code</button>
+      ${state.settings.logo ? `<button type="button" data-share-qr="${esc(url.href)}" data-qr-logo>Baixar QR Code com logo</button>` : ""}
     </div>
   </details>`;
 }
@@ -328,6 +329,23 @@ function printRegistrationSheet(championship) {
   sheet.document.getElementById("print").onclick = () => sheet.print();
 }
 
+async function qrLogoData(source) {
+  const logo = new Image();
+  logo.crossOrigin = "anonymous";
+  logo.src = source;
+  try {
+    await logo.decode();
+  } catch {
+    throw Error("O logo não pôde ser incorporado. Na aparência do Arena, envie o logo como arquivo ou use um endereço que permita o acesso à imagem.");
+  }
+  const canvas = document.createElement("canvas");
+  const scale = 128 / Math.max(logo.naturalWidth, logo.naturalHeight);
+  canvas.width = Math.max(1, Math.round(logo.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(logo.naturalHeight * scale));
+  canvas.getContext("2d").drawImage(logo, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/png");
+}
+
 document.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-share-copy],[data-share-qr],[data-registration-sheet]");
   if (!button) return;
@@ -341,7 +359,9 @@ document.addEventListener("click", async (event) => {
       }
     } else if (button.dataset.shareQr) {
       const {qrSvg} = await import("./vendor/arena-qrcode.js");
-      download("arena-qr-code.svg", qrSvg(button.dataset.shareQr), "image/svg+xml");
+      const logo = button.hasAttribute("data-qr-logo") ? await qrLogoData(state.settings.logo) : "";
+      const filename = logo ? "arena-qr-code-com-logo.svg" : "arena-qr-code.svg";
+      download(filename, qrSvg(button.dataset.shareQr, logo), "image/svg+xml");
     } else if (admin && canManageChampionships()) {
       const championship = (state.championships || []).find((c) => c.id === button.dataset.registrationSheet);
       if (championship) printRegistrationSheet(championship);
