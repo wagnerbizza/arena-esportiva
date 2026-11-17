@@ -449,7 +449,7 @@ function googleLinkPanel() {
   return `<section class="google-account"><h3>Entrada com Google</h3>${linked ? `<p><strong>Google vinculado</strong>${linked.email ? "<br>" + esc(linked.email) : ""}</p><p class="muted">Você pode entrar pelo Google usando esta identidade. Suas permissões continuam as mesmas.</p>` : `<p>Conta atual: <strong>${esc(user.email || accountName())}</strong>. Adicione o Google mantendo esta conta e seus acessos.</p><p class="muted">Na janela do Google, selecione preferencialmente o mesmo e-mail desta conta. Se já existir outra conta cadastrada com essa identidade Google, a vinculação será recusada.</p><button type="button" class="google-button" data-google-link ${accessBusy ? "disabled" : ""}>${googleSymbol()}<span>Vincular Google à minha conta atual</span></button>`}</section>`;
 }
 function googleEntryButton(registerIntent = false) {
-  return `<div class="google-entry"><button type="button" class="google-button" data-google-entry="${registerIntent ? "register" : "login"}" ${!cloud || accessBusy ? "disabled" : ""}>${googleSymbol()}<span>${registerIntent ? "Cadastrar com Google" : "Entrar com Google"}</span></button><p class="muted">${registerIntent ? "Use seu nome e e-mail do Google. Não precisa preencher uma senha neste formulário. O acesso depende da aprovação do administrador." : "Já tem conta por e-mail e senha? Entre por ela primeiro e vincule o Google em Minha conta."}</p></div>`;
+  return `<div class="google-entry"><button type="button" class="google-button" data-google-entry="${registerIntent ? "register" : "login"}" ${!cloud || accessBusy ? "disabled" : ""}>${googleSymbol()}<span>${registerIntent ? "Cadastrar com Google" : "Entrar com Google"}</span></button><p class="muted">${registerIntent ? "Escolha uma conta Google para enviar a solicitação de acesso. Se você já tem conta com senha, entre nela e use Minha conta → Vincular Google." : "Já tem conta por e-mail e senha? Entre por ela primeiro e vincule o Google em Minha conta."}</p></div>`;
 }
 function accountView() {
   if (C.demo) return `<section class="card"><h2>Minha conta</h2><p>Você está na demonstração local. Nome, e-mail e recuperação de senha aparecem ao entrar com uma conta do Firebase.</p></section>`;
@@ -571,13 +571,22 @@ const gameResult = (m) =>
 function prettyTime(ms) {
   return M.clockText({ clock: { ...M.emptyClock(), baseMs: ms || 0 } });
 }
+function clockStatus(m, now = Date.now()) {
+  if (!m.clock) return "Aguardando ativação do cronômetro";
+  if (m.clock.mode === "down" && M.elapsed(m, now) >= m.clock.durationMs) return "TEMPO ESGOTADO";
+  return m.clock.running ? "EM CONTAGEM" : "PARADO";
+}
 function clockMarkup(m) {
-  return `<div class="game-clock"><span class="clock-caption">${m.clock?.mode === "down" ? "Tempo restante" : "Tempo de jogo"}</span><strong data-clock="${esc(m.id)}">${m.clock ? M.clockText(m) : "—"}</strong><small>${m.clock?.running ? "EM CONTAGEM" : m.clock ? "PARADO" : "Aguardando ativação do cronômetro"}</small></div>`;
+  return `<div class="game-clock"><span class="clock-caption">${m.clock?.mode === "down" ? "Tempo restante" : "Tempo de jogo"}</span><strong data-clock="${esc(m.id)}">${m.clock ? M.clockText(m) : "—"}</strong><small data-clock-status>${clockStatus(m)}</small></div>`;
 }
 function updateClocks() {
   for (const el of document.querySelectorAll("[data-clock]")) {
     const m = state.matches.find((m) => m.id === el.dataset.clock);
-    if (m) el.textContent = m.clock ? M.clockText(m) : "—";
+    if (!m) continue;
+    const now = Date.now();
+    el.textContent = m.clock ? M.clockText(m, now) : "—";
+    const label = el.parentElement.querySelector("[data-clock-status]");
+    if (label) label.textContent = clockStatus(m, now);
   }
 }
 // Um intervalo apenas na tela: nenhum acesso ao Firestore a cada segundo.
@@ -1550,6 +1559,8 @@ function accessError(e) {
     "auth/cancelled-popup-request": "Já existe uma tentativa de entrada aberta. Use uma janela do Google por vez.",
     "auth/unauthorized-domain": "O domínio deste site ainda não está autorizado no Firebase Authentication.",
     "auth/operation-not-allowed": "A entrada com Google precisa estar habilitada no Firebase Authentication.",
+    "auth/admin-restricted-operation": "O Firebase está impedindo novos cadastros. Peça ao administrador para conferir as configurações de cadastro no Authentication.",
+    "auth/web-storage-unsupported": "O navegador bloqueou o armazenamento necessário para a entrada com Google. Tente uma janela comum com o armazenamento do site permitido.",
     "auth/account-exists-with-different-credential": "Este e-mail já usa outra forma de entrada. Entre com seu método atual e use Minha conta → Vincular Google.",
     "auth/credential-already-in-use": "Esta identidade Google já está ligada a outra conta. Nenhuma conta foi mesclada. Entre com a conta original ou escolha outra identidade Google.",
     "auth/email-already-in-use": "Este e-mail já tem conta. Entre com seu método atual e vincule o Google em Minha conta.",
