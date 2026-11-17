@@ -38,6 +38,13 @@ const key = trainingMode ? "arena-treinamento-isolado-v1" : "arena-demo-v1",
   app = $("#app");
 let reportFilter = "",
   publicFilter = "";
+const publicEdition = admin ? "" : new URLSearchParams(location.search).get("campeonato") || "";
+
+function publicEditionState(data) {
+  if (!publicEdition) return data;
+  return {...data, matches:data.matches.filter((m) =>
+    m.championshipId && m.competition === publicEdition && !m.publicHidden)};
+}
 
 // 2.1 — FILTROS DA CENTRAL. Apenas consulta: não altera cadastros nem permissões.
 // Para mudar a visualização inicial de partidas, altere group: "active" abaixo.
@@ -183,6 +190,7 @@ function championshipCards() {
         <div class="toolbar">
           <button type="button" data-edit-championship="${esc(c.id)}">Editar</button>
           <button type="button" data-championship-games="${esc(c.id)}">Ver partidas</button>
+          <button type="button" data-registration-sheet="${esc(c.id)}">Ficha de inscrição</button>
         </div>
       </section>`;
     }).join("");
@@ -190,6 +198,7 @@ function championshipCards() {
     return `<article class="card championship-card">
       <h3>${esc(edition.name)}</h3>
       <p>${esc(edition.season)}</p>
+      ${C.demo ? "" : shareEditionControls(championshipTitle(edition))}
       <div class="grid">${categories}</div>
       <button type="button" data-add-championship-category="${esc(edition.id)}">Adicionar modalidade ou categoria</button>
     </article>`;
@@ -197,6 +206,80 @@ function championshipCards() {
     ? "Nenhum campeonato corresponde aos filtros."
     : "Cadastre seu primeiro campeonato acima.");
 }
+function shareEditionControls(edition = "") {
+  const url = new URL("./index.html", location.href);
+  if (edition) url.searchParams.set("campeonato", edition);
+  return `<details class="card"><summary>Compartilhar</summary>
+    <div class="toolbar">
+      <a href="${esc(url.href)}" target="_blank" rel="noopener">Abrir página pública</a>
+      <button type="button" data-share-copy="${esc(url.href)}">Copiar link</button>
+      <button type="button" data-share-qr="${esc(url.href)}">Baixar QR Code</button>
+    </div>
+  </details>`;
+}
+
+function printRegistrationSheet(championship) {
+  const rows = prompt("Quantas linhas de inscrição? (1 a 60)", "20");
+  if (rows === null) return;
+  const count = Number(rows);
+  if (!Number.isInteger(count) || count < 1 || count > 60) {
+    throw Error("Informe um número inteiro de 1 a 60.");
+  }
+
+  const sheet = window.open("", "_blank");
+  if (!sheet) throw Error("Permita que o Arena abra a ficha em uma nova aba.");
+  sheet.opener = null;
+  const logo = state.settings.logo || "";
+  const hasLogo = /^https:\/\//i.test(logo) || /^data:image\/(png|jpeg|webp);base64,/i.test(logo);
+  const participants = Array.from({length:count}, (_, i) =>
+    `<tr><td>${i + 1}</td><td></td><td></td><td></td></tr>`).join("");
+  sheet.document.open();
+  sheet.document.write(`<!doctype html><html lang="pt-BR"><meta charset="utf-8">
+    <title>Ficha de inscrição — ${esc(championship.name)}</title>
+    <style>
+      @page{size:A4;margin:15mm} body{font:14px system-ui;color:#111;margin:24px}
+      header{display:flex;align-items:center;gap:16px} img{max-width:96px;max-height:64px}
+      table{border-collapse:collapse;width:100%;margin-top:16px}
+      th,td{border:1px solid #777;padding:6px;text-align:left;height:22px}
+      tr{break-inside:avoid} thead{display:table-header-group} button{margin-top:16px}
+      @media print{button{display:none}body{margin:0}}
+    </style>
+    <header>${hasLogo ? `<img src="${esc(logo)}" alt="Logo da organização">` : ""}
+      <div><strong>${esc(systemDisplayName())}</strong><h1>Ficha de inscrição</h1></div>
+    </header>
+    <h2>${esc(championshipTitle(championship))}</h2>
+    <p>${esc(championship.sport)} · ${esc(championship.category || "Sem categoria")}</p>
+    <p>Equipe: ____________________________________________</p>
+    <p>Responsável: _______________________________________</p>
+    <table><thead><tr><th>Nº</th><th>Nome do participante</th><th>Turma</th><th>Assinatura</th></tr></thead>
+    <tbody>${participants}</tbody></table><button type="button" id="print">Imprimir / Salvar PDF</button></html>`);
+  sheet.document.close();
+  sheet.document.getElementById("print").onclick = () => sheet.print();
+}
+
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-share-copy],[data-share-qr],[data-registration-sheet]");
+  if (!button) return;
+  try {
+    if (button.dataset.shareCopy) {
+      try {
+        await navigator.clipboard.writeText(button.dataset.shareCopy);
+        toast("Link público copiado.");
+      } catch {
+        prompt("Copie o link público", button.dataset.shareCopy);
+      }
+    } else if (button.dataset.shareQr) {
+      const {qrSvg} = await import("./vendor/arena-qrcode.js");
+      download("arena-qr-code.svg", qrSvg(button.dataset.shareQr), "image/svg+xml");
+    } else if (admin && canManageChampionships()) {
+      const championship = (state.championships || []).find((c) => c.id === button.dataset.registrationSheet);
+      if (championship) printRegistrationSheet(championship);
+    }
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
 function updateChampionshipList() {
   if ($("#championship-results")) $("#championship-results").innerHTML = championshipCards();
   if ($("#championship-count")) $("#championship-count").textContent = championshipCount();
@@ -521,12 +604,13 @@ async function boot() {
         true,
       );
     }
+    state = publicEditionState(state);
     role = "admin";
     if (trainingMode) setConnectionStatus("DEMONSTRAÇÃO ISOLADA");
     render();
     window.addEventListener("storage", (e) => {
       if (e.key === key) {
-        state = e.newValue ? JSON.parse(e.newValue) : (trainingMode ? trainingSeed() : D.fresh());
+        state = publicEditionState(e.newValue ? JSON.parse(e.newValue) : (trainingMode ? trainingSeed() : D.fresh()));
         render();
       }
     });
@@ -539,7 +623,7 @@ async function boot() {
       config: C,
       privateView: admin,
       onData: (s) => {
-        state = s;
+        state = publicEditionState(s);
         refresh();
       },
       onSession: (u, r, access = {}) => {
@@ -703,7 +787,7 @@ function render() {
     return;
   }
   if (!admin) {
-    app.innerHTML = `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section>${liveStatusPanel("public")}<div class="sectionhead"><h2>Acompanhe os jogos</h2><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
+    app.innerHTML = `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(publicEdition || systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section>${C.demo ? "" : shareEditionControls(publicEdition)}${liveStatusPanel("public")}<div class="sectionhead"><h2>Acompanhe os jogos</h2><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
       D.SPORTS,
       (x) => x,
       (x) => x,
@@ -1318,9 +1402,9 @@ function auditChunks(label, value) {
     );
   return fields;
 }
-function download(name, value) {
+function download(name, value, type = "application/json") {
   const u = URL.createObjectURL(
-      new Blob([value], { type: "application/json" }),
+      new Blob([value], { type }),
     ),
     a = document.createElement("a");
   a.href = u;
