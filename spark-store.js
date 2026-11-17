@@ -395,6 +395,9 @@ export async function connectSpark({
       : F.doc(F.collection(database, "audit")).id;
   async function send(action) {
     if (!session || !authorized()) throw Error("Faça login com uma conta autorizada.");
+    if (action.type === "notes" && !isOwner()) {
+      throw Error("Somente o administrador pode editar as observações da súmula.");
+    }
     const rosterAction=canManageRosters()&&(["team","player"].includes(action.type)||(action.type==="import"&&["team","player"].includes(action.kind)));
     const matchCreation = action.type === "match" && !action.data?.id && canCreateMatches();
     const championshipAction = action.type === "championship" && canManageChampionships();
