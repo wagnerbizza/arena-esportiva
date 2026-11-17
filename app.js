@@ -218,6 +218,63 @@ function shareEditionControls(edition = "") {
   </details>`;
 }
 
+const registrationStyleKey = "arena-ficha-identidade-v1";
+const registrationFonts = {
+  "Sem serifa": "system-ui, sans-serif",
+  "Com serifa": "Georgia, serif",
+  "Monoespaçada": "monospace"
+};
+const registrationLogoGroups = ["Organizadores", "Patrocinadores", "Colaboradores"];
+
+function registrationStyle() {
+  try {
+    return JSON.parse(localStorage.getItem(registrationStyleKey)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function registrationStyleForm() {
+  const style = registrationStyle();
+  return `<section class="card"><h2>Identidade da ficha de inscrição</h2>
+    <p>As preferências da ficha são salvas neste navegador.</p>
+    <form id="registration-style"><div class="formgrid">
+      ${field("Nome da escola", "school", "text", `maxlength="150" value="${esc(style.school)}"`)}
+      ${field("URL HTTPS do logo da escola", "schoolLogo", "url", `maxlength="1500" value="${esc(style.schoolLogo)}"`)}
+      <label>Fonte<select name="font">${Object.keys(registrationFonts).map((font) =>
+        `<option ${style.font === font ? "selected" : ""}>${esc(font)}</option>`).join("")}</select></label>
+      ${field("Tamanho do texto (pt)", "size", "number", `min="9" max="16" required value="${esc(style.size || 11)}"`)}
+      ${field("Texto da marca d’água", "watermark", "text", `maxlength="60" value="${esc(style.watermark)}"`)}
+      ${registrationLogoGroups.map((group, i) => `<label>Logos de ${group.toLowerCase()} (um link HTTPS por linha)
+        <textarea name="logos${i}" maxlength="9070">${esc(style.logos?.[i]?.join("\n"))}</textarea></label>`).join("")}
+    </div><button type="submit">Salvar preferências da ficha</button></form></section>`;
+}
+
+document.addEventListener("submit", (event) => {
+  const form = event.target;
+  if (form.id !== "registration-style") return;
+  event.preventDefault();
+  if (!admin || role !== "admin") return;
+  const data = new FormData(form);
+  const get = (key) => String(data.get(key) || "").trim();
+  const schoolLogo = get("schoolLogo");
+  const logos = registrationLogoGroups.map((_, i) => get(`logos${i}`).split(/\r?\n/).map((url) => url.trim()).filter(Boolean));
+  const validLogo = (url) => url.length <= 1500 && /^https:\/\/[^\s]+$/i.test(url);
+  if ((schoolLogo && !validLogo(schoolLogo)) || logos.some((group) => group.length > 6 || group.some((url) => !validLogo(url)))) {
+    toast("Use links HTTPS e até seis logos por grupo.", true);
+    return;
+  }
+  try {
+    localStorage.setItem(registrationStyleKey, JSON.stringify({
+      school: get("school"), schoolLogo, font: get("font"), size: Number(get("size")),
+      watermark: get("watermark"), logos
+    }));
+    toast("Preferências da ficha salvas neste navegador.");
+  } catch {
+    toast("Não foi possível salvar as preferências neste navegador.", true);
+  }
+});
+
 function printRegistrationSheet(championship) {
   const rows = prompt("Quantas linhas de inscrição? (1 a 60)", "20");
   if (rows === null) return;
@@ -226,6 +283,15 @@ function printRegistrationSheet(championship) {
     throw Error("Informe um número inteiro de 1 a 60.");
   }
 
+  const style = registrationStyle();
+  const font = Object.hasOwn(registrationFonts, style.font) ? registrationFonts[style.font] : registrationFonts["Sem serifa"];
+  const size = Number.isInteger(style.size) && style.size >= 9 && style.size <= 16 ? style.size : 11;
+  const partners = registrationLogoGroups.map((group, i) => {
+    const urls = style.logos?.[i];
+    if (!Array.isArray(urls) || !urls.length) return "";
+    return `<section><strong>${group}</strong><div class="partner-logos">${urls.map((url) =>
+      `<img src="${esc(url)}" alt="${group}">`).join("")}</div></section>`;
+  }).join("");
   const sheet = window.open("", "_blank");
   if (!sheet) throw Error("Permita que o Arena abra a ficha em uma nova aba.");
   sheet.opener = null;
@@ -237,22 +303,27 @@ function printRegistrationSheet(championship) {
   sheet.document.write(`<!doctype html><html lang="pt-BR"><meta charset="utf-8">
     <title>Ficha de inscrição — ${esc(championship.name)}</title>
     <style>
-      @page{size:A4;margin:15mm} body{font:14px system-ui;color:#111;margin:24px}
+      @page{size:A4;margin:15mm} body{font:${size}pt ${font};color:#111;margin:24px}
       header{display:flex;align-items:center;gap:16px} img{max-width:96px;max-height:64px}
       table{border-collapse:collapse;width:100%;margin-top:16px}
       th,td{border:1px solid #777;padding:6px;text-align:left;height:22px}
       tr{break-inside:avoid} thead{display:table-header-group} button{margin-top:16px}
+      .watermark{position:fixed;inset:42% 8% auto;text-align:center;transform:rotate(-25deg);
+        font-size:32pt;font-weight:bold;color:rgba(20,20,20,.12);pointer-events:none;overflow-wrap:anywhere}
+      .partner-logos{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:5px 0 12px}
+      .partners{margin-top:18px;break-inside:avoid}
       @media print{button{display:none}body{margin:0}}
     </style>
-    <header>${hasLogo ? `<img src="${esc(logo)}" alt="Logo da organização">` : ""}
-      <div><strong>${esc(systemDisplayName())}</strong><h1>Ficha de inscrição</h1></div>
+    ${style.watermark ? `<div class="watermark" aria-hidden="true">${esc(style.watermark)}</div>` : ""}
+    <header>${style.schoolLogo ? `<img src="${esc(style.schoolLogo)}" alt="Logo da escola">` : ""}${hasLogo ? `<img src="${esc(logo)}" alt="Logo da organização">` : ""}
+      <div><strong>${esc(style.school || systemDisplayName())}</strong><h1>Ficha de inscrição</h1></div>
     </header>
     <h2>${esc(championshipTitle(championship))}</h2>
     <p>${esc(championship.sport)} · ${esc(championship.category || "Sem categoria")}</p>
     <p>Equipe: ____________________________________________</p>
     <p>Responsável: _______________________________________</p>
     <table><thead><tr><th>Nº</th><th>Nome do participante</th><th>Turma</th><th>Assinatura</th></tr></thead>
-    <tbody>${participants}</tbody></table><button type="button" id="print">Imprimir / Salvar PDF</button></html>`);
+    <tbody>${participants}</tbody></table>${partners ? `<aside class="partners">${partners}</aside>` : ""}<button type="button" id="print">Imprimir / Salvar PDF</button></html>`);
   sheet.document.close();
   sheet.document.getElementById("print").onclick = () => sheet.print();
 }
@@ -886,7 +957,7 @@ function view() {
   if (section === "imports") return importView();
   if (section === "matchSheets") return role==="admin"?matchSheetsView():empty("Súmulas disponíveis somente para o administrador principal.");
   if (section === "reports") return role==="admin"?reports():empty("Relatórios disponíveis somente para o administrador principal.");
-  if (section === "settings") return settingsView();
+  if (section === "settings") return settingsView() + registrationStyleForm();
   return "";
 }
 // 3 — O Firestore valida permissões, auditoria e transições em firestore.rules.
