@@ -203,6 +203,11 @@
           e.value = a.baseMs;
           e.text = "Ajuste do cronômetro: " + clockText(m);
         } else throw Error("Comando do cronômetro inválido.");
+      } else if (a.type === "addedTime") {
+        need(m.sport === "Futebol" && m.status === "Ao vivo", "Acréscimos disponíveis para futebol ao vivo.");
+        need(Number.isInteger(a.minutes) && a.minutes >= 0 && a.minutes <= 30, "Informe de 0 a 30 minutos.");
+        m.addedTime = {stage: m.stage, minutes: a.minutes};
+        Object.assign(e, {type:"acréscimos", value:a.minutes, text:"Acréscimos: +" + a.minutes + " min"});
       } else if (a.type === "notice") {
         m.publicNotice = text(a.notice, 300);
         e.type = "aviso";
@@ -343,6 +348,7 @@
       ...(Object.hasOwn(m, "championshipId") ? { championshipId: m.championshipId } : {}),
       clock: m.clock || emptyClock(),
       publicNotice: m.publicNotice || "",
+      ...(Object.hasOwn(m,"addedTime") ? {addedTime:m.addedTime} : {}),
       id,
       home,
       away,
