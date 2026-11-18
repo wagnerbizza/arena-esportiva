@@ -773,6 +773,30 @@ export async function connectSpark({
     if (snap.exists() && JSON.stringify(snap.data().methods) === JSON.stringify(methods)) return;
     await F.setDoc(ref, { id: u.uid, methods, updatedAt: F.serverTimestamp() });
   }
+  async function updateOwnContact({name, phone}) {
+    const u = authentication.currentUser;
+    if (!u || administratorUIDs.has(u.uid)) throw Error("Atualização disponível para contas de operadores.");
+    name = String(name || "").trim();
+    phone = String(phone || "").trim();
+    const digits = phone.replace(/[^0-9]/g, "");
+    if (!name || name.length > 100) throw Error("Informe o nome completo, com até 100 caracteres.");
+    if (!/^[+0-9() .-]+$/.test(phone) || phone.length > 25 || digits.length < 10 || digits.length > 15)
+      throw Error("Informe um telefone com DDD, de 10 a 15 dígitos.");
+    const ref = F.doc(database, "users", u.uid), aid = uid();
+    await F.runTransaction(database, async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw Error("Conclua seu cadastro primeiro.");
+      const before = snap.data();
+      if (before.deleted || before.removalRequested) throw Error("O acesso foi removido ou está em exclusão.");
+      const after = { ...before, name, phone, updatedAt: F.serverTimestamp(),
+        revision: (before.revision || 0) + 1, auditId: aid };
+      tx.set(ref, after);
+      tx.set(F.doc(database, "accessAudit", aid), {
+        actor: u.uid, target: u.uid, at: F.serverTimestamp(), action: "dados cadastrais",
+        reason: "Atualização de nome e telefone pelo titular", before, after,
+      });
+    });
+  }
   async function requestOwnRemoval(reason) {
     const u = authentication.currentUser;
     if (!u || administratorUIDs.has(u.uid))
@@ -927,6 +951,8 @@ export async function connectSpark({
     manageUser,
     removeOperator,
     requestOwnRemoval,
+    updateOwnContact,
+    ownContact: () => profile ? {name:profile.name || "", phone:profile.phone || ""} : null,
     canManageRosters,
     enterGoogle,
     linkGoogle,

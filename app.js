@@ -451,6 +451,18 @@ function googleLinkPanel() {
 function googleEntryButton(registerIntent = false) {
   return `<div class="google-entry"><button type="button" class="google-button" data-google-entry="${registerIntent ? "register" : "login"}" ${!cloud || accessBusy ? "disabled" : ""}>${googleSymbol()}<span>${registerIntent ? "Cadastrar com Google" : "Entrar com Google"}</span></button><p class="muted">${registerIntent ? "Escolha uma conta Google para enviar a solicitação de acesso. Se você já tem conta com senha, entre nela e use Minha conta → Vincular Google." : "Já tem conta por e-mail e senha? Entre por ela primeiro e vincule o Google em Minha conta."}</p></div>`;
 }
+function ownContactForm() {
+  if (C.demo || !user || role === "admin") return "";
+  const contact = cloud?.ownContact?.();
+  if (!contact || ["removal-requested", "loading"].includes(accessStatus)) return "";
+  return `<section class="card"><h3>Atualizar meus dados</h3>
+    <p>Complete seu nome e telefone para contato com a organização.</p>
+    <form id="own-contact">
+    ${field("Nome completo", "name", "text", `required maxlength="100" autocomplete="name" value="${esc(contact.name)}"`)}
+    ${field("E-mail da conta", "email", "email", `readonly value="${esc(user.email || "")}"`)}
+    ${field("Telefone com DDD", "phone", "tel", `required maxlength="25" autocomplete="tel" placeholder="(11) 99999-9999" value="${esc(contact.phone)}"`)}
+    <p><button class="primary">Salvar meus dados</button></p></form></section>`;
+}
 function ownRemovalForm() {
   if (C.demo || !user || role === "admin" || accessStatus === "removal-requested" || accessStatus === "incomplete" || accessStatus === "loading") return "";
   return `<section class="card"><h3>Solicitar exclusão do meu acesso</h3>
@@ -473,7 +485,7 @@ function accountView() {
   if (C.demo) return `<section class="card"><h2>Minha conta</h2><p>Você está na demonstração local. Nome, e-mail e recuperação de senha aparecem ao entrar com uma conta do Firebase.</p></section>`;
   if (!user) return "";
   const providers = [...new Set((user.providerData || []).map((p) => ({password:"E-mail e senha", "google.com":"Google", "microsoft.com":"Microsoft"})[p.providerId] || p.providerId))];
-  return `<section class="card"><h2>Minha conta</h2><p class="muted">Confira a conta que está usando nesta sessão.</p><dl class="account-details"><div><dt>Nome</dt><dd>${esc(accountName())}</dd></div><div><dt>Conectado como</dt><dd>${esc(user.email || "Não informado")}</dd></div>${activeAccountLabel() ? `<div><dt>Identificação da sessão</dt><dd>Conta ativa</dd></div><div><dt>Conta principal</dt><dd>Wagner Bizza · wagnerbizza@gmail.com</dd></div><div><dt>Conta secundária</dt><dd>Wagner Santiago · wagnersantiago@prof.educacao.sp.gov.br</dd></div>` : ""}<div><dt>Perfil de acesso</dt><dd>${esc(accountRole())}</dd></div><div><dt>Permissão de cadastros</dt><dd>${canManageRosters()?"Autorizado a gerenciar equipes e jogadores":"Não concedida"}</dd></div><div><dt>Confirmação do e-mail</dt><dd>${user.emailVerified ? "Confirmado" : "Ainda não confirmado"}</dd></div><div><dt>Formas de entrada já vinculadas</dt><dd>${esc(providers.join(", ") || "Não informado")}</dd></div></dl>${role === "admin" ? '<p class="public-notice">Sua conta continua como administrador principal. Nenhuma opção desta tela altera suas permissões.</p>' : '<p class="muted">Seu acesso às partidas é definido pelo administrador principal.</p>'}<div class="toolbar"><button type="button" data-account-recover ${!user.email ? "disabled" : ""}>Alterar minha senha</button><button type="button" data-account-exit>Sair desta conta</button></div><p class="muted">Para quem entra com e-mail e senha: clique em Alterar minha senha para receber um link em <strong>${esc(user.email)}</strong>. Abra esse e-mail para escolher a nova senha; confira também o spam. Não é necessário vincular o Google. O administrador não vê sua senha.</p>${googleLinkPanel()}</section>${ownRemovalForm()}`;
+  return `<section class="card"><h2>Minha conta</h2><p class="muted">Confira a conta que está usando nesta sessão.</p><dl class="account-details"><div><dt>Nome</dt><dd>${esc(accountName())}</dd></div><div><dt>Conectado como</dt><dd>${esc(user.email || "Não informado")}</dd></div>${activeAccountLabel() ? `<div><dt>Identificação da sessão</dt><dd>Conta ativa</dd></div><div><dt>Conta principal</dt><dd>Wagner Bizza · wagnerbizza@gmail.com</dd></div><div><dt>Conta secundária</dt><dd>Wagner Santiago · wagnersantiago@prof.educacao.sp.gov.br</dd></div>` : ""}<div><dt>Perfil de acesso</dt><dd>${esc(accountRole())}</dd></div><div><dt>Permissão de cadastros</dt><dd>${canManageRosters()?"Autorizado a gerenciar equipes e jogadores":"Não concedida"}</dd></div><div><dt>Confirmação do e-mail</dt><dd>${user.emailVerified ? "Confirmado" : "Ainda não confirmado"}</dd></div><div><dt>Formas de entrada já vinculadas</dt><dd>${esc(providers.join(", ") || "Não informado")}</dd></div></dl>${role === "admin" ? '<p class="public-notice">Sua conta continua como administrador principal. Nenhuma opção desta tela altera suas permissões.</p>' : '<p class="muted">Seu acesso às partidas é definido pelo administrador principal.</p>'}<div class="toolbar"><button type="button" data-account-recover ${!user.email ? "disabled" : ""}>Alterar minha senha</button><button type="button" data-account-exit>Sair desta conta</button></div><p class="muted">Para quem entra com e-mail e senha: clique em Alterar minha senha para receber um link em <strong>${esc(user.email)}</strong>. Abra esse e-mail para escolher a nova senha; confira também o spam. Não é necessário vincular o Google. O administrador não vê sua senha.</p>${googleLinkPanel()}</section>${ownContactForm()}${ownRemovalForm()}`;
 }
 
 // Atualizações ao vivo preservam o formulário ainda não enviado.
@@ -1598,7 +1610,7 @@ function accessView() {
     return wrap(`<h2>Situação do acesso</h2><p>${esc(user.email || "")}</p><p role="status">${messages[accessStatus] || messages.unauthorized}</p>${accessStatus === "incomplete" ? `<form id="complete-access"><p>Complete seus dados para enviar o pedido ao administrador.</p>
     ${field("Nome completo", "name", "text", `required maxlength="100" autocomplete="name" value="${esc(registrationDraft?.name || user.displayName || "")}"`)}
     ${field("E-mail da conta", "email", "email", `readonly value="${esc(user.email || "")}"`)}
-    ${field("Telefone com DDD", "phone", "tel", `required maxlength="25" autocomplete="tel" value="${esc(registrationDraft?.phone || "")}"`)}<p><button class="primary">Concluir solicitação</button></p></form>` : ""}<div class="toolbar">${!user.emailVerified && accessStatus !== "loading" ? '<button type="button" data-access-verify>Enviar confirmação de e-mail</button>' : ""}<button type="button" data-access-refresh>Já confirmei / Atualizar acesso</button><button type="button" data-access-exit>Sair desta conta</button></div><p class="muted">O cadastro não autoriza alterações de placar. A senha não é exibida para a organização.</p>${googleLinkPanel()}${ownRemovalForm()}`);
+    ${field("Telefone com DDD", "phone", "tel", `required maxlength="25" autocomplete="tel" value="${esc(registrationDraft?.phone || "")}"`)}<p><button class="primary">Concluir solicitação</button></p></form>` : ""}<div class="toolbar">${!user.emailVerified && accessStatus !== "loading" ? '<button type="button" data-access-verify>Enviar confirmação de e-mail</button>' : ""}<button type="button" data-access-refresh>Já confirmei / Atualizar acesso</button><button type="button" data-access-exit>Sair desta conta</button></div><p class="muted">O cadastro não autoriza alterações de placar. A senha não é exibida para a organização.</p>${googleLinkPanel()}${ownContactForm()}${ownRemovalForm()}`);
   }
   if (authMode === "register") {
     if (!registrationDraft) return wrap(`<h2>Cadastro de operador</h2><p>Etapa 1 de 2 · Seus dados</p>
@@ -1790,8 +1802,13 @@ document.addEventListener("submit", async (e) => {
       render();
       return;
     }
-    if (["login", "register", "recover", "complete-access", "access-user", "remove-operator", "request-own-removal"].includes(f.id)) {
+    if (["login", "register", "recover", "complete-access", "access-user", "remove-operator", "request-own-removal", "own-contact"].includes(f.id)) {
       await accessAction(async () => {
+        if (f.id === "own-contact") {
+          await cloud.updateOwnContact({name:d.name, phone:d.phone});
+          toast("Dados atualizados e disponíveis para o administrador.");
+          return;
+        }
         if (f.id === "request-own-removal") {
           if (d.confirmation !== "EXCLUIR") throw Error("Digite EXCLUIR para confirmar.");
           await cloud.requestOwnRemoval(d.reason);
