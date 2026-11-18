@@ -179,6 +179,21 @@
           need(c.running, "O cronômetro já está parado.");
           stopClock(m, stamp);
           e.text = "Cronômetro parado";
+        } else if (a.command === "iniciar-acrescimos") {
+          const added = m.addedTime;
+          need(m.sport === "Futebol" && m.status === "Ao vivo" && added?.stage === m.stage &&
+            Number.isInteger(added.minutes) && added.minutes > 0 && added.minutes <= 30,
+            "Publique os acréscimos desta etapa primeiro.");
+          need(!c.running && !c.segments.acrescimos, "Pare o relógio normal antes de iniciar os acréscimos.");
+          m.clock = {
+            ...emptyClock(),
+            mode: "down",
+            durationMs: added.minutes * 60000,
+            segments: { acrescimos: { start: stamp, end: null } },
+            current: "acrescimos",
+            running: true,
+          };
+          e.text = "Cronômetro dos acréscimos iniciado";
         } else if (a.command === "ajustar") {
           need(!c.running, "Pare o cronômetro antes de ajustar.");
           need(text(a.reason), "Informe a justificativa do ajuste.");

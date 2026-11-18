@@ -576,17 +576,31 @@ function clockStatus(m, now = Date.now()) {
   if (m.clock.mode === "down" && M.elapsed(m, now) >= m.clock.durationMs) return "TEMPO ESGOTADO";
   return m.clock.running ? "EM CONTAGEM" : "PARADO";
 }
+function addedClock(m, now = Date.now()) {
+  const minutes = m.addedTime?.stage === m.stage ? m.addedTime.minutes : 0;
+  const started = Object.hasOwn(m.clock?.segments || {}, "acrescimos");
+  const waiting = m.status === "Ao vivo" && minutes > 0 && !started &&
+    (!m.clock?.running || clockStatus(m, now) === "TEMPO ESGOTADO");
+  return {
+    caption: started || waiting ? "Acréscimos" : m.clock?.mode === "down" ? "Tempo restante" : "Tempo de jogo",
+    time: waiting ? prettyTime(minutes * 60000) : m.clock ? M.clockText(m, now) : "—",
+    status: waiting ? "AGUARDANDO INÍCIO" : clockStatus(m, now),
+  };
+}
 function clockMarkup(m) {
-  return `<div class="game-clock"><span class="clock-caption">${m.clock?.mode === "down" ? "Tempo restante" : "Tempo de jogo"}</span><strong data-clock="${esc(m.id)}">${m.clock ? M.clockText(m) : "—"}</strong><small data-clock-status>${clockStatus(m)}</small>${m.addedTime?.stage === m.stage && m.addedTime.minutes > 0 ? `<span class="tag">Acréscimos +${esc(m.addedTime.minutes)} min</span>` : ""}</div>`;
+  const clock = addedClock(m);
+  return `<div class="game-clock"><span class="clock-caption">${clock.caption}</span><strong data-clock="${esc(m.id)}">${clock.time}</strong><small data-clock-status>${clock.status}</small>${m.addedTime?.stage === m.stage && m.addedTime.minutes > 0 ? `<span class="tag">Acréscimos +${esc(m.addedTime.minutes)} min</span>` : ""}</div>`;
 }
 function updateClocks() {
   for (const el of document.querySelectorAll("[data-clock]")) {
     const m = state.matches.find((m) => m.id === el.dataset.clock);
     if (!m) continue;
     const now = Date.now();
-    el.textContent = m.clock ? M.clockText(m, now) : "—";
+    const clock = addedClock(m, now);
+    el.textContent = clock.time;
+    el.parentElement.querySelector(".clock-caption").textContent = clock.caption;
     const label = el.parentElement.querySelector("[data-clock-status]");
-    if (label) label.textContent = clockStatus(m, now);
+    if (label) label.textContent = clock.status;
   }
 }
 // Um intervalo apenas na tela: nenhum acesso ao Firestore a cada segundo.
@@ -1016,6 +1030,7 @@ function view() {
 }
 // 3 — O Firestore valida permissões, auditoria e transições em firestore.rules.
 // 4 — Operação da partida. Sem apagar eventos: pontos errados recebem estorno.
+let operationPanel = "tempo";
 function operate() {
   const m = state.matches.find((m) => m.id === selected);
   if (!m) {
@@ -1085,10 +1100,12 @@ function operate() {
     .join("");
   const elapsedMs = M.elapsed(m);
   const clockDisplayMs = c.mode === "down" ? Math.max(0, c.durationMs - elapsedMs) : elapsedMs;
-  return `<button data-back>← Voltar às partidas</button><div class="live-console"><div class="console-score">${matchCard(m)}${matchStartGuide(m)}${role === "admin" ? championshipLinkForm(m) : ""}<div class="card"><h3>Jogo e interrupções</h3><form id="interruption"><div class="formgrid"><label>Motivo de pausa / suspensão<select name="pauseReason"><option>Intervalo</option><option>Atendimento em quadra</option><option>Chuva ou condições do local</option><option>Problema técnico</option><option>Decisão da arbitragem</option><option>Outro motivo</option></select></label><label>Detalhes para o público<input name="pauseDetails" maxlength="220" placeholder="Ex.: retorno previsto em 10 minutos"></label></div><div class="toolbar">${buttons}</div></form><p class="muted">Pausar ou suspender o jogo para o cronômetro e informa o motivo ao público. O placar é preservado.</p>${!locked ? `<form id="stage" class="row"><input name="stage" aria-label="Etapa" value="${esc(m.stage)}" required style="max-width:180px"><button>Atualizar etapa</button></form>${m.sport.startsWith("Vôlei") ? "<p><button data-set>Fechar set e iniciar próximo</button></p>" : ""}<hr><h3>Cronômetro</h3>${m.sport === "Futebol" && live ? `<form id="added-time"><label>Acréscimos da etapa (minutos)
+  return `<button data-back>← Voltar às partidas</button><div class="live-console"><div class="console-score">${matchCard(m)}${matchStartGuide(m)}${role === "admin" ? championshipLinkForm(m) : ""}<div class="card"><h3>Jogo e interrupções</h3><form id="interruption"><div class="formgrid"><label>Motivo de pausa / suspensão<select name="pauseReason"><option>Intervalo</option><option>Atendimento em quadra</option><option>Chuva ou condições do local</option><option>Problema técnico</option><option>Decisão da arbitragem</option><option>Outro motivo</option></select></label><label>Detalhes para o público<input name="pauseDetails" maxlength="220" placeholder="Ex.: retorno previsto em 10 minutos"></label></div><div class="toolbar">${buttons}</div></form><p class="muted">Pausar ou suspender o jogo para o cronômetro e informa o motivo ao público. O placar é preservado.</p>${!locked ? `<form id="stage" class="row"><input name="stage" aria-label="Etapa" value="${esc(m.stage)}" required style="max-width:180px"><button>Atualizar etapa</button></form>${m.sport.startsWith("Vôlei") ? "<p><button data-set>Fechar set e iniciar próximo</button></p>" : ""}</div><div class="card"><div class="toolbar" aria-label="Controles da mesa"><button type="button" data-operation-panel="tempo" aria-pressed="${operationPanel === "tempo"}" class="${operationPanel === "tempo" ? "primary" : ""}">Tempo</button><button type="button" data-operation-panel="avisos" aria-pressed="${operationPanel === "avisos"}" class="${operationPanel === "avisos" ? "primary" : ""}">Avisos</button></div><div id="mesa-tempo" ${operationPanel === "tempo" ? "" : "hidden"}><h3>Cronômetro</h3>${m.sport === "Futebol" && live ? `<form id="added-time"><label>Acréscimos da etapa (minutos)
      <input name="addedMinutes" type="number" min="0" max="30" step="1" required value="${m.addedTime?.stage === m.stage ? esc(m.addedTime.minutes) : 0}">
-     </label><button type="submit">Publicar acréscimos</button>
-     <p class="muted">Use 0 para retirar o aviso. O relógio tem ajuste próprio.</p></form>` : ""}<div class="toolbar"><button data-clock-command="${c.running ? "parar" : "iniciar"}" ${!c.running && !live ? "disabled" : ""}>${c.running ? "Parar somente o relógio" : "Iniciar relógio"}</button></div><details id="clockSettings"><summary>Configurar duração e ajustar cronômetro</summary><p>Escolha um atalho ou preencha os tempos abaixo conforme o regulamento do seu evento. O atalho apenas preenche; clique em Salvar ajuste para aplicar.</p><div class="toolbar">${[10,20,45].map(n=>`<button type="button" data-clock-preset="${n}" ${c.running?"disabled":""}>${n} minutos</button>`).join("")}</div><form id="clock-config"><div class="formgrid"><label>Modo<select name="clockMode"><option value="up" ${c.mode === "up" ? "selected" : ""}>Crescente (00:00 →)</option><option value="down" ${c.mode === "down" ? "selected" : ""}>Regressivo (duração → 00:00)</option></select></label>${field("Duração da etapa (min)", "durationMin", "number", `min="0" max="360" value="${Math.floor((c.durationMs || 600000) / 60000)}"`)}${field("Tempo no visor (min)", "displayMin", "number", `min="0" max="360" value="${Math.floor(clockDisplayMs / 60000)}"`)}${field("Tempo no visor (seg)", "displaySec", "number", `min="0" max="59" value="${Math.floor(clockDisplayMs / 1000) % 60}"`)}${field("Motivo do ajuste", "clockReason", "text", 'required maxlength="300"')}</div><button ${c.running ? "disabled" : ""}>Salvar ajuste do cronômetro</button><p class="muted">No regressivo, informe quanto falta. No crescente, informe o tempo decorrido. Pare o relógio para ajustar. A troca de etapa não zera o tempo automaticamente. Ao chegar a zero, a contagem regressiva aguarda a decisão da arbitragem.</p></form></details>` : ""}</div></div><div class="console-actions"><div class="card quick-panel"><span class="tag">LANÇAMENTO RÁPIDO</span><h2>Marcar ponto</h2><p class="muted">Selecione o atleta, se desejar, e toque na pontuação da equipe.</p><div class="quick-grid">${quick}</div>${!live ? '<p class="public-notice">Os lançamentos ficam disponíveis quando o jogo está Ao vivo.</p>' : ""}</div><div class="card"><details><summary>Cartões, faltas, substituições e outros lances</summary>${
+     </label><div class="toolbar">${[1, 2, 3].map(minutes => `<button type="button" data-added-minutes="${minutes}">+${minutes} min</button>`).join("")}
+     <button type="submit" class="primary">Publicar acréscimos</button>
+     <button type="button" data-clock-command="iniciar-acrescimos" ${c.running || c.segments?.acrescimos || m.addedTime?.stage !== m.stage || !m.addedTime.minutes ? "disabled" : ""}>Iniciar acréscimos</button></div>
+     <p class="muted">Pare o relógio normal para iniciar a contagem dos acréscimos. Use 0 para retirar o aviso.</p></form>` : ""}<div class="toolbar"><button data-clock-command="${c.running ? "parar" : "iniciar"}" ${!c.running && !live ? "disabled" : ""}>${c.running ? "Parar somente o relógio" : "Iniciar relógio"}</button></div><details id="clockSettings"><summary>Configurar duração e ajustar cronômetro</summary><p>Escolha um atalho ou preencha os tempos abaixo conforme o regulamento do seu evento. O atalho apenas preenche; clique em Salvar ajuste para aplicar.</p><div class="toolbar">${[10,20,45].map(n=>`<button type="button" data-clock-preset="${n}" ${c.running?"disabled":""}>${n} minutos</button>`).join("")}</div><form id="clock-config"><div class="formgrid"><label>Modo<select name="clockMode"><option value="up" ${c.mode === "up" ? "selected" : ""}>Crescente (00:00 →)</option><option value="down" ${c.mode === "down" ? "selected" : ""}>Regressivo (duração → 00:00)</option></select></label>${field("Duração da etapa (min)", "durationMin", "number", `min="0" max="360" value="${Math.floor((c.durationMs || 600000) / 60000)}"`)}${field("Tempo no visor (min)", "displayMin", "number", `min="0" max="360" value="${Math.floor(clockDisplayMs / 60000)}"`)}${field("Tempo no visor (seg)", "displaySec", "number", `min="0" max="59" value="${Math.floor(clockDisplayMs / 1000) % 60}"`)}${field("Motivo do ajuste", "clockReason", "text", 'required maxlength="300"')}</div><button ${c.running ? "disabled" : ""}>Salvar ajuste do cronômetro</button><p class="muted">No regressivo, informe quanto falta. No crescente, informe o tempo decorrido. Pare o relógio para ajustar. A troca de etapa não zera o tempo automaticamente. Ao chegar a zero, a contagem regressiva aguarda a decisão da arbitragem.</p></form></details>` : ""}</div><div id="mesa-avisos" ${operationPanel === "avisos" ? "" : "hidden"}><h3>Aviso para quem está assistindo</h3><form id="public-notice"><label>Mensagem pública<textarea name="notice" maxlength="300" ${locked ? "disabled" : ""}>${esc(m.publicNotice || "")}</textarea></label><p><button ${locked ? "disabled" : ""}>Publicar aviso</button> <button name="noticeAction" value="clear" ${locked || !m.publicNotice ? "disabled" : ""}>Retirar aviso</button></p></form></div></div></div><div class="console-actions"><div class="card quick-panel"><span class="tag">LANÇAMENTO RÁPIDO</span><h2>Marcar ponto</h2><p class="muted">Selecione o atleta, se desejar, e toque na pontuação da equipe.</p><div class="quick-grid">${quick}</div>${!live ? '<p class="public-notice">Os lançamentos ficam disponíveis quando o jogo está Ao vivo.</p>' : ""}</div><div class="card"><details><summary>Cartões, faltas, substituições e outros lances</summary>${
     locked
       ? "<p>Partida bloqueada.</p>"
       : `<form id="event"><div class="formgrid">${select("Equipe", "side", `<option value="0">${esc(name(m.home))}</option><option value="1">${esc(name(m.away))}</option>`)}${select(
@@ -1125,7 +1142,7 @@ function operate() {
               (x) => x.number + " • " + x.name,
             ),
         )}</div><label>Detalhes / jogador que entra e sai<textarea name="text" maxlength="500"></textarea></label><p><button class="primary" ${!live ? "disabled" : ""}>Registrar lance</button></p></form>`
-  }</details></div><div class="card"><h3>Aviso para quem está assistindo</h3><form id="public-notice"><label>Mensagem pública<textarea name="notice" maxlength="300" ${locked ? "disabled" : ""}>${esc(m.publicNotice || "")}</textarea></label><p><button ${locked ? "disabled" : ""}>Publicar aviso</button></p></form></div><div class="card"><h3>Observações operacionais da súmula</h3>${role === "admin" ? `<form id="notes"><label>Ocorrências<textarea name="notes" maxlength="5000" ${locked ? "disabled" : ""}>${esc(m.notes)}</textarea></label><p><button ${locked ? "disabled" : ""}>Salvar observações</button></p></form>` : `<p>${esc(m.notes || "Sem observações.")}</p><p class="muted">Edição exclusiva do administrador.</p>`}</div></div></div><div class="card"><h3>Histórico da partida</h3>${
+  }</details></div><div class="card"><h3>Observações operacionais da súmula</h3>${role === "admin" ? `<form id="notes"><label>Ocorrências<textarea name="notes" maxlength="5000" ${locked ? "disabled" : ""}>${esc(m.notes)}</textarea></label><p><button ${locked ? "disabled" : ""}>Salvar observações</button></p></form>` : `<p>${esc(m.notes || "Sem observações.")}</p><p class="muted">Edição exclusiva do administrador.</p>`}</div></div></div><div class="card"><h3>Histórico da partida</h3>${
     m.events
       .slice()
       .reverse()
@@ -1781,7 +1798,7 @@ document.addEventListener("submit", async (e) => {
     } else if (f.id === "added-time") {
       await dispatch({type:"addedTime", matchId:selected, minutes:Number(d.addedMinutes)});
     } else if (f.id === "public-notice") {
-      await dispatch({ type: "notice", matchId: selected, notice: d.notice });
+      await dispatch({ type: "notice", matchId: selected, notice: e.submitter?.value === "clear" ? "" : d.notice });
     } else if (f.id === "event")
       await dispatch({
         type: "event",
@@ -1804,6 +1821,21 @@ document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
   try {
+    if (b.dataset.operationPanel) {
+      operationPanel = b.dataset.operationPanel;
+      for (const button of document.querySelectorAll("[data-operation-panel]")) {
+        const active = button.dataset.operationPanel === operationPanel;
+        button.classList.toggle("primary", active);
+        button.setAttribute("aria-pressed", String(active));
+      }
+      $("#mesa-tempo").hidden = operationPanel !== "tempo";
+      $("#mesa-avisos").hidden = operationPanel !== "avisos";
+      return;
+    }
+    if (b.dataset.addedMinutes) {
+      $("#added-time").elements.addedMinutes.value = b.dataset.addedMinutes;
+      return;
+    }
     if (b.hasAttribute("data-live-jump")) {
       const matchId = b.dataset.liveJump;
       const match = state.matches.find((item) => item.id === matchId);
