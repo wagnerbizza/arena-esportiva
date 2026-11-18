@@ -126,6 +126,7 @@ export async function connectSpark({
       watchCollection("players", (d) => (state.players = d));
       watchCollection("matches", (d) => (state.matches = d));
       watchCollection("users", (d) => (state.users = d));
+      watchCollection("accountMethods", (d) => (state.accountMethods = d));
       watchCollection("accessAudit", (d) => (state.accessAudit = d), [F.orderBy("at", "desc"), F.limit(50)]);
     } else if (!full) {
       watchCollection("publicMatches", (d) => (state.matches = d));
@@ -754,6 +755,37 @@ export async function connectSpark({
       return {uid:beforeUID, alreadyLinked:false};
     } finally { googleBusy = false; }
   }
+  async function syncAccountMethods(u) {
+    if (!u || !privateView) return;
+    const methods = [...new Set(u.providerData.map(item => item.providerId))]
+      .filter(method => ["password", "google.com"].includes(method)).sort();
+    const ref = F.doc(database, "accountMethods", u.uid);
+    const snap = await F.getDoc(ref);
+    if (snap.exists() && JSON.stringify(snap.data().methods) === JSON.stringify(methods)) return;
+    await F.setDoc(ref, { id: u.uid, methods, updatedAt: F.serverTimestamp() });
+  }
+  async function requestOwnRemoval(reason) {
+    const u = authentication.currentUser;
+    if (!u || administratorUIDs.has(u.uid))
+      throw Error("Esta opção está disponível para contas de operadores.");
+    reason = String(reason || "").trim();
+    if (reason.length < 5 || reason.length > 500) throw Error("Informe um motivo de 5 a 500 caracteres.");
+    const ref = F.doc(database, "users", u.uid), aid = uid();
+    await F.runTransaction(database, async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw Error("Cadastro não encontrado.");
+      const before = snap.data();
+      if (before.deleted || before.removalRequested) throw Error("Já existe uma solicitação ou exclusão deste acesso.");
+      const after = { ...before, enabled: false, matches: [], permissions: [], followedEditions: [],
+        removalRequested: true, removalReason: reason, updatedAt: F.serverTimestamp(),
+        revision: (before.revision || 0) + 1, auditId: aid };
+      tx.set(ref, after);
+      tx.set(F.doc(database, "accessAudit", aid), {
+        actor: u.uid, target: u.uid, at: F.serverTimestamp(),
+        action: "solicitação de exclusão", reason, before, after,
+      });
+    });
+  }
   async function removeOperator(userId, reason) {
     if (!isOwner() || administratorUIDs.has(userId))
       throw Error("Somente o administrador pode remover operadores. Contas administrativas são protegidas.");
@@ -828,6 +860,7 @@ export async function connectSpark({
     onSession(u, "", {status: "loading"});
     onData(state);
     if (!u) { onConnection("FIREBASE SPARK • pronto para entrar"); return; }
+    syncAccountMethods(u).catch(message);
     if (administratorUIDs.has(u.uid)) {
       // O titular não depende de um campo editável no documento users.
       onSession(u, "admin", {status: "owner"});
@@ -845,7 +878,7 @@ export async function connectSpark({
       const valid = u.emailVerified === true && profile?.role === "operator" && profile.enabled !== false &&
         (ids === undefined || (Array.isArray(ids) && ids.every((id) =>
           typeof id === "string" && id.length > 0 && !id.includes("/"))));
-      const status = !profile ? "incomplete" : profile.role === "operator" && profile.enabled === false ? "blocked" :
+      const status = !profile ? "incomplete" : profile.removalRequested ? "removal-requested" : profile.role === "operator" && profile.enabled === false ? "blocked" :
         !u.emailVerified ? "verify" : profile.role === "pending" ? "pending" : valid ? "operator" : "unauthorized";
       onSession(u, valid ? "operator" : "", {status,permissions:valid?(profile?.permissions||[]):[],followedEditions:valid?(profile?.followedEditions||[]):[]});
       onData(state);
@@ -882,6 +915,7 @@ export async function connectSpark({
     recoverPassword,
     manageUser,
     removeOperator,
+    requestOwnRemoval,
     canManageRosters,
     enterGoogle,
     linkGoogle,
