@@ -1955,3 +1955,41 @@ body:not([data-admin="true"]) .public-event-icon {
   font-size: 0.875rem;
   letter-spacing: normal;
 }
+
+
+/* Mensagens da organização dentro dos cards das partidas. */
+.match-card .public-notice {
+  background: #302509;
+  border-color: #f3cb63;
+  border-left-width: 5px;
+  color: #fff8e5;
+  padding: 16px 18px;
+}
+
+.match-card .public-notice strong {
+  display: block;
+  color: #ffda75;
+  font-size: 1rem;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+}
+
+.match-card .public-notice p {
+  color: #fff8e5;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5;
+  margin-top: 8px;
+  white-space: pre-wrap;
+}
+
+:root[data-theme="light"] .match-card .public-notice {
+  background: #fff1bf;
+  border-color: #876000;
+  color: #302000;
+}
+
+:root[data-theme="light"] .match-card .public-notice strong,
+:root[data-theme="light"] .match-card .public-notice p {
+  color: #302000;
+}
