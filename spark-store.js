@@ -633,13 +633,15 @@ export async function connectSpark({
             actor: session.uid,
             at: F.serverTimestamp(),
           });
+        if (action.type === "clock" && action.command === "ajustar") {
+          return { clock: next.clock, revision: next._revision };
+        }
       });
     // Uma regra pode rejeitar uma revisão antiga durante uma disputa entre dispositivos.
     // Só repetimos se o servidor confirmar que outra revisão foi gravada entretanto.
     for (let attempt = 0; ; attempt++) {
       try {
-        await commit();
-        break;
+        return await commit();
       } catch (error) {
         if (
           error.code !== "permission-denied" ||
