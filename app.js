@@ -307,7 +307,7 @@ function printRegistrationSheet(championship) {
   const logo = state.settings.logo || "";
   const hasLogo = /^https:\/\//i.test(logo) || /^data:image\/(png|jpeg|webp);base64,/i.test(logo);
   const participants = Array.from({length:count}, (_, i) =>
-    `<tr><td>${i + 1}</td><td></td><td></td><td></td></tr>`).join("");
+    `<tr><td>${i + 1}</td><td></td><td></td><td></td><td></td><td></td></tr>`).join("");
   sheet.document.open();
   sheet.document.write(`<!doctype html><html lang="pt-BR"><meta charset="utf-8">
     <title>Ficha de inscrição — ${esc(championship.name)}</title>
@@ -316,6 +316,9 @@ function printRegistrationSheet(championship) {
       header{display:flex;align-items:center;gap:16px} img{max-width:96px;max-height:64px}
       table{border-collapse:collapse;width:100%;margin-top:16px}
       th,td{border:1px solid #777;padding:6px;text-align:left;height:22px}
+      .registration-players{table-layout:fixed}
+      .registration-players th,.registration-players td{overflow-wrap:anywhere}
+      .registration-players th{vertical-align:middle}
       tr{break-inside:avoid} thead{display:table-header-group} button{margin-top:16px}
       .watermark{position:fixed;inset:42% 8% auto;text-align:center;transform:rotate(-25deg);
         font-size:32pt;font-weight:bold;color:rgba(20,20,20,.12);pointer-events:none;overflow-wrap:anywhere}
@@ -331,7 +334,7 @@ function printRegistrationSheet(championship) {
     <p>${esc(championship.sport)} · ${esc(championship.category || "Sem categoria")}</p>
     <p>Equipe: ____________________________________________</p>
     <p>Responsável: _______________________________________</p>
-    <table><thead><tr><th>Nº</th><th>Nome do participante</th><th>Turma</th><th>Assinatura</th></tr></thead>
+    <table class="registration-players"><colgroup><col style="width:4%"><col style="width:32%"><col style="width:10%"><col style="width:10%"><col style="width:18%"><col style="width:26%"></colgroup><thead><tr><th>Nº</th><th>Nome do participante</th><th>Turma</th><th>Nº da camisa</th><th>Posição</th><th>Assinatura</th></tr></thead>
     <tbody>${participants}</tbody></table>${partners ? `<aside class="partners">${partners}</aside>` : ""}<button type="button" id="print">Imprimir / Salvar PDF</button></html>`);
   sheet.document.close();
   sheet.document.getElementById("print").onclick = () => sheet.print();
