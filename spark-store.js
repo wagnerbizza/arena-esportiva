@@ -754,6 +754,32 @@ export async function connectSpark({
       return {uid:beforeUID, alreadyLinked:false};
     } finally { googleBusy = false; }
   }
+  async function removeOperator(userId, reason) {
+    if (!isOwner() || administratorUIDs.has(userId))
+      throw Error("Somente o administrador pode remover operadores. Contas administrativas são protegidas.");
+    reason = String(reason || "").trim();
+    if (reason.length < 5 || reason.length > 500)
+      throw Error("Informe um motivo de 5 a 500 caracteres.");
+    const ref = F.doc(database, "users", userId), aid = uid();
+    await F.runTransaction(database, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw Error("Operador não encontrado.");
+      const before = snap.data();
+      if (before.deleted === true) throw Error("Este operador já foi removido.");
+      const after = {
+        id: userId, name: before.name || "Operador cadastrado", email: before.email || "",
+        role: "operator", enabled: false, deleted: true,
+        matches: [], permissions: [], followedEditions: [],
+        createdAt: before.createdAt || F.serverTimestamp(),
+        updatedAt: F.serverTimestamp(), revision: (before.revision || 0) + 1, auditId: aid,
+      };
+      tx.set(ref, after);
+      tx.set(F.doc(database, "accessAudit", aid), {
+        actor: session.uid, target: userId, at: F.serverTimestamp(),
+        action: "exclusão de acesso", reason, before, after,
+      });
+    });
+  }
   async function manageUser({ userId, access, matches, reason, permissions, followedEditions }) {
     if (!isOwner()) throw Error("Somente o administrador principal gerencia usuários.");
     if (administratorUIDs.has(userId)) throw Error("A conta administrativa está protegida e não pode ser alterada.");
@@ -768,6 +794,7 @@ export async function connectSpark({
       const snap = await tx.get(ref);
       if (!snap.exists()) throw Error("Solicitação não encontrada.");
       const before = snap.data();
+      if (before.deleted === true) throw Error("Este operador foi removido e está disponível apenas para consulta.");
       const granted=access==="active"?[...new Set(permissions===undefined?(before.permissions||[]):permissions)]:[];
       if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView"].includes(p)))throw Error("Permissão específica inválida.");
       const editions = access === "active"
@@ -854,6 +881,7 @@ export async function connectSpark({
     refreshAccess,
     recoverPassword,
     manageUser,
+    removeOperator,
     canManageRosters,
     enterGoogle,
     linkGoogle,
