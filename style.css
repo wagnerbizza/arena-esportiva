@@ -1916,3 +1916,42 @@ body:not([data-admin="true"]) .public-event-icon {
     padding-block: 4px !important;
   }
 }
+
+
+/* Estados da partida e avisos no placar */
+.match-card .status {
+  font-weight: 700;
+}
+
+.match-card .status.live {
+  background: #08653c;
+  color: #fff;
+}
+
+.match-card .status.is-finished {
+  background: #a91c2b;
+  color: #fff;
+}
+
+.game-clock .clock-caption,
+.game-clock [data-clock-status] {
+  color: inherit;
+  opacity: 1;
+  font-weight: 700;
+}
+
+.game-clock [data-clock-status] {
+  display: block;
+  font-size: 0.875rem;
+}
+
+.game-clock > .tag {
+  display: table;
+  margin: 0.5rem auto 0;
+  padding: 0.25rem 0.65rem;
+  border-radius: 0.35rem;
+  background: #124768;
+  color: #fff;
+  font-size: 0.875rem;
+  letter-spacing: normal;
+}
