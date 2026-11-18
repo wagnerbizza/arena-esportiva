@@ -1581,6 +1581,8 @@ function download(name, value, type = "application/json") {
   setTimeout(() => URL.revokeObjectURL(u), 1000);
 }
 // 7 — Acesso e aprovação. Senhas ficam somente no Firebase Authentication.
+let registrationDraft = null;
+let registrationContact = null;
 function accessView() {
   const wrap = (content) => `<section class="card access-card" style="max-width:520px;margin:40px auto"><span class="tag">ACESSO À CENTRAL</span>${content}</section>`;
   if (user) {
@@ -1593,9 +1595,33 @@ function accessView() {
       blocked: "Seu acesso está bloqueado. Procure o administrador principal.",
       unauthorized: "Esta conta ainda não está autorizada. Procure o administrador principal."
     };
-    return wrap(`<h2>Situação do acesso</h2><p>${esc(user.email || "")}</p><p role="status">${messages[accessStatus] || messages.unauthorized}</p>${accessStatus === "incomplete" ? `<form id="complete-access">${field("Seu nome", "name", "text", 'required maxlength="100" autocomplete="name"')}<p><button class="primary">Concluir solicitação</button></p></form>` : ""}<div class="toolbar">${!user.emailVerified && accessStatus !== "loading" ? '<button type="button" data-access-verify>Enviar confirmação de e-mail</button>' : ""}<button type="button" data-access-refresh>Já confirmei / Atualizar acesso</button><button type="button" data-access-exit>Sair desta conta</button></div><p class="muted">O cadastro não autoriza alterações de placar. A senha não é exibida para a organização.</p>${googleLinkPanel()}${ownRemovalForm()}`);
+    return wrap(`<h2>Situação do acesso</h2><p>${esc(user.email || "")}</p><p role="status">${messages[accessStatus] || messages.unauthorized}</p>${accessStatus === "incomplete" ? `<form id="complete-access"><p>Complete seus dados para enviar o pedido ao administrador.</p>
+    ${field("Nome completo", "name", "text", `required maxlength="100" autocomplete="name" value="${esc(registrationDraft?.name || user.displayName || "")}"`)}
+    ${field("E-mail da conta", "email", "email", `readonly value="${esc(user.email || "")}"`)}
+    ${field("Telefone com DDD", "phone", "tel", `required maxlength="25" autocomplete="tel" value="${esc(registrationDraft?.phone || "")}"`)}<p><button class="primary">Concluir solicitação</button></p></form>` : ""}<div class="toolbar">${!user.emailVerified && accessStatus !== "loading" ? '<button type="button" data-access-verify>Enviar confirmação de e-mail</button>' : ""}<button type="button" data-access-refresh>Já confirmei / Atualizar acesso</button><button type="button" data-access-exit>Sair desta conta</button></div><p class="muted">O cadastro não autoriza alterações de placar. A senha não é exibida para a organização.</p>${googleLinkPanel()}${ownRemovalForm()}`);
   }
-  if (authMode === "register") return wrap(`<h2>Solicitar acesso</h2><p>Cadastre sua conta de operador. O administrador principal aprovará o pedido e definirá as partidas autorizadas.</p>${googleEntryButton(true)}<p class="muted">Ou cadastre com e-mail e senha:</p><form id="register"><div style="display:grid;gap:14px">${field("Nome completo", "name", "text", 'required maxlength="100" autocomplete="name"')}${field("E-mail", "email", "email", 'required maxlength="254" autocomplete="email"')}${field("Senha (mínimo de 8 caracteres)", "password", "password", 'required minlength="8" autocomplete="new-password"')}${field("Confirmar senha", "confirmPassword", "password", 'required minlength="8" autocomplete="new-password"')}</div><p><button class="primary">Criar conta e solicitar acesso</button></p></form><button type="button" data-access-mode="login">Já tenho conta — entrar</button>`);
+  if (authMode === "register") {
+    if (!registrationDraft) return wrap(`<h2>Cadastro de operador</h2><p>Etapa 1 de 2 · Seus dados</p>
+      <form id="registration-details"><div style="display:grid;gap:14px">
+      ${field("Nome completo", "name", "text", `required maxlength="100" autocomplete="name" value="${esc(registrationContact?.name || "")}"`)}
+      ${field("E-mail", "email", "email", `required maxlength="254" autocomplete="email" value="${esc(registrationContact?.email || "")}"`)}
+      ${field("Telefone com DDD", "phone", "tel", `required maxlength="25" autocomplete="tel" placeholder="(11) 99999-9999" value="${esc(registrationContact?.phone || "")}"`)}
+      </div><p class="muted">Nome e contato serão apresentados ao administrador para avaliar seu pedido de acesso. O telefone serve para contato com a organização.</p>
+      <p><button class="primary">Continuar</button></p></form>
+      <button type="button" data-access-mode="login">Já tenho conta · Entrar</button>`);
+    return wrap(`<h2>Criar acesso</h2><p>Etapa 2 de 2 · Escolha como entrar</p>
+      <p><strong>${esc(registrationDraft.name)}</strong><br>${esc(registrationDraft.email)}<br>${esc(registrationDraft.phone)}</p>
+      <button type="button" data-registration-back>Corrigir meus dados</button>
+      ${googleEntryButton(true)}
+      <p class="muted">Para usar Google, selecione a conta com o e-mail informado. Contas escolares podem exigir autorização da instituição.</p>
+      <form id="register"><input type="hidden" name="name" value="${esc(registrationDraft.name)}">
+      <input type="hidden" name="email" value="${esc(registrationDraft.email)}">
+      <input type="hidden" name="phone" value="${esc(registrationDraft.phone)}">
+      ${field("Senha (mínimo de 8 caracteres)", "password", "password", 'required minlength="8" autocomplete="new-password"')}
+      ${field("Confirmar senha", "confirmPassword", "password", 'required minlength="8" autocomplete="new-password"')}
+      <p><button class="primary">Criar conta e solicitar acesso</button></p></form>
+      <p class="muted">Depois de confirmar o e-mail, aguarde a aprovação do administrador.</p>`);
+  }
   if (authMode === "recover") return wrap(`<h2>Recuperar senha</h2><p>Informe seu e-mail para receber as instruções do Firebase.</p><form id="recover">${field("E-mail", "email", "email", 'required autocomplete="email"')}<p><button class="primary">Enviar instruções</button></p></form><button type="button" data-access-mode="login">Voltar para entrar</button>`);
   return wrap(`<h2>Entrar na organização</h2>${googleEntryButton()}<p class="muted">Ou entre com e-mail e senha:</p><form id="login"><div style="display:grid;gap:14px">${field("E-mail", "email", "email", 'required autocomplete="username"')}${field("Senha", "password", "password", 'required autocomplete="current-password"')}</div><p><button class="primary">Entrar</button></p></form><div class="toolbar"><button type="button" data-access-mode="register">Solicitar acesso</button><button type="button" data-access-mode="recover">Esqueci minha senha</button></div>`);
 }
@@ -1717,7 +1743,8 @@ function usersView() {
   };
   const editor = editing && editing.deleted !== true ? `<section class="card"><h3>Permissões de ${esc(editing.name || editing.email || "Operador cadastrado")}</h3>
     ${editing.removalRequested ? `<div class="public-notice"><strong>Solicitação de exclusão recebida</strong><p>${esc(editing.removalReason || "")}</p><p>Use Excluir acesso do operador abaixo para concluir. Salvar permissões decide novamente o acesso desta pessoa.</p></div>` : ""}
-    <p><strong>Entrada vinculada</strong> · ${esc(methodLabel(editing.id))}</p><p>${esc(editing.email || "E-mail não registrado no perfil antigo")}<br><small>UID: ${esc(editing.id)}</small></p><form id="access-user"><input type="hidden" name="userId" value="${esc(editing.id)}"><label>Situação do acesso<select name="access"><option value="pending" ${editing.role === "pending" ? "selected" : ""}>Aguardando aprovação</option><option value="active" ${editing.role === "operator" && editing.enabled !== false ? "selected" : ""}>Aprovar / manter operador ativo</option><option value="blocked" ${editing.role === "operator" && editing.enabled === false ? "selected" : ""}>Bloquear acesso</option></select></label><p class="muted">Mesmo aprovado, o operador precisa confirmar o e-mail. Nenhum operador pode promover usuários ou acessar seus relatórios.</p>${operatorMatchPicker(editing)}<fieldset><legend>Cadastros esportivos</legend><p class="muted">Conceda apenas os cadastros que este operador precisa administrar.</p><label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${(editing.permissions||[]).includes("rosters")?"checked":""}><span>Equipes e jogadores: cadastrar, editar e importar dados, inclusive técnicos e elencos.</span></label><label class="confirmation-check"><input type="checkbox" name="championshipPermission" ${(editing.permissions||[]).includes("championships")?"checked":""}><span>Campeonatos e temporadas: cadastrar e editar competições.</span></label><label class="confirmation-check"><input type="checkbox" name="matchCreatePermission" ${(editing.permissions||[]).includes("matchesCreate")?"checked":""}><span>Partidas: cadastrar novos jogos. Isso não concede operação dos jogos.</span></label></fieldset><fieldset><legend>Acompanhar jogos</legend><p>Selecione os campeonatos que o operador pode acompanhar pelo painel.</p>${editionOptions}<label class="confirmation-check"><input type="checkbox" name="gamesViewPermission" ${(editing.permissions||[]).includes("gamesView")?"checked":""}><span>Consultar todos os jogos publicados — próximos, ao vivo e encerrados — sem alterar placares. Para operar, selecione partidas na lista acima.</span></label></fieldset><label>Motivo da alteração<textarea name="reason" required maxlength="500" placeholder="Ex.: responsável pelos jogos da quadra 1"></textarea></label><p><button class="primary">Salvar permissões</button> <button type="button" data-access-cancel>Fechar edição</button></p></form><hr><h3>Excluir acesso do operador</h3><p>Remove da lista ativa e revoga partidas, campeonatos e cadastros autorizados. A auditoria é preservada. O login do Firebase Authentication pode ser excluído pelo console do Firebase.</p><form id="remove-operator"><input type="hidden" name="userId" value="${esc(editing.id)}"><label>Motivo da exclusão<textarea name="reason" required minlength="5" maxlength="500"></textarea></label><label>Digite EXCLUIR para confirmar<input name="confirmation" required autocomplete="off"></label><p><button type="submit">Excluir acesso do operador</button></p></form></section>` : "";
+    <p><strong>Entrada vinculada</strong> · ${esc(methodLabel(editing.id))}</p>
+    <p><strong>Telefone de contato</strong> · ${esc(editing.phone || "Não informado no cadastro antigo")}</p><p>${esc(editing.email || "E-mail não registrado no perfil antigo")}<br><small>UID: ${esc(editing.id)}</small></p><form id="access-user"><input type="hidden" name="userId" value="${esc(editing.id)}"><label>Situação do acesso<select name="access"><option value="pending" ${editing.role === "pending" ? "selected" : ""}>Aguardando aprovação</option><option value="active" ${editing.role === "operator" && editing.enabled !== false ? "selected" : ""}>Aprovar / manter operador ativo</option><option value="blocked" ${editing.role === "operator" && editing.enabled === false ? "selected" : ""}>Bloquear acesso</option></select></label><p class="muted">Mesmo aprovado, o operador precisa confirmar o e-mail. Nenhum operador pode promover usuários ou acessar seus relatórios.</p>${operatorMatchPicker(editing)}<fieldset><legend>Cadastros esportivos</legend><p class="muted">Conceda apenas os cadastros que este operador precisa administrar.</p><label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${(editing.permissions||[]).includes("rosters")?"checked":""}><span>Equipes e jogadores: cadastrar, editar e importar dados, inclusive técnicos e elencos.</span></label><label class="confirmation-check"><input type="checkbox" name="championshipPermission" ${(editing.permissions||[]).includes("championships")?"checked":""}><span>Campeonatos e temporadas: cadastrar e editar competições.</span></label><label class="confirmation-check"><input type="checkbox" name="matchCreatePermission" ${(editing.permissions||[]).includes("matchesCreate")?"checked":""}><span>Partidas: cadastrar novos jogos. Isso não concede operação dos jogos.</span></label></fieldset><fieldset><legend>Acompanhar jogos</legend><p>Selecione os campeonatos que o operador pode acompanhar pelo painel.</p>${editionOptions}<label class="confirmation-check"><input type="checkbox" name="gamesViewPermission" ${(editing.permissions||[]).includes("gamesView")?"checked":""}><span>Consultar todos os jogos publicados — próximos, ao vivo e encerrados — sem alterar placares. Para operar, selecione partidas na lista acima.</span></label></fieldset><label>Motivo da alteração<textarea name="reason" required maxlength="500" placeholder="Ex.: responsável pelos jogos da quadra 1"></textarea></label><p><button class="primary">Salvar permissões</button> <button type="button" data-access-cancel>Fechar edição</button></p></form><hr><h3>Excluir acesso do operador</h3><p>Remove da lista ativa e revoga partidas, campeonatos e cadastros autorizados. A auditoria é preservada. O login do Firebase Authentication pode ser excluído pelo console do Firebase.</p><form id="remove-operator"><input type="hidden" name="userId" value="${esc(editing.id)}"><label>Motivo da exclusão<textarea name="reason" required minlength="5" maxlength="500"></textarea></label><label>Digite EXCLUIR para confirmar<input name="confirmation" required autocomplete="off"></label><p><button type="submit">Excluir acesso do operador</button></p></form></section>` : "";
   const registrationPermissions = (permissions) => [
     permissions.includes("rosters") && "Equipes e jogadores",
     permissions.includes("championships") && "Campeonatos",
@@ -1754,6 +1781,15 @@ document.addEventListener("submit", async (e) => {
       d.id = d.recordId;
       delete d.recordId;
     }
+    if (f.id === "registration-details") {
+      const digits = d.phone.replace(/[^0-9]/g, "");
+      if (!d.name.trim() || !/^[+0-9() .-]+$/.test(d.phone) || digits.length < 10 || digits.length > 15)
+        throw Error("Preencha o nome completo e um telefone com DDD válido.");
+      registrationDraft = {name:d.name.trim(), email:d.email.trim(), phone:d.phone.trim()};
+      registrationContact = registrationDraft;
+      render();
+      return;
+    }
     if (["login", "register", "recover", "complete-access", "access-user", "remove-operator", "request-own-removal"].includes(f.id)) {
       await accessAction(async () => {
         if (f.id === "request-own-removal") {
@@ -1786,7 +1822,7 @@ document.addEventListener("submit", async (e) => {
           await cloud.recoverPassword(d.email);
           toast("Se houver uma conta para esse endereço, você receberá as instruções. Confira também o spam.");
         } else if (f.id === "complete-access") {
-          await cloud.requestAccess(d.name);
+          await cloud.requestAccess(d.name, d.phone);
           await cloud.resendVerification();
           toast(user?.emailVerified ? "Solicitação registrada. Aguarde a aprovação do administrador principal." : "Solicitação registrada. Confira a confirmação enviada ao seu e-mail.");
         } else {
@@ -1906,7 +1942,7 @@ document.addEventListener("click", async (e) => {
       if (!cloud || accessBusy) return;
       const registerIntent = b.dataset.googleEntry === "register";
       await accessAction(async () => {
-        await cloud.enterGoogle({register:registerIntent});
+        await cloud.enterGoogle({register:registerIntent, registration:registrationDraft});
         toast(registerIntent ? "Conta Google reconhecida. Confira a situação da solicitação de acesso." : "Entrada com Google concluída. Conferindo sua autorização.");
       }); return;
     }
@@ -1969,6 +2005,11 @@ document.addEventListener("click", async (e) => {
       listFilters.matches.group = b.dataset.listGroup;
       listFilters.matches.status = "";
       refresh(); return;
+    }
+    if (b.hasAttribute("data-registration-back")) {
+      registrationDraft = null;
+      render();
+      return;
     }
     if (b.dataset.accessMode) {
       authMode = b.dataset.accessMode;

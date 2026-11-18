@@ -659,17 +659,21 @@ export async function connectSpark({
   }
   // 7 — Cadastro e permissões: nenhuma senha é gravada no Firestore.
   const mainUID = OWNER_UID;
-  async function requestAccess(name) {
+  async function requestAccess(name, phone) {
     const u = authentication.currentUser;
     if (!u || administratorUIDs.has(u.uid)) throw Error("Use uma conta de operador para solicitar acesso.");
     name = String(name || u.displayName || "").trim();
     if (!name || name.length > 100) throw Error("Informe seu nome, com até 100 caracteres.");
+    phone = String(phone || "").trim();
+    const digits = phone.replace(/[^0-9]/g, "");
+    if (!/^[+0-9() .-]+$/.test(phone) || phone.length > 25 || digits.length < 10 || digits.length > 15)
+      throw Error("Informe um telefone com DDD, de 10 a 15 dígitos.");
     const ref = F.doc(database, "users", u.uid);
     const aid = uid();
     await F.runTransaction(database, async (tx) => {
       const existing = await tx.get(ref);
       if (existing.exists()) return;
-      const after = { id: u.uid, name, email: u.email || "", role: "pending",
+      const after = { id: u.uid, name, phone, email: u.email || "", role: "pending",
         enabled: false, matches: [], createdAt: F.serverTimestamp(),
         updatedAt: F.serverTimestamp(), revision: 1, auditId: aid };
       tx.set(ref, after);
@@ -678,16 +682,19 @@ export async function connectSpark({
         before: null, after });
     });
   }
-  async function register({name, email, password}) {
+  async function register({name, email, phone, password}) {
     if (authentication.currentUser) throw Error("Saia da conta atual antes de criar outra conta.");
     name = String(name || "").trim();
     email = String(email || "").trim();
     if (!name || name.length > 100) throw Error("Informe seu nome, com até 100 caracteres.");
     if (String(password || "").length < 8) throw Error("Use uma senha com pelo menos 8 caracteres.");
+    const digits = String(phone || "").replace(/[^0-9]/g, "");
+    if (!/^[+0-9() .-]+$/.test(String(phone || "")) || String(phone || "").length > 25 || digits.length < 10 || digits.length > 15)
+      throw Error("Informe um telefone com DDD, de 10 a 15 dígitos.");
     const {user: u} = await auth.createUserWithEmailAndPassword(authentication, email, password);
     // Se uma etapa falhar, o usuário pode entrar e concluir seu pedido sem criar outra conta.
     await auth.updateProfile(u, { displayName: name });
-    await requestAccess(name);
+    await requestAccess(name, phone);
     await auth.sendEmailVerification(u);
   }
   async function resendVerification() {
@@ -717,7 +724,7 @@ export async function connectSpark({
     return provider;
   };
   let googleBusy = false;
-  async function enterGoogle({register: registerIntent = false} = {}) {
+  async function enterGoogle({register: registerIntent = false, registration = null} = {}) {
     if (!privateView) throw Error("Use a central para entrar com Google.");
     if (googleBusy) throw Error("Aguarde a janela do Google.");
     if (authentication.currentUser) throw Error("Você já está conectado. Para adicionar Google, use Vincular Google na sua conta.");
@@ -730,7 +737,9 @@ export async function connectSpark({
       // O login não cria permissões. O cadastro cria apenas solicitação pendente auditada.
       if (registerIntent && !administratorUIDs.has(u.uid)) {
         if (!u.email) throw Error("O Google não informou um e-mail. Conclua a solicitação com outra forma de entrada.");
-        await requestAccess(String(u.displayName || u.email.split("@")[0]).trim().slice(0,100));
+        if (registration && registration.email.toLowerCase() === u.email.toLowerCase()) {
+          await requestAccess(registration.name, registration.phone);
+        }
       }
       return { uid: u.uid, isNewUser: auth.getAdditionalUserInfo(result)?.isNewUser === true };
     } finally { googleBusy = false; }
@@ -800,6 +809,7 @@ export async function connectSpark({
       if (before.deleted === true) throw Error("Este operador já foi removido.");
       const after = {
         id: userId, name: before.name || "Operador cadastrado", email: before.email || "",
+        ...(before.phone ? {phone: before.phone} : {}),
         role: "operator", enabled: false, deleted: true,
         matches: [], permissions: [], followedEditions: [],
         createdAt: before.createdAt || F.serverTimestamp(),
@@ -837,6 +847,7 @@ export async function connectSpark({
         throw Error("Selecione até 20 edições de campeonatos.");
       }
       const after = { id: userId, name: before.name || "Operador cadastrado", email: before.email || "",
+        ...(before.phone ? {phone: before.phone} : {}),
         role: access === "pending" ? "pending" : "operator", enabled: access === "active", matches, permissions:granted, followedEditions:editions,
         createdAt: before.createdAt || F.serverTimestamp(), updatedAt: F.serverTimestamp(),
         revision: (before.revision || 0) + 1, auditId: aid };
