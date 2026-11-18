@@ -1728,15 +1728,20 @@ document.addEventListener("submit", async (e) => {
       d.id = d.recordId;
       delete d.recordId;
     }
-    if (["login", "register", "recover", "complete-access", "access-user"].includes(f.id)) {
+    if (["login", "register", "recover", "complete-access", "access-user", "remove-operator"].includes(f.id)) {
       await accessAction(async () => {
         if (f.id === "remove-operator") {
       if (role !== "admin" || !cloud) throw Error("Ação exclusiva do administrador.");
       if (d.confirmation !== "EXCLUIR") throw Error("Digite EXCLUIR para confirmar.");
       await cloud.removeOperator(d.userId, d.reason);
+      const removed = state.users?.find((item) => item.id === d.userId);
+      if (removed) Object.assign(removed, {
+        deleted: true, enabled: false, matches: [], permissions: [], followedEditions: [],
+      });
       managedUserId = "";
-      toast("Acesso removido e permissões revogadas.");
+      showRemovedOperators = true;
       render();
+      toast("Acesso excluído. Operador movido para acessos removidos e permissões revogadas.");
       return;
     }
     if (f.id === "login") {
