@@ -735,7 +735,7 @@ setInterval(updateClocks, 250);
 function eventLabel(e, m) {
   if (e.type === "ponto")
     return e.correctionOf
-      ? "Estorno (" + e.value + ")"
+      ? (m.sport === "Futebol" || m.sport === "Futsal" ? "Gol anulado" : "Pontuação anulada") + " (" + e.value + ")"
       : (m.sport === "Futebol" || m.sport === "Futsal" ? "Gol" : "Ponto") +
           " +" +
           e.value;
@@ -776,7 +776,7 @@ function matchEventSummary(m) {
   );
   const relevant = events.filter(
     (e) =>
-      (e.type === "ponto" && e.value > 0 && !corrected.has(e.id)) ||
+      (e.type === "ponto" && ((e.value > 0 && !corrected.has(e.id)) || (e.value < 0 && e.correctionOf))) ||
       [
         "cartão amarelo",
         "cartão vermelho",
