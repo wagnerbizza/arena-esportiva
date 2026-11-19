@@ -1993,3 +1993,43 @@ body:not([data-admin="true"]) .public-event-icon {
 :root[data-theme="light"] .match-card .public-notice p {
   color: #302000;
 }
+
+
+/* Atalhos acessíveis nos resumos e na central. */
+.public-metrics .metric-shortcut,
+.overview-shortcut {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 20px;
+  text-align: left;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.public-metrics .metric-shortcut:hover,
+.public-metrics .metric-shortcut[aria-pressed="true"],
+.overview-shortcut:hover {
+  border-color: var(--accent);
+}
+.metric-shortcut:focus-visible,
+.overview-shortcut:focus-visible,
+.frequent-shortcuts button:focus-visible,
+.frequent-shortcuts a:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.frequent-shortcuts {
+  margin: 14px 0;
+}
+.frequent-shortcuts .toolbar {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.frequent-shortcuts button,
+.frequent-shortcuts a {
+  min-height: 44px;
+}

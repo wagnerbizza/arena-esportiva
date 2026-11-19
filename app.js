@@ -2026,6 +2026,19 @@ document.addEventListener("click", async (e) => {
       listFilters.matches.status = "";
       refresh(); return;
     }
+    if (b.dataset.gamesShortcut) {
+      if (!admin || !["admin","operator"].includes(role)) return;
+      const groups = {live:{group:"active",status:"Ao vivo"},scheduled:{group:"active",status:"Agendada"},finished:{group:"finished",status:""}};
+      const filter = groups[b.dataset.gamesShortcut];
+      if (!filter) return;
+      cloud?.stopHistory();
+      selected = "";
+      section = "matches";
+      listFilters.matches = {...listDefaults.matches,...filter};
+      render();
+      document.getElementById("view")?.scrollIntoView({block:"start"});
+      return;
+    }
     if (b.hasAttribute("data-registration-back")) {
       registrationDraft = null;
       render();
@@ -2993,6 +3006,21 @@ const workspaceDefinitions=[
  {id:"administration",title:"Administração",intro:"Operadores, acessos, relatórios e configurações",sections:["monitor","users","matchSheets","reports","auditReports","certificates","settings","cleanup"]}
 ];
 function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canCreateMatches()&&id==="createMatch"));}
+function frequentWorkspaceShortcuts(allowed) {
+ const games = [["live","Ao vivo"],["scheduled","Agendadas"],["finished","Finalizadas"]];
+ const registrations = [
+  ["createMatch","Nova partida"],["teams","Equipes"],["players","Jogadores"],
+  ["championships","Campeonatos e fichas"],["users","Operadores"],
+ ];
+ return `<nav class="frequent-shortcuts noprint" aria-label="Atalhos frequentes">
+  <div class="toolbar">${allowed.has("matches") ? games.map(([group,label]) =>
+   `<button type="button" data-games-shortcut="${group}">${label}</button>`).join("") : ""}
+  ${registrations.filter(([id]) => allowed.has(id)).map(([id,label]) =>
+   `<button type="button" data-section="${id}">${label}</button>`).join("")}
+  <a class="button" href="./index.html" target="_blank" rel="noopener">Painel público ↗</a>
+  <button type="button" data-share-qr="${esc(new URL("./index.html",location.href).href)}" ${state.settings.logo ? "data-qr-logo" : ""}>Baixar QR code${state.settings.logo ? " com logo" : ""}</button>
+  </div></nav>`;
+}
 function workspaceNavigation(sections){
  const visible=workspaceDefinitions.filter(g=>allowedWorkspaceSections(g).length);
  const group=visible.find(g=>g.sections.includes(section))||visible[0];
@@ -3020,7 +3048,7 @@ function workspaceNavigation(sections){
   .filter(id => allowed.has(id) && (id === "overview" || id !== section))
   .slice(0, 4);
  const homeActions = `${role === "operator" && !(section === "matches" && selected) ? operatorStartPanel(section === "overview") : ""}<nav class="workspace-home-actions noprint" aria-label="Atalhos desta tela">${shortcuts.map(id => `<button type="button" data-section="${id}" ${id === section ? 'class="primary" aria-current="page"' : ""}>${id === "overview" ? "Home" : esc(labels[id] || id)}</button>`).join("")}</nav>`;
- return `${homeActions}<section class="navigation-finder noprint" aria-label="Encontrar função"><label for="functionSearch">O que você quer fazer?</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: gol, jogador, PDF, logo, permissões…" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><p class="muted">Digite para encontrar uma função ou expanda uma área pela seta abaixo.</p><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section><nav class="workspace-tabs workspace-disclosures noprint" style="--workspace-count:${visible.length}" aria-label="Áreas da central">${visible.map(g=>`<details name="arena-navigation" data-navigation-group="${g.id}" ${expandedNavigation.has(g.id)?"open":""} class="${group?.id===g.id&&section!=="account"?"current-area":""}"><summary><span><strong>${g.title}</strong><small>${g.intro}</small></span><span class="navigation-disclosure-action" aria-hidden="true"><span class="navigation-closed-label">Ver opções</span><span class="navigation-open-label">Fechar</span><svg class="navigation-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8 5 7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></summary><div class="navigation-options">${allowedWorkspaceSections(g).map(id=>`<button type="button" data-section="${id}" ${id===section?'aria-current="page"':""}><strong>${esc(labels[id]||id)}</strong><small>${esc(navigationDescriptions[id]?.description||"")}</small></button>`).join("")}</div></details>`).join("")}</nav>${section!=="account"?`<nav class="workspace-subtabs noprint" aria-label="Seções de ${esc(group.title)}">${allowedWorkspaceSections(group).map(id=>sections.find(s=>s[0]===id)).filter(Boolean).map(([id,label])=>`<button type="button" data-section="${id}" class="${section===id?"active":""}" ${section===id?'aria-current="page"':""}>${label}</button>`).join("")}</nav>`:""}`;
+ return `${homeActions}${frequentWorkspaceShortcuts(allowed)}<section class="navigation-finder noprint" aria-label="Encontrar função"><label for="functionSearch">O que você quer fazer?</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: gol, jogador, PDF, logo, permissões…" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><p class="muted">Digite para encontrar uma função ou expanda uma área pela seta abaixo.</p><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section><nav class="workspace-tabs workspace-disclosures noprint" style="--workspace-count:${visible.length}" aria-label="Áreas da central">${visible.map(g=>`<details name="arena-navigation" data-navigation-group="${g.id}" ${expandedNavigation.has(g.id)?"open":""} class="${group?.id===g.id&&section!=="account"?"current-area":""}"><summary><span><strong>${g.title}</strong><small>${g.intro}</small></span><span class="navigation-disclosure-action" aria-hidden="true"><span class="navigation-closed-label">Ver opções</span><span class="navigation-open-label">Fechar</span><svg class="navigation-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8 5 7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></summary><div class="navigation-options">${allowedWorkspaceSections(g).map(id=>`<button type="button" data-section="${id}" ${id===section?'aria-current="page"':""}><strong>${esc(labels[id]||id)}</strong><small>${esc(navigationDescriptions[id]?.description||"")}</small></button>`).join("")}</div></details>`).join("")}</nav>${section!=="account"?`<nav class="workspace-subtabs noprint" aria-label="Seções de ${esc(group.title)}">${allowedWorkspaceSections(group).map(id=>sections.find(s=>s[0]===id)).filter(Boolean).map(([id,label])=>`<button type="button" data-section="${id}" class="${section===id?"active":""}" ${section===id?'aria-current="page"':""}>${label}</button>`).join("")}</nav>`:""}`;
 }
 function documentationView(){
  const central=new URL("painel.html",location.href);central.search="";
@@ -3056,17 +3084,36 @@ const sportChallenges=[
 function publicStatistics(){
  const games=state.matches.filter(m=>!publicFilter||m.sport===publicFilter),ended=games.filter(m=>["Encerrada","Homologada"].includes(m.status));
  const football=ended.filter(m=>m.sport==="Futebol"),goals=football.reduce((sum,m)=>sum+(m.score||[0,0]).reduce((a,n)=>a+(Number.isFinite(n)?n:0),0),0),teams=new Set(games.flatMap(m=>[m.home,m.away]).filter(Boolean));
- return `<div class="public-metrics" aria-label="Estatísticas dos jogos publicados"><article><strong>${games.filter(m=>m.status==="Ao vivo").length}</strong><span>Jogos ao vivo</span></article><article><strong>${games.filter(m=>["Agendada","Adiada"].includes(m.status)).length}</strong><span>Jogos programados</span></article><article><strong>${ended.length}</strong><span>Jogos concluídos</span></article><article><strong>${teams.size}</strong><span>Equipes nas partidas</span></article></div>${!publicFilter||publicFilter==="Futebol"?`<p class="muted public-goals">Futebol: ${goals} gol(s) em ${football.length} partida(s) encerrada(s) ou homologada(s).</p>`:""}`;
+ const metrics = [
+  ["live", games.filter(m => m.status === "Ao vivo").length, "Jogos ao vivo"],
+  ["schedule", games.filter(m => ["Agendada","Adiada"].includes(m.status)).length, "Jogos programados"],
+  ["results", ended.length, "Jogos concluídos"],
+  ["teams", teams.size, "Equipes nas partidas"],
+ ];
+ return `<nav class="public-metrics" aria-label="Atalhos dos jogos publicados">${metrics.map(([area,count,label]) =>
+  `<button type="button" class="metric-shortcut" data-public-area="${area}" aria-pressed="${publicArea === area}">
+    <strong>${count}</strong><span>${label}</span></button>`).join("")}</nav>
+  ${!publicFilter||publicFilter==="Futebol"?`<p class="muted public-goals">Futebol: ${goals} gol(s) em ${football.length} partida(s) encerrada(s) ou homologada(s).</p>`:""}`;
+
 }
 function publicChallenge(){
  const q=sportChallenges[sportChallengeIndex%sportChallenges.length],answered=sportChallengeAnswer!=="";
  return `<section class="card sport-challenge"><span class="tag">INTERVALO ESPORTIVO</span><h2>Desafio rápido</h2><p>Uma brincadeira para aprender enquanto acompanha as partidas. Suas respostas ficam apenas nesta página.</p><p class="quiz-score">Seu placar: <strong>${quizHits} acerto(s) em ${quizAttempts} resposta(s)</strong></p><h3>${esc(q.question)}</h3><div class="toolbar">${q.answers.map((a,i)=>`<button type="button" data-sport-answer="${i}" ${answered?"disabled":""}>${esc(a)}</button>`).join("")}</div>${answered?`<p role="status"><strong>${Number(sportChallengeAnswer)===q.correct?"Acertou!":"Vamos aprender!"}</strong> ${esc(q.explanation)}</p><button type="button" data-sport-next>Próximo desafio</button>`:""}</section>`;
 }
 function publicHub(){
- const tabs=[["active","Jogos atuais"],["live","Ao vivo"],["schedule","Agenda"],["results","Resultados"],["standings","Classificação"],["fun","Diversão"]];
+ const tabs=[["active","Jogos atuais"],["live","Ao vivo"],["schedule","Agenda"],["results","Resultados"],["teams","Equipes"],["standings","Classificação"],["fun","Diversão"]];
  return `${publicStatistics()}${publicSportSummary()}<nav class="public-navigation" aria-label="Conteúdo do painel público">${tabs.map(([id,label])=>`<button type="button" data-public-area="${id}" class="${id===publicArea?"active":""}" ${id===publicArea?'aria-current="page"':""}>${label}</button>`).join("")}</nav><div id="publicHubContent">${publicHubContent()}</div>`;
 }
+function publicTeamsPanel() {
+ const games = state.matches.filter(m => !publicFilter || m.sport === publicFilter);
+ const ids = [...new Set(games.flatMap(m => [m.home,m.away]).filter(Boolean))]
+  .sort((a,b) => name(a).localeCompare(name(b), "pt-BR"));
+ return `<section aria-label="Equipes nas partidas publicadas"><h2>Equipes</h2><div class="grid">${ids.map(id =>
+  `<article class="card"><h3>${esc(name(id))}</h3><p>${games.filter(m => m.home === id || m.away === id).length} partida(s) nesta seleção</p></article>`).join("") ||
+  empty("Nenhuma equipe nas partidas desta seleção.")}</div></section>`;
+}
 function publicHubContent(){
+ if(publicArea==="teams")return publicTeamsPanel();
  if(publicArea==="fun")return fanZone();
  if(publicArea==="standings")return standingsPanel()||empty("A classificação estará disponível quando houver partidas vinculadas a um campeonato de futebol.");
  return `${publicArea==="active"?'<p class="muted">Partidas encerradas, homologadas e canceladas ficam em <strong>Resultados</strong>.</p>':""}<div id="publicMatches" class="grid">${publicMatches(publicFilter)}</div>${publicArea==="active"?'<section class="card public-locations"><h2>Esporte em diferentes locais</h2><p>Veja o local informado em cada partida. Use a modalidade, a agenda e os jogos ao vivo para acompanhar os eventos publicados pela organização.</p></section>':""}`;
@@ -3084,7 +3131,14 @@ document.addEventListener("click",e=>{
   return;
  }
  const area=e.target.closest("[data-public-area]");
- if(area){publicArea=area.dataset.publicArea;render();return;}
+ if(area){
+  publicArea=area.dataset.publicArea;
+  render();
+  requestAnimationFrame(() => document.getElementById("publicHubContent")?.scrollIntoView({
+   behavior:preferences.motion?"auto":"smooth",block:"start"
+  }));
+  return;
+ }
  const answer=e.target.closest("[data-sport-answer]");
  if(answer&&sportChallengeAnswer===""){sportChallengeAnswer=answer.dataset.sportAnswer;quizAttempts++;if(Number(sportChallengeAnswer)===sportChallenges[sportChallengeIndex%sportChallenges.length].correct)quizHits++;const out=$("#publicHubContent");if(out)out.innerHTML=fanZone();return;}
  if(e.target.closest("[data-sport-next]")){sportChallengeIndex++;sportChallengeAnswer="";const out=$("#publicHubContent");if(out)out.innerHTML=fanZone();}
@@ -3408,7 +3462,8 @@ function operatorStartPanel(showTasks = false) {
 
 function overviewMatchView(){
  const rows=scopeMatches(state.matches,overviewGameScope).slice().sort((a,b)=>{if(overviewGameScope!=="finished"){const priority=m=>m.status==="Ao vivo"?0:m.status==="Pausada"?1:2;const d=priority(a)-priority(b);if(d)return d;}return overviewGameScope==="finished"?new Date(b.date)-new Date(a.date):new Date(a.date)-new Date(b.date);});
- return `${quickActionCards()}<div class="grid">${[["Equipes",state.teams.length],["Jogadores",state.players.length],["Partidas ao vivo",state.matches.filter(m=>m.status==="Ao vivo").length]].map(([label,n])=>`<div class="card"><span class="muted">${label}</span><div class="kpi">${n}</div></div>`).join("")}</div><section class="card"><h2>Quadra e campo</h2>${matchScopeButtons("overview",overviewGameScope)}<p class="muted">Jogos encerrados ficam em Finalizadas. Esta seleção muda apenas a visualização.</p></section><div class="grid">${rows.slice(0,6).map(m=>matchCard(m,true)).join("")||empty(overviewGameScope==="active"?"Nenhuma partida atual. Consulte Finalizadas ou programe um novo jogo.":"Nenhuma partida nesta seleção.")}</div>${rows.length>6?'<p>Exibindo seis partidas. Abra Jogos → Acompanhar jogos para consultar a lista completa.</p>':""}`;
+ return `${quickActionCards()}<div class="grid">${[["Equipes",state.teams.length,"teams"],["Jogadores",state.players.length,"players"],["Partidas ao vivo",state.matches.filter(m=>m.status==="Ao vivo").length,"live"]].filter(([, , target]) => target === "live" || canManageRosters()).map(([label,n,target]) =>
+  `<button type="button" class="card overview-shortcut" ${target === "live" ? 'data-games-shortcut="live"' : `data-section="${target}"`}><span>${label}</span><strong class="kpi">${n}</strong></button>`).join("")}</div><section class="card"><h2>Quadra e campo</h2>${matchScopeButtons("overview",overviewGameScope)}<p class="muted">Jogos encerrados ficam em Finalizadas. Esta seleção muda apenas a visualização.</p></section><div class="grid">${rows.slice(0,6).map(m=>matchCard(m,true)).join("")||empty(overviewGameScope==="active"?"Nenhuma partida atual. Consulte Finalizadas ou programe um novo jogo.":"Nenhuma partida nesta seleção.")}</div>${rows.length>6?'<p>Exibindo seis partidas. Abra Jogos → Acompanhar jogos para consultar a lista completa.</p>':""}`;
 }
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-match-scope]");if(!b||!admin||!['active','finished','all'].includes(b.dataset.matchScope))return;
