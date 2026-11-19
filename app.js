@@ -316,9 +316,17 @@ function printRegistrationSheet(championship) {
       header{display:flex;align-items:center;gap:16px} img{max-width:96px;max-height:64px}
       table{border-collapse:collapse;width:100%;margin-top:16px}
       th,td{border:1px solid #777;padding:6px;text-align:left;height:22px}
-      .registration-players{table-layout:fixed}
-      .registration-players th,.registration-players td{overflow-wrap:anywhere}
-      .registration-players th{vertical-align:middle}
+      h1{font-size:20pt;line-height:1.15;margin:6px 0}
+      h2{font-size:14pt;line-height:1.2;margin:12px 0 8px}
+      body>p{margin:8px 0}
+      .registration-players{table-layout:fixed;font-size:${Math.min(size,11)}pt;margin-top:10px}
+      .registration-players th,.registration-players td{
+        box-sizing:border-box;padding:1mm 1.5mm;overflow-wrap:break-word;line-height:1.2;height:7mm}
+      .registration-players th{vertical-align:middle;font-size:10pt}
+      .registration-players th:first-child,.registration-players td:first-child{
+        white-space:nowrap;overflow-wrap:normal;text-align:center;padding:1mm}
+      .registration-players td:nth-child(3),.registration-players td:nth-child(4){
+        white-space:nowrap;text-align:center}
       tr{break-inside:avoid} thead{display:table-header-group} button{margin-top:16px}
       .watermark{position:fixed;inset:42% 8% auto;text-align:center;transform:rotate(-25deg);
         font-size:32pt;font-weight:bold;color:rgba(20,20,20,.12);pointer-events:none;overflow-wrap:anywhere}
@@ -334,7 +342,7 @@ function printRegistrationSheet(championship) {
     <p>${esc(championship.sport)} · ${esc(championship.category || "Sem categoria")}</p>
     <p>Equipe: ____________________________________________</p>
     <p>Responsável: _______________________________________</p>
-    <table class="registration-players"><colgroup><col style="width:4%"><col style="width:32%"><col style="width:10%"><col style="width:10%"><col style="width:18%"><col style="width:26%"></colgroup><thead><tr><th>Nº</th><th>Nome do participante</th><th>Turma</th><th>Nº da camisa</th><th>Posição</th><th>Assinatura</th></tr></thead>
+    <table class="registration-players"><colgroup><col style="width:7%"><col style="width:30%"><col style="width:10%"><col style="width:11%"><col style="width:17%"><col style="width:25%"></colgroup><thead><tr><th>Nº</th><th>Nome do participante</th><th>Turma</th><th>Nº da camisa</th><th>Posição</th><th>Assinatura</th></tr></thead>
     <tbody>${participants}</tbody></table>${partners ? `<aside class="partners">${partners}</aside>` : ""}<button type="button" id="print">Imprimir / Salvar PDF</button></html>`);
   sheet.document.close();
   sheet.document.getElementById("print").onclick = () => sheet.print();
@@ -739,11 +747,13 @@ function timelineControl(m) {
     ${timelineOpenId === m.id ? `<section id="timeline-panel-${esc(m.id)}" aria-label="Lances anteriores da partida">${timelineContent(m)}</section>` : ""}</div>`;
 }
 function timelineContent(m) {
-  const rows = timelineRows.slice().sort((a,b) => b.revision-a.revision);
+  const summaryOnly = !timelineRows.length && (m.publicEvents || []).length > 0;
+  const rows = (summaryOnly ? m.publicEvents.map((e,i) => ({...e,revision:i+1,stage:m.stage})) : timelineRows)
+    .slice().sort((a,b) => b.revision-a.revision);
   return `<div class="toolbar"><button type="button" data-timeline-scroll="recent">↑ Recentes</button>
     <button type="button" data-timeline-scroll="older">↓ Anteriores</button>
     ${role === "admin" && !C.demo ? '<button type="button" data-timeline-publish>Publicar lances antigos</button>' : ""}</div>
-    <p role="status">${timelineError ? esc(timelineError) : timelineLoading ? "Carregando lances…" : rows.length + " lance(s) carregado(s)"}</p>
+    <p role="status">${timelineError ? esc(timelineError) : timelineLoading ? "Carregando lances…" : rows.length + (summaryOnly ? " lance(s) do resumo recente. O histórico completo ainda precisa ser publicado pelo administrador." : " lance(s) carregado(s)")}</p>
     <div class="timeline-scroll" data-timeline-list tabindex="0" aria-label="Lista de lances, do mais recente para o mais antigo">
     ${rows.map(e => {
       const side = [0,1].includes(e.side) ? name([m.home,m.away][e.side]) : "";
@@ -751,7 +761,7 @@ function timelineContent(m) {
         e.type === "etapa" ? `Etapa: ${e.to}` : e.type === "set" ? "Set encerrado" : eventLabel(e,m);
       return `<article class="timeline-event"><strong>${esc(label)}${side ? " · "+esc(side) : ""}</strong>
         ${e.playerName ? `<p>${esc(e.number ? e.number+" · " : "")}${esc(e.playerName)}</p>` : ""}
-        <small>Etapa ${esc(e.stage)} · ${esc(e.at ? format(e.at?.toDate ? e.at.toDate().toISOString() : e.at) : "Aguardando confirmação")}</small></article>`;
+        <small>Etapa ${esc(e.stage)} · ${esc(e.at ? format(e.at?.toDate ? e.at.toDate().toISOString() : e.at) : "Horário não disponível no resumo")}</small></article>`;
     }).join("") || '<p>Nenhum lance publicado neste histórico.</p>'}</div>
     <p><button type="button" data-timeline-more ${timelineLoading || !timelineMore ? "disabled" : ""}>Carregar lances mais antigos</button></p>`;
 }
@@ -791,13 +801,14 @@ document.addEventListener("click", async event => {
         return;
       }
       const request = timelineRequest;
+      let publishingOld = role === "admin";
       timelineStop = cloud.watchTimeline(matchId, page => {
         if (request !== timelineRequest) return;
         const known = new Map(timelineRows.map(row => [row.id,row]));
         for (const row of page.rows) known.set(row.id,row);
         timelineRows = [...known.values()];
         if (!timelineCursor) {timelineCursor=page.cursor;timelineMore=page.more;}
-        timelineLoading = false;
+        timelineLoading = publishingOld;
         timelineError = "";
         paintTimeline();
       }, error => {
@@ -806,6 +817,15 @@ document.addEventListener("click", async event => {
         timelineError = "Não foi possível carregar os lances: "+error.message;
         paintTimeline();
       });
+      if (publishingOld) {
+        try {
+          const count = await cloud.publishTimeline(matchId);
+          if (request === timelineRequest && count) toast(count+" lance(s) antigo(s) publicado(s).");
+        } finally {
+          publishingOld = false;
+          if (request === timelineRequest) {timelineLoading=false;paintTimeline();}
+        }
+      }
       return;
     }
     const panel = document.getElementById("timeline-panel-"+timelineOpenId);
@@ -822,9 +842,9 @@ document.addEventListener("click", async event => {
     paintTimeline();
     try {
       if (button.hasAttribute("data-timeline-publish")) {
-        await cloud.publishTimeline(matchId);
+        const count = await cloud.publishTimeline(matchId);
         if (request !== timelineRequest) return;
-        toast("Lances antigos publicados.");
+        toast(count ? count+" lance(s) antigo(s) publicado(s)." : "O histórico já está publicado. Nenhum lance adicional encontrado.");
       } else if (timelineMore && timelineCursor) {
         const page = await cloud.loadTimeline(matchId,timelineCursor);
         if (request !== timelineRequest) return;
@@ -1040,12 +1060,15 @@ function liveStatusPanel(context) {
     .slice().sort((a, b) => a.date.localeCompare(b.date))[0];
   const liveCount = active.filter((match) => match.status === "Ao vivo").length;
   const accessibleActive = context !== "admin" || role === "admin" ? active : active.filter((match) => cloud?.canOperate(match.id));
-  const statusText = liveCount
+  const restrictedOperator = context === "admin" && role === "operator" && !active.length && !upcoming;
+  const statusText = restrictedOperator ? "Nenhum jogo disponível para esta conta" : liveCount
     ? `${liveCount} jogo${liveCount === 1 ? "" : "s"} ao vivo agora`
     : active.length
       ? `Nenhum jogo ao vivo • ${active.length} interrompido${active.length === 1 ? "" : "s"}`
       : "Nenhum jogo ao vivo no momento";
-  const detail = upcoming
+  const detail = restrictedOperator
+    ? "O administrador define as partidas para operar e os campeonatos para acompanhar."
+    : upcoming
     ? `${name(upcoming.home)} × ${name(upcoming.away)} • ${esc(format(upcoming.date))}`
     : active.length || liveCount
       ? "Confira a situação e os controles da partida."
@@ -3576,7 +3599,7 @@ function operatorStartPanel(showTasks = false) {
     tasks.push(["players", "Jogadores", "Cadastre ou edite o elenco."]);
   }
   return `<section class="card"><h2>Minhas partidas para operar</h2>
-    ${games ? `<div class="grid">${games}</div>` : '<p class="muted">Nenhuma partida disponível para operação. Peça ao administrador para atribuir o jogo à sua conta.</p>'}
+    ${games ? `<div class="grid">${games}</div>` : '<p class="muted">Nenhuma partida atual atribuída para operação. Em Administração → Usuários e permissões, o administrador pode selecionar esta conta e atribuir a partida. Para consultar os jogos publicados, use Painel público.</p>'}
     ${operatorEditions.length ? '<p><button type="button" data-section="matches">Meus campeonatos</button></p>' : ""}
     ${assigned.length > 3 ? '<p><button type="button" data-section="matches">Ver todas as partidas disponíveis</button></p>' : ""}
   </section>${showTasks ? `<section class="card"><h2>O que você quer fazer?</h2><div class="grid">
