@@ -70,13 +70,16 @@
     if (a.type === "settings") {
       const limit = Number(a.data.summaryLimit ?? s.settings.summaryLimit ?? 5);
       need(Number.isInteger(limit) && limit >= 1 && limit <= 5, "Escolha de 1 a 5 lances para o resumo.");
+      const historySize = Number(a.data.historyPageSize ?? s.settings.historyPageSize ?? 20);
+      need(Number.isInteger(historySize) && historySize >= 1 && historySize <= 50, "Escolha de 1 a 50 lances por carregamento do histórico.");
       s.settings = {
         title: str(a.data.title, 100) || "Arena",
         subtitle: str(a.data.subtitle, 200),
         color: /^#[0-9a-f]{6}$/i.test(a.data.color) ? a.data.color : "#c8fa64",
         banner: url(a.data.banner),
         logo: url(a.data.logo ?? s.settings.logo ?? ""),
-        summaryLimit: Number(a.data.summaryLimit ?? s.settings.summaryLimit ?? 5),
+        summaryLimit: limit,
+        historyPageSize: historySize,
       };
     } else if (a.type === "championship") {
       const d = a.data;

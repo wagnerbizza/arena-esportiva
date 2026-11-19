@@ -443,7 +443,7 @@ function renderBrandAndIdentity() {
 }
 function settingsView() {
   const s = state.settings;
-  return `<div class="card"><h2>Identidade visual e configurações</h2><p class="muted">A aparência é compartilhada pelo painel público e pela central. Somente o administrador principal pode alterá-la.</p><form id="settings"><div class="formgrid">${field("Título do sistema", "title", "text", `value="${esc(s.title)}" required maxlength="100"`)}${field("Subtítulo", "subtitle", "text", `value="${esc(s.subtitle)}" maxlength="200"`)}${field("Cor de destaque", "color", "color", `value="${esc(s.color)}"`)}${field("Lances no resumo do placar (1 a 5)", "summaryLimit", "number", `required min="1" max="5" step="1" value="${esc(s.summaryLimit ?? 5)}"`)}<p class="muted">Quantidade de lances recentes no card do administrador, operador e público. Os demais continuam disponíveis em Ver lances anteriores.</p>${field("Endereço HTTPS da imagem de capa", "banner", "url", `value="${esc(s.banner)}" maxlength="1500"`)}<label>Logo do sistema (PNG, JPG ou WebP)<input id="systemLogoFile" type="file" accept="image/png,image/jpeg,image/webp"><small>Escolha uma imagem de até 5 MB. Ela será reduzida automaticamente.</small></label><label>Ou endereço HTTPS do logo<input name="logoURL" type="url" maxlength="1500" placeholder="https://..." value="${esc(s.logo?.startsWith("https://") ? s.logo : "")}"></label><input type="hidden" name="logo" value="${esc(s.logo || "")}"><div class="system-logo-preview" id="systemLogoPreview">${systemLogoPreview(s.logo || "")}</div></div><p><button class="primary">Salvar aparência</button></p></form><p class="muted">Escolher ou remover uma imagem só muda a prévia. Clique em Salvar aparência para publicar. O logo salvo também será usado como ícone da aba do navegador. Os escudos dos times são alterados na aba Equipes. A assinatura WagnerBIZZA é preservada.</p></div>`;
+  return `<div class="card"><h2>Identidade visual e configurações</h2><p class="muted">A aparência é compartilhada pelo painel público e pela central. Somente o administrador principal pode alterá-la.</p><form id="settings"><div class="formgrid">${field("Título do sistema", "title", "text", `value="${esc(s.title)}" required maxlength="100"`)}${field("Subtítulo", "subtitle", "text", `value="${esc(s.subtitle)}" maxlength="200"`)}${field("Cor de destaque", "color", "color", `value="${esc(s.color)}"`)}${field("Lances no resumo do placar (1 a 5)", "summaryLimit", "number", `required min="1" max="5" step="1" value="${esc(s.summaryLimit ?? 5)}"`)}<p class="muted">Quantidade de lances recentes no card do administrador, operador e público. Os demais continuam disponíveis em Ver lances anteriores.</p>${field("Lances por carregamento do histórico (1 a 50)", "historyPageSize", "number", `required min="1" max="50" step="1" value="${esc(s.historyPageSize ?? 20)}"`)}<p class="muted">Quantidade inicial ao abrir Ver lances anteriores. O botão Carregar lances mais antigos traz o próximo grupo.</p>${field("Endereço HTTPS da imagem de capa", "banner", "url", `value="${esc(s.banner)}" maxlength="1500"`)}<label>Logo do sistema (PNG, JPG ou WebP)<input id="systemLogoFile" type="file" accept="image/png,image/jpeg,image/webp"><small>Escolha uma imagem de até 5 MB. Ela será reduzida automaticamente.</small></label><label>Ou endereço HTTPS do logo<input name="logoURL" type="url" maxlength="1500" placeholder="https://..." value="${esc(s.logo?.startsWith("https://") ? s.logo : "")}"></label><input type="hidden" name="logo" value="${esc(s.logo || "")}"><div class="system-logo-preview" id="systemLogoPreview">${systemLogoPreview(s.logo || "")}</div></div><p><button class="primary">Salvar aparência</button></p></form><p class="muted">Escolher ou remover uma imagem só muda a prévia. Clique em Salvar aparência para publicar. O logo salvo também será usado como ícone da aba do navegador. Os escudos dos times são alterados na aba Equipes. A assinatura WagnerBIZZA é preservada.</p></div>`;
 }
 function systemLogoPreview(value) {
   return `<div class="system-logo-sample">${value ? `<img src="${esc(value)}" alt="Prévia do logo do sistema" onerror="this.hidden=true">` : '<span class="muted">Sem logo personalizado</span>'}</div><button type="button" data-remove-system-logo>Remover logo</button>`;
@@ -737,6 +737,11 @@ function matchEventSummary(m) {
 
 let timelineOpenId = "", timelineRows = [], timelineCursor = null, timelineMore = false;
 let timelineStop = null, timelineLoading = false, timelineError = "", timelineRequest = 0;
+let timelineAppliedSize = 20;
+function configuredHistoryPageSize() {
+  const size = Number(state.settings.historyPageSize ?? 20);
+  return Number.isInteger(size) && size >= 1 && size <= 50 ? size : 20;
+}
 function closeTimeline() {
   timelineRequest++;
   timelineStop?.();
@@ -751,7 +756,7 @@ function timelineControl(m) {
 }
 function timelineContent(m) {
   const summaryOnly = !timelineRows.length && (m.publicEvents || []).length > 0;
-  const rows = (summaryOnly ? m.publicEvents.map((e,i) => ({...e,revision:i+1,stage:m.stage})) : timelineRows)
+  const rows = (summaryOnly ? m.publicEvents.slice(-configuredHistoryPageSize()).map((e,i) => ({...e,revision:i+1,stage:m.stage})) : timelineRows)
     .slice().sort((a,b) => b.revision-a.revision);
   return `<div class="toolbar"><button type="button" data-timeline-scroll="recent">↑ Recentes</button>
     <button type="button" data-timeline-scroll="older">↓ Anteriores</button>
@@ -766,6 +771,7 @@ function timelineContent(m) {
         ${e.playerName ? `<p>${esc(e.number ? e.number+" · " : "")}${esc(e.playerName)}</p>` : ""}
         <small>Etapa ${esc(e.stage)} · ${esc(e.at ? format(e.at?.toDate ? e.at.toDate().toISOString() : e.at) : "Horário não disponível no resumo")}</small></article>`;
     }).join("") || '<p>Nenhum lance publicado neste histórico.</p>'}</div>
+    <p class="muted">Até ${configuredHistoryPageSize()} lances por carregamento.</p>
     <p><button type="button" data-timeline-more ${timelineLoading || !timelineMore ? "disabled" : ""}>Carregar lances mais antigos</button></p>`;
 }
 function paintTimeline() {
@@ -791,6 +797,7 @@ document.addEventListener("click", async event => {
       const match = state.matches.find(m => m.id === matchId);
       if (!match) return;
       timelineOpenId = matchId;
+      timelineAppliedSize = configuredHistoryPageSize();
       timelineRows = [];
       timelineCursor = null;
       timelineMore = false;
@@ -1087,6 +1094,7 @@ function liveStatusPanel(context) {
 }
 
 function render() {
+  if (timelineOpenId && timelineAppliedSize !== configuredHistoryPageSize()) closeTimeline();
   resetTeamProfileContext();
   resetRemovedContext();
   hideContextHelp();

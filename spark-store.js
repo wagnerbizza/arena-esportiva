@@ -195,17 +195,21 @@ export async function connectSpark({
       playerName:athlete?.playerName || "", number:athlete?.number || "",
       at:audit.at, revision:audit.revision};
   }
+  function historyPageSize() {
+    const size = state.settings.historyPageSize ?? 20;
+    return Number.isInteger(size) && size >= 1 && size <= 50 ? size : 20;
+  }
   function timelineQuery(matchId, cursor = null) {
     return F.query(F.collection(database, "publicMatches", matchId, "timeline"),
-      F.orderBy("revision","desc"), ...(cursor ? [F.startAfter(cursor)] : []), F.limit(50));
+      F.orderBy("revision","desc"), ...(cursor ? [F.startAfter(cursor)] : []), F.limit(historyPageSize()));
   }
   async function loadTimeline(matchId, cursor = null) {
     const snap = await F.getDocsFromServer(timelineQuery(matchId,cursor));
-    return { rows:snap.docs.map(doc => doc.data()), cursor:snap.docs.at(-1) || null, more:snap.size === 50 };
+    return { rows:snap.docs.map(doc => doc.data()), cursor:snap.docs.at(-1) || null, more:snap.size === historyPageSize() };
   }
   function watchTimeline(matchId, update, error) {
     return F.onSnapshot(timelineQuery(matchId), snap => update({
-      rows:snap.docs.map(doc => doc.data()), cursor:snap.docs.at(-1) || null, more:snap.size === 50,
+      rows:snap.docs.map(doc => doc.data()), cursor:snap.docs.at(-1) || null, more:snap.size === historyPageSize(),
     }), error);
   }
   async function publishTimeline(matchId) {
