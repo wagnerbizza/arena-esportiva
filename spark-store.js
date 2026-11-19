@@ -106,7 +106,7 @@ export async function connectSpark({
           publish();
         },
         error => {
-          if(path.startsWith("matches/") && !isOwner() && error.code === "permission-denied") {
+          if((path.startsWith("matches/") || path.startsWith("championships/")) && !isOwner() && error.code === "permission-denied") {
             assign(null); publish(); return;
           }
           message(error);
@@ -148,12 +148,30 @@ export async function connectSpark({
       // Operador não consulta a coleção privada inteira: recebe cada partida autorizada.
       // A lista pública é somente leitura; os documentos privados autorizados preservam os detalhes operacionais.
       const publicGames = new Map(), assignedGames = new Map(), championshipGames = new Map();
+      const listedChampionships = new Map(), assignedChampionships = new Map(), championshipWatches = new Set();
+      const publishChampionships = () => {
+        const rows = new Map(listedChampionships);
+        for(const [id,row] of assignedChampionships)rows.set(id,row);
+        state.championships=[...rows.values()].filter(row=>row.testData!==true);
+      };
+      const watchAssignedChampionship = id => {
+        if(typeof id!=="string" || !id || id.includes("/") || championshipWatches.has(id))return;
+        if(!canManageChampionships() && !(profile?.operatedChampionships || []).includes(id))return;
+        championshipWatches.add(id);
+        // Leitura pontual também contempla cadastros antigos sem o campo testData.
+        watchDoc("championships/"+id,row=>{
+          if(row && row.testData!==true)assignedChampionships.set(id,row);
+          else assignedChampionships.delete(id);
+          publishChampionships();
+        });
+      };
       const publishOperatorGames = () => {
         const visibleGames = new Map(publicGames);
         for (const games of championshipGames.values())
           for (const game of games) visibleGames.set(game.id,game);
         for (const [id, game] of assignedGames) visibleGames.set(id, game);
         state.matches = [...visibleGames.values()];
+        for(const game of state.matches)if(game.testData!==true)watchAssignedChampionship(game.championshipId);
         if (!canManageRosters()) state.players = [...new Map(
           [...championshipGames.values()].flat().concat([...assignedGames.values()])
             .flatMap(m => m.roster || []).filter(p => p && typeof p === "object")
@@ -161,7 +179,8 @@ export async function connectSpark({
       };
       // Os jogadores disponíveis são os elencos congelados nessas partidas.
       if(canManageRosters())watchCollection("players",d=>state.players=d,[F.where("testData","==",false)]);
-      if(canManageChampionships())watchCollection("championships",d=>state.championships=d,[F.where("testData","==",false)]);
+      if(canManageChampionships())watchCollection("championships",rows=>{listedChampionships.clear();for(const row of rows)listedChampionships.set(row.id,row);publishChampionships();},[F.where("testData","==",false)]);
+      for(const id of profile?.operatedChampionships || [])watchAssignedChampionship(id);
       if(canViewAllGames())watchCollection("publicMatches",d=>{publicGames.clear();for(const game of d)publicGames.set(game.id,game);publishOperatorGames();});
       else {
         for (const edition of profile?.followedEditions || []) {
@@ -1002,7 +1021,7 @@ export async function connectSpark({
           typeof id === "string" && id.length > 0 && !id.includes("/"))));
       const status = !profile ? "incomplete" : profile.removalRequested ? "removal-requested" : profile.role === "operator" && profile.enabled === false ? "blocked" :
         !u.emailVerified ? "verify" : profile.role === "pending" ? "pending" : valid ? "operator" : "unauthorized";
-      onSession(u, valid ? "operator" : "", {status,permissions:valid?(profile?.permissions||[]):[],followedEditions:valid?(profile?.followedEditions||[]):[]});
+      onSession(u, valid ? "operator" : "", {status,permissions:valid?(profile?.permissions||[]):[],followedEditions:valid?(profile?.followedEditions||[]):[],operatedChampionships:valid?(profile?.operatedChampionships||[]):[]});
       onData(state);
       if (valid) listen(true);
 

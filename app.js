@@ -31,6 +31,7 @@ let state = D.fresh(),
   role = "",
   operatorPermissions = [],
   operatorEditions = [],
+  operatorChampionships = [],
   pendingImport = null,
   busy = false,
   cloud = null,
@@ -465,7 +466,7 @@ document.addEventListener("click", async (event) => {
       const logo = button.hasAttribute("data-qr-logo") ? await qrLogoData(state.settings.logo) : "";
       const filename = logo ? "arena-qr-code-com-logo.svg" : "arena-qr-code.svg";
       download(filename, qrSvg(button.dataset.shareQr, logo), "image/svg+xml");
-    } else if (admin && canManageChampionships()) {
+    } else if (admin && canPrepareRegistrationSheets()) {
       const championship = (state.championships || []).find((c) => c.id === button.dataset.registrationSheet);
       if (championship) printRegistrationSheet(championship);
     }
@@ -493,6 +494,7 @@ let systemLogoBusy = false, systemLogoVersion = 0;
 const canManageRosters = () => role === "admin" || (role === "operator" && operatorPermissions.includes("rosters"));
 const canCreateMatches = () => role === "admin" || (role === "operator" && operatorPermissions.includes("matchesCreate"));
 const canManageChampionships = () => role === "admin" || (role === "operator" && operatorPermissions.includes("championships"));
+const canPrepareRegistrationSheets = () => canManageChampionships() || (role === "operator" && operatorChampionships.length > 0);
 const canViewAllGames = () => role === "admin" || (role === "operator" && operatorPermissions.includes("gamesView"));
 async function sairParaApresentacao() {
   if (!cloud || !window.confirm("Deseja sair da sua conta no Arena?")) return;
@@ -1052,6 +1054,7 @@ async function boot() {
         role = r;
         operatorPermissions = Array.isArray(access.permissions)?access.permissions:[];
         operatorEditions = Array.isArray(access.followedEditions) ? access.followedEditions : [];
+        operatorChampionships = Array.isArray(access.operatedChampionships) ? access.operatedChampionships : [];
         listFilters.matches.edition = "";
         listFilters.matches.team = "";
         render();
@@ -1245,7 +1248,7 @@ function render() {
     return;
   }
   // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
-  if (role !== "admin" && !["overview", "matches", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","imports"]:[]), ...(canManageChampionships()?["championships","registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[])].includes(section)) {
+  if (role !== "admin" && !["overview", "matches", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canPrepareRegistrationSheets()?["registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[])].includes(section)) {
     section = "overview";
     selected = "";
   }
@@ -1310,7 +1313,7 @@ function view() {
   if(section==="qrCodes")return qrCodesView();
   if(section==="profiles")return profilesView();
   if(section==="preferences")return personalPreferencesView();
-  if(section==="registrationSheets"&&canManageChampionships())return registrationSheetsView();
+  if(section==="registrationSheets"&&canPrepareRegistrationSheets())return registrationSheetsView();
   if(section==="accessHistory"&&role==="admin")return permissionHistoryView();
   if(section==="testData" && role==="admin")return testDataPanel();
   if(section==="credentials" && role==="admin")return credentialsPanel();
@@ -3517,7 +3520,7 @@ const workspaceDefinitions=[
  {id:"administration",title:"Administração",intro:"Operadores e permissões",sections:["monitor","users"]},
  {id:"maintenance",title:"Backups e suporte",intro:"Guias, testes e recuperação",sections:["documentation","testData","cleanup"]}
 ];
-function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&["championships","registrationSheets"].includes(id))||(canCreateMatches()&&id==="createMatch"));}
+function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
 function publicPanelURL(edition="") {
  const url=new URL("./index.html",location.href);
  if(trainingMode)url.searchParams.set("demonstracao","1");
@@ -3540,7 +3543,7 @@ async function renderQRPreviews() {
 }
 function registrationSheetsView() {
  const rows=(state.championships||[]).filter(c=>!c.testData).slice().sort(alphabetical);
- return `<section class="card"><h2>Fichas de inscrição</h2><p>Escolha o campeonato para preparar sua ficha, imprimir ou salvar em PDF.</p>${role==="admin"?'<button type="button" data-section="settings">Configurar identidade da ficha</button>':""}</section><div class="grid">${rows.map(c=>`<article class="card"><h3>${esc(championshipTitle(c))}</h3><p>${esc(c.sport)} • ${esc(c.category||"Sem categoria")}</p><button type="button" class="primary" data-registration-sheet="${esc(c.id)}">Preparar ficha de inscrição</button><button type="button" data-championship-games="${esc(c.id)}">Ver partidas</button></article>`).join("")||empty("Nenhum campeonato disponível para esta conta.")}</div>`;
+ return `<section class="card"><h2>Fichas de inscrição</h2><p>Escolha o campeonato para preparar sua ficha, imprimir ou salvar em PDF.</p>${role==="admin"?'<button type="button" data-section="settings">Configurar identidade da ficha</button>':""}</section><div class="grid">${rows.map(c=>`<article class="card"><h3>${esc(championshipTitle(c))}</h3><p>${esc(c.sport)} • ${esc(c.category||"Sem categoria")}</p><button type="button" class="primary" data-registration-sheet="${esc(c.id)}">Preparar ficha de inscrição</button><button type="button" data-championship-games="${esc(c.id)}">Ver partidas</button></article>`).join("")||empty(role==="admin" ? "Nenhum campeonato cadastrado. Cadastre um campeonato para preparar a ficha." : "Nenhum campeonato carregado para esta conta. O administrador deve autorizar a operação do campeonato em Usuários e permissões. Campeonatos reservados como teste não aparecem aqui.")}</div>`;
 }
 function permissionHistoryView() {
  const holder=document.createElement("div");holder.innerHTML=usersView();
@@ -3878,7 +3881,7 @@ function locationTrail(){
  const group=workspaceDefinitions.find(g=>g.sections.includes(section));
  const profile=section==="teams"&&selectedTeamId?state.teams.find(t=>t.id===selectedTeamId):null;
  const tabs={data:"Dados e técnico",roster:"Jogadores",games:"Jogos da equipe",stats:"Estatísticas, cartões e faltas",history:"Histórico de alterações"};
- return `<nav class="location-trail noprint" aria-label="Localização atual"><span>Você está em:</span>${group?`<button type="button" data-workspace="${group.id}">${group.title}</button><span aria-hidden="true">›</span>`:""}${profile||section==="teams"&&teamFormVisible?'<button type="button" data-team-form-back>Equipes</button>':`<strong>${esc(labels[section]||section)}</strong>`}${profile?`<span aria-hidden="true">›</span><span>${esc(profile.name)}</span><span aria-hidden="true">›</span><strong>${esc(tabs[teamProfileTab]||"Dados e técnico")}</strong>`:section==="teams"&&teamFormVisible?`<span aria-hidden="true">›</span><strong>${teamEditorId?"Editar equipe":"Nova equipe"}</strong>`:""}</nav>`;
+ return `<nav class="location-trail noprint" aria-label="Localização atual"><span>Você está em:</span>${group?`<button type="button" data-workspace="${group.id}">${group.title}</button><span aria-hidden="true">›</span>`:""}${profile||section==="teams"&&teamFormVisible?'<button type="button" data-team-form-back>Equipes</button>':`<strong>${esc(labels[section]||navigationDescriptions[section]?.label||section)}</strong>`}${profile?`<span aria-hidden="true">›</span><span>${esc(profile.name)}</span><span aria-hidden="true">›</span><strong>${esc(tabs[teamProfileTab]||"Dados e técnico")}</strong>`:section==="teams"&&teamFormVisible?`<span aria-hidden="true">›</span><strong>${teamEditorId?"Editar equipe":"Nova equipe"}</strong>`:""}</nav>`;
 }
 document.addEventListener("click",e=>{
  if(!e.target.closest("[data-new-team-form],[data-team-form-back]"))return;
@@ -4004,7 +4007,7 @@ function getShortcutCatalog(){
   }
   if(role==="admin")for(const [id,label] of [["matches","Acompanhar jogos"],["standings","Classificação"],["imports","Importar"],["matchSheets","Súmulas"],["reports","Relatórios esportivos"],["auditReports","Auditoria geral"],["certificates","Certificados"],["testData","Dados de teste"],["credentials","Credenciais de eventos"],["monitor","Operadores e partidas"],["cleanup","Limpeza de testes"],["documentation","Guias e suporte"],["account","Minha conta"]])if(!actions.some(a=>a.id===id))actions.push({id,label,detail:"Abrir "+label.toLowerCase()});
   for(const [id,label] of [["qrCodes","QR codes e links"],["profiles","Trocar perfil / conta"],["preferences","Configurações pessoais"],["account","Minha conta"]])if(!actions.some(a=>a.id===id))actions.push({id,label,detail:"Abrir "+label.toLowerCase()});
-  if(canManageChampionships())actions.push({id:"registrationSheets",label:"Fichas de inscrição",detail:"Imprimir fichas por campeonato"});
+  if(canPrepareRegistrationSheets())actions.push({id:"registrationSheets",label:"Fichas de inscrição",detail:"Imprimir fichas por campeonato"});
   if(role==="admin")actions.push({id:"accessHistory",label:"Histórico de permissões",detail:"Consultar auditoria de acessos"});
   return actions.filter((action) => action.id && (action.id === "overview" || role === "admin" || ["teams","players","championships","createMatch","matches","imports","qrCodes","profiles","preferences","account","registrationSheets"].includes(action.id)));
 }
