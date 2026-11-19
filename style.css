@@ -2359,3 +2359,12 @@ body:not([data-admin="true"]) .public-event-icon {
  .document-report-header .document-report-titles h2 {display:block!important;color:#111!important;font-size:16pt;margin:0}
  .document-report-header .report-brand {width:auto;color:#333!important;font-size:9pt}
 }
+
+/* Páginas de compartilhamento e atalhos separados por finalidade. */
+.arena-qr-grid {grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
+.arena-qr-preview {display:grid;place-items:center;min-height:210px;margin:12px 0;padding:12px;background:#fff;color:#172534;border:1px solid var(--line);border-radius:12px}
+.arena-qr-preview img {display:block;width:190px;height:190px;max-width:100%;object-fit:contain}
+.arena-qr-grid input {width:100%;font-size:13px}
+.arena-qr-grid .toolbar {margin-top:14px}
+@media screen {#arenaSidebar .arena-sidebar-footer button,#arenaSidebar .arena-sidebar-footer a.button{min-height:34px;padding-top:6px;padding-bottom:6px}}
+@media screen and (max-width:1079px){#arenaSidebar .arena-sidebar-footer button,#arenaSidebar .arena-sidebar-footer a.button{min-height:44px}}

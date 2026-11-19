@@ -1245,7 +1245,7 @@ function render() {
     return;
   }
   // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
-  if (role !== "admin" && !["overview", "matches", "account", "documentation", ...(canManageRosters()?["teams","players","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canCreateMatches()?["createMatch"]:[])].includes(section)) {
+  if (role !== "admin" && !["overview", "matches", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","imports"]:[]), ...(canManageChampionships()?["championships","registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[])].includes(section)) {
     section = "overview";
     selected = "";
   }
@@ -1266,6 +1266,11 @@ function render() {
     ["testData", "Dados de teste"],
     ["credentials", "Credenciais de eventos"],
     ["settings", "Configurações"],
+    ["qrCodes", "QR codes e links"],
+    ["profiles", "Trocar perfil / conta"],
+    ["preferences", "Configurações pessoais"],
+    ["registrationSheets", "Fichas de inscrição"],
+    ["accessHistory", "Histórico de permissões"],
     ["users", "Usuários e permissões"],
     ["account", "Minha conta"],
     ["documentation", "Backups e suporte"],
@@ -1275,6 +1280,7 @@ function render() {
   app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">${esc(panelDisplayName())}</span><h1>${esc(selected && section==="matches" ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${accountPendingBanner()}${liveStatusPanel("admin")}${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>`;
   stopInvisibleTimeline();
   applyArenaDrawer();
+  if(section==="qrCodes")renderQRPreviews();
   if (busy || accessBusy) app.querySelectorAll("button").forEach((b) => (b.disabled = true));
   if (["matchSheets","reports"].includes(section) && $("[name=reportMatch]")) {
     $("[name=reportMatch]").value = reportFilter;
@@ -1301,6 +1307,11 @@ function publicMatches(filter) {
       : empty("Nenhuma partida publicada para esta seleção.");
 }
 function view() {
+  if(section==="qrCodes")return qrCodesView();
+  if(section==="profiles")return profilesView();
+  if(section==="preferences")return personalPreferencesView();
+  if(section==="registrationSheets"&&canManageChampionships())return registrationSheetsView();
+  if(section==="accessHistory"&&role==="admin")return permissionHistoryView();
   if(section==="testData" && role==="admin")return testDataPanel();
   if(section==="credentials" && role==="admin")return credentialsPanel();
   if(section==="teams"&&selectedTeamId&&canManageRosters())return teamProfileView();
@@ -3454,7 +3465,7 @@ document.addEventListener("change",e=>{if(!e.target.hasAttribute("data-removed-s
 // 20 — Menu da conta e preferências. Apenas navegação; conserva autenticação/permissões.
 function accountMenuMarkup(){
  const label=C.demo?"Demonstração local":accountName();
- return `<div class="account-summary"><strong>${esc(label)}</strong><small>${esc(accountRole())}</small></div><div class="account-dropdown"><button type="button" id="accountMenuToggle" data-account-menu-toggle aria-expanded="false" aria-controls="accountPopover">Minha conta <span data-connection-dot class="connection-dot" aria-hidden="true"></span><span aria-hidden="true">▾</span></button><div id="accountPopover" class="account-popover" hidden><div class="account-menu-identity"><strong>${esc(label)}</strong>${!C.demo?`<span>${esc(user?.email||"Sem e-mail informado")}</span>`:""}<small>${esc(accountRole())}</small></div>${connectionAccountPanel()}<nav aria-label="Opções da conta">${C.demo||role?'<button type="button" class="account-feature" data-my-account><strong>Minha conta e segurança</strong><small>Perfil, acesso, senha e vínculo com Google</small></button>':'<button type="button" data-access-refresh>Atualizar situação do acesso</button>'}<button type="button" class="account-feature" data-open-accessibility><strong>Aparência e acessibilidade</strong><small>Tema, tamanho do texto, contraste e movimentos</small></button>${role==="admin"?'<button type="button" data-account-settings>Configurações do sistema</button>':""}<button type="button" class="account-feature" data-account-guide><strong>Ajuda e guia de uso</strong><small>Orientações passo a passo para o seu perfil</small></button><a class="button account-feature" href="${esc(new URL("painel.html?demonstracao=1",location.href).href)}" target="_blank" rel="noopener"><strong>Treinamento</strong><small>Pratique em outra aba com dados fictícios</small></a>${C.demo?`<a class="button" href="${esc(new URL("painel.html",location.href).href)}">Sair da demonstração</a>`:'<button type="button" data-account-exit>Sair da conta</button>'}</nav></div></div>`;
+ return `<div class="account-summary"><strong>${esc(label)}</strong><small>${esc(accountRole())}</small></div><div class="account-dropdown"><button type="button" id="accountMenuToggle" data-account-menu-toggle aria-expanded="false" aria-controls="accountPopover">Minha conta <span data-connection-dot class="connection-dot" aria-hidden="true"></span><span aria-hidden="true">▾</span></button><div id="accountPopover" class="account-popover" hidden><div class="account-menu-identity"><strong>${esc(label)}</strong>${!C.demo?`<span>${esc(user?.email||"Sem e-mail informado")}</span>`:""}<small>${esc(accountRole())}</small></div>${connectionAccountPanel()}<nav aria-label="Opções da conta">${C.demo||role?'<button type="button" class="account-feature" data-my-account><strong>Minha conta e segurança</strong><small>Perfil, acesso, senha e vínculo com Google</small></button>':'<button type="button" data-access-refresh>Atualizar situação do acesso</button>'}<button type="button" class="account-feature" data-open-accessibility><strong>Aparência e acessibilidade</strong><small>Tema, tamanho do texto, contraste e movimentos</small></button>${role==="admin"?'<button type="button" data-account-settings>Configurações do sistema</button>':""}<button type="button" data-section="profiles">Trocar perfil / conta</button><button type="button" class="account-feature" data-account-guide><strong>Ajuda e guia de uso</strong><small>Orientações passo a passo para o seu perfil</small></button><a class="button account-feature" href="${esc(new URL("painel.html?demonstracao=1",location.href).href)}" target="_blank" rel="noopener"><strong>Treinamento</strong><small>Pratique em outra aba com dados fictícios</small></a>${C.demo?`<a class="button" href="${esc(new URL("painel.html",location.href).href)}">Sair da demonstração</a>`:'<button type="button" data-account-exit>Sair da conta</button>'}</nav></div></div>`;
 }
 function closeAccountMenu(focus=false){
  const toggle=$("#accountMenuToggle"),panel=$("#accountPopover");
@@ -3496,12 +3507,70 @@ setupAccountTools();
 
 // 21 — Organização da central. Permissões continuam validadas pelo Firebase.
 const workspaceDefinitions=[
- {id:"games",title:"Jogos",intro:"Acompanhar e operar partidas",sections:["overview","matches","standings"]},
- {id:"records",title:"Cadastros",intro:"Equipes, jogadores, campeonatos e partidas",sections:["teams","players","championships","createMatch","imports"]},
- {id:"documents",title:"Documentos e suporte",intro:"Súmulas, relatórios, certificados e guias",sections:["documentation","matchSheets","reports","auditReports","certificates"]},
- {id:"administration",title:"Administração",intro:"Operadores, acessos, relatórios e configurações",sections:["monitor","users","matchSheets","reports","auditReports","certificates","settings","cleanup","testData","credentials"]}
+ {id:"games",title:"Jogos",intro:"Operação, agenda e resultados",sections:["overview","matches","createMatch","standings"]},
+ {id:"records",title:"Cadastros",intro:"Equipes, jogadores e importação",sections:["teams","players","imports"]},
+ {id:"championships",title:"Campeonatos e fichas",intro:"Temporadas e inscrições",sections:["championships","registrationSheets"]},
+ {id:"reports",title:"Relatórios",intro:"Súmulas, resultados e auditoria",sections:["matchSheets","reports","auditReports","accessHistory"]},
+ {id:"documents",title:"Documentos",intro:"Certificados",sections:["certificates"]},
+ {id:"sharing",title:"QR codes e links",intro:"Compartilhar o painel e os eventos",sections:["qrCodes"]},
+ {id:"credentials",title:"Credenciais",intro:"Identificação da organização e dos eventos",sections:["credentials"]},
+ {id:"administration",title:"Administração",intro:"Operadores e permissões",sections:["monitor","users"]},
+ {id:"maintenance",title:"Backups e suporte",intro:"Guias, testes e recuperação",sections:["documentation","testData","cleanup"]}
 ];
-function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canCreateMatches()&&id==="createMatch"));}
+function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&["championships","registrationSheets"].includes(id))||(canCreateMatches()&&id==="createMatch"));}
+function publicPanelURL(edition="") {
+ const url=new URL("./index.html",location.href);
+ if(trainingMode)url.searchParams.set("demonstracao","1");
+ if(edition)url.searchParams.set("campeonato",edition);
+ return url.href;
+}
+function qrCodesView() {
+ const editions=new Map();
+ for(const c of state.championships||[])if(!c.testData)editions.set(championshipTitle(c),c.sport||"");
+ for(const match of state.matches)if(!match.testData&&!match.publicHidden&&match.competition)editions.set(match.competition,match.sport||"");
+ const cards=[["Painel público do Arena",publicPanelURL(),"Todos os jogos publicados"],...[...editions].sort((a,b)=>a[0].localeCompare(b[0],"pt-BR")).map(([title,sport])=>[title,publicPanelURL(title),sport])];
+ return `<section class="card"><h2>Central de QR codes e links</h2><p>Compartilhe o painel público ou a página de um campeonato. Os links não concedem acesso à operação.</p><p class="muted">A prévia usa QR code sem logo. O botão Com logo incorpora o logo principal configurado no Arena.</p></section><div class="grid arena-qr-grid">${cards.map(([title,url,detail])=>`<article class="card"><h3>${esc(title)}</h3><p class="muted">${esc(detail)}</p><div class="arena-qr-preview" data-qr-preview="${esc(url)}"><span>Preparando QR code…</span></div><label>Link público<input readonly value="${esc(url)}" aria-label="Link de ${esc(title)}"></label><div class="toolbar"><button type="button" data-share-copy="${esc(url)}">Copiar link</button><a class="button" href="${esc(url)}" target="_blank" rel="noopener">Abrir página</a><button type="button" class="primary" data-share-qr="${esc(url)}">Baixar QR code</button>${state.settings.logo?`<button type="button" data-share-qr="${esc(url)}" data-qr-logo>Baixar com logo</button>`:""}</div></article>`).join("")}</div>`;
+}
+async function renderQRPreviews() {
+ const nodes=[...app.querySelectorAll("[data-qr-preview]")];
+ try {
+  const {qrSvg}=await import("./vendor/arena-qrcode.js");
+  for(const node of nodes){if(!node.isConnected)continue;const img=document.createElement("img");img.alt="QR code do link público";img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(qrSvg(node.dataset.qrPreview,""));node.replaceChildren(img);}
+ }catch{for(const node of nodes)if(node.isConnected)node.textContent="Prévia indisponível. Confira a pasta vendor e tente baixar novamente.";}
+}
+function registrationSheetsView() {
+ const rows=(state.championships||[]).filter(c=>!c.testData).slice().sort(alphabetical);
+ return `<section class="card"><h2>Fichas de inscrição</h2><p>Escolha o campeonato para preparar sua ficha, imprimir ou salvar em PDF.</p>${role==="admin"?'<button type="button" data-section="settings">Configurar identidade da ficha</button>':""}</section><div class="grid">${rows.map(c=>`<article class="card"><h3>${esc(championshipTitle(c))}</h3><p>${esc(c.sport)} • ${esc(c.category||"Sem categoria")}</p><button type="button" class="primary" data-registration-sheet="${esc(c.id)}">Preparar ficha de inscrição</button><button type="button" data-championship-games="${esc(c.id)}">Ver partidas</button></article>`).join("")||empty("Nenhum campeonato disponível para esta conta.")}</div>`;
+}
+function permissionHistoryView() {
+ const holder=document.createElement("div");holder.innerHTML=usersView();
+ return holder.querySelector("#accessAuditReport")?.outerHTML||empty("Nenhum histórico de permissões disponível.");
+}
+function personalPreferencesView() {
+ return `<section class="card"><h2>Configurações pessoais</h2><p>Ajuste a leitura e seus atalhos neste navegador.</p><div class="toolbar"><button type="button" data-open-accessibility>Aparência e acessibilidade</button><button type="button" data-personal-settings>Meus atalhos e favoritos</button><button type="button" data-section="account">Dados da minha conta</button><button type="button" data-section="profiles">Trocar perfil / conta</button></div></section>`;
+}
+function profilesView() {
+ const trainingURL=new URL("./painel.html?demonstracao=1",location.href).href;
+ return `<section class="card"><h2>Perfil e conta de acesso</h2><p><strong>${esc(C.demo?"Treinamento isolado":accountName())}</strong><br>${esc(C.demo?(role==="admin"?"Administrador simulado":"Operador simulado"):accountRole())}</p><p>O perfil real é definido pela autorização da conta. Para entrar com outro acesso, use Trocar conta.</p><div class="toolbar"><button type="button" data-section="account">Minha conta</button><a class="button" href="${esc(publicPanelURL())}" target="_blank" rel="noopener">Ver painel público</a>${!C.demo?'<button type="button" data-profile-switch-account>Trocar conta</button>':""}</div></section><section class="card"><h2>Treinamento de perfis</h2><p>Pratique com dados fictícios, sem alterar resultados e permissões reais.</p>${trainingMode?`<div class="toolbar">${[["admin","Administrador"],["operator","Operador"],["operator-rosters","Operador com cadastros"],["operator-matches","Operador que cria jogos"],["operator-championships","Operador de campeonatos"],["operator-games-view","Operador que acompanha jogos"]].map(([id,label])=>`<button type="button" data-profile-training="${id}">${label}</button>`).join("")}</div>`:`<a class="button" href="${esc(trainingURL)}" target="_blank" rel="noopener">Abrir treinamento de perfis</a>`}</section>`;
+}
+document.addEventListener("click",async event=>{
+ const choice=event.target.closest("[data-profile-training]");
+ if(choice){
+  if(!trainingMode)return;
+  const select=document.getElementById("trainingRole"),value=choice.dataset.profileTraining;
+  if(!select||![...select.options].some(option=>option.value===value))return;
+  select.value=value;select.dispatchEvent(new Event("change",{bubbles:true}));return;
+ }
+ if(!event.target.closest("[data-profile-switch-account]"))return;
+ try {
+  if(C.demo||!cloud||!user)throw Error("Use uma conta conectada na central real para trocar o acesso.");
+  if(busy||accessBusy)throw Error("Aguarde a operação atual antes de trocar de conta.");
+  if(!confirm("Sair da conta atual para entrar com outra conta no Arena?"))return;
+  await cloud.auth.signOut(cloud.authentication);
+  window.location.replace("painel.html");
+ }catch(error){toast(error.message,true);}
+});
+
 function frequentWorkspaceShortcuts(allowed) {
  const games = [["live","Ao vivo"],["scheduled","Agendadas"],["finished","Finalizadas"]];
  const registrations = [
@@ -3518,7 +3587,7 @@ function frequentWorkspaceShortcuts(allowed) {
   </div></nav>`;
 }
 function arenaIcon(name) {
- const paths={overview:"M3 10 12 3l9 7v11h-6v-7H9v7H3Z",games:"M4 4h16v16H4z M8 4v16 M16 4v16 M4 10h16 M4 14h16",records:"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M20 21v-2a4 4 0 0 0-3-3.87",documents:"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z M14 2v6h6 M8 13h8 M8 17h6",administration:"M12 3 3 7v6c0 5 9 9 9 9s9-4 9-9V7Z M8 12l3 3 5-6",account:"M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M4 22v-3a8 6 0 0 1 16 0v3",menu:"M4 6h16 M4 12h16 M4 18h16",close:"M6 6l12 12 M18 6 6 18",help:"M9 9a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 18h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",collapse:"M14 6l-6 6 6 6",qr:"M3 3h6v6H3z M15 3h6v6h-6z M3 15h6v6H3z M15 15h3v3h3v3h-6z",cup:"M8 3h8v7a4 4 0 0 1-8 0V3Z M8 5H4v3a4 4 0 0 0 4 4 M16 5h4v3a4 4 0 0 1-4 4 M12 14v7 M8 21h8"};
+ const paths={overview:"M3 10 12 3l9 7v11h-6v-7H9v7H3Z",games:"M4 4h16v16H4z M8 4v16 M16 4v16 M4 10h16 M4 14h16",records:"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M20 21v-2a4 4 0 0 0-3-3.87",documents:"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z M14 2v6h6 M8 13h8 M8 17h6",administration:"M12 3 3 7v6c0 5 9 9 9 9s9-4 9-9V7Z M8 12l3 3 5-6",account:"M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M4 22v-3a8 6 0 0 1 16 0v3",menu:"M4 6h16 M4 12h16 M4 18h16",close:"M6 6l12 12 M18 6 6 18",help:"M9 9a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 18h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",reports:"M4 3h16v18H4z M8 16v-3 M12 16V8 M16 16v-6",championships:"M8 3h8v7a4 4 0 0 1-8 0V3Z M8 5H4v3a4 4 0 0 0 4 4 M16 5h4v3a4 4 0 0 1-4 4 M12 14v7 M8 21h8",sharing:"M3 3h6v6H3z M15 3h6v6h-6z M3 15h6v6H3z M15 15h6v6h-6z",credentials:"M4 4h16v17H4z M9 2h6v5H9z M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4 M8 18a4 3 0 0 1 8 0",maintenance:"M12 3v3 M12 18v3 M3 12h3 M18 12h3 M6 6l2 2 M16 16l2 2 M6 18l2-2 M16 8l2-2 M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0",profiles:"M8 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M2 21v-2a6 5 0 0 1 12 0v2 M16 6h6l-3-3 M22 6l-3 3 M22 16h-6l3 3 M16 16l3-3",collapse:"M14 6l-6 6 6 6",qr:"M3 3h6v6H3z M15 3h6v6h-6z M3 15h6v6H3z M15 15h3v3h3v3h-6z",cup:"M8 3h8v7a4 4 0 0 1-8 0V3Z M8 5H4v3a4 4 0 0 0 4 4 M16 5h4v3a4 4 0 0 1-4 4 M12 14v7 M8 21h8"};
  return `<svg class="arena-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]||paths.documents}"/></svg>`;
 }
 function workspaceNavigation(sections){
@@ -3526,12 +3595,13 @@ function workspaceNavigation(sections){
  const seen=new Set(["overview","account"]);
  const brand=$("#systemBrand")?.innerHTML||esc(systemDisplayName());
  const publicHref=trainingMode?"./index.html?demonstracao=1":"./index.html";
+ const footerItem=(id,label,icon)=>`<button type="button" data-section="${id}" title="${esc(label)}" aria-label="${esc(label)}" class="${section===id?"is-current":""}" ${section===id?'aria-current="page"':""}>${arenaIcon(icon)}<span>${esc(label)}</span></button>`;
  const groups=visible.map(group=>{
    const ids=allowedWorkspaceSections(group).filter(id=>!seen.has(id));ids.forEach(id=>seen.add(id));if(!ids.length)return "";
    const active=ids.includes(section),open=arenaOpenGroups.has(group.id)?arenaOpenGroups.get(group.id):active;
    return `<details class="arena-side-group" data-layout-group="${group.id}" ${open?"open":""}><summary title="${esc(group.title)}" aria-label="${esc(group.title)}">${arenaIcon(group.id)}<span>${esc(group.title)}</span></summary><nav aria-label="${esc(group.title)}">${ids.map(id=>`<button type="button" data-section="${id}" title="${esc(labels[id]||id)}" class="arena-side-item ${section===id?"is-current":""}" ${section===id?'aria-current="page"':""}>${esc(labels[id]||id)}</button>${id==="matches"?'<div class="arena-side-scopes" aria-label="Filtrar jogos"><button type="button" data-games-shortcut="live">Ao vivo</button><button type="button" data-games-shortcut="scheduled">Agenda</button><button type="button" data-games-shortcut="finished">Resultados</button></div>':""}`).join("")}</nav></details>`;
  }).join("");
- return `<aside id="arenaSidebar" class="arena-sidebar noprint" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link" aria-label="${esc(systemDisplayName())}" title="${esc(systemDisplayName())}">${brand}</a><button type="button" data-layout-rail aria-label="Recolher barra lateral" title="Recolher barra lateral" aria-expanded="true" aria-controls="arenaSidebar">${arenaIcon("collapse")}</button><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><div class="arena-sidebar-nav"><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" title="Visão geral" aria-label="Visão geral" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Visão geral</span></button>${groups}</div><div class="arena-sidebar-footer"><button type="button" data-section="account" title="Minha conta" aria-label="Minha conta">${arenaIcon("account")}<span>Minha conta</span></button><button type="button" data-account-guide title="Demonstração e ajuda" aria-label="Demonstração e ajuda">${arenaIcon("help")}<span>Demonstração e ajuda</span></button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener" title="Abrir painel público" aria-label="Abrir painel público">${arenaIcon("games")}<span>Abrir painel público</span></a><button type="button" data-share-qr="${esc(new URL(publicHref,location.href).href)}" ${state.settings.logo?"data-qr-logo":""} title="Baixar QR code" aria-label="Baixar QR code">${arenaIcon("qr")}<span>Baixar QR code${state.settings.logo?" com logo":""}</span></button><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><div class="arena-toolbar noprint"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button></div>${personalTopShortcuts()}<section class="navigation-finder arena-function-search noprint" aria-label="Encontrar função"><label for="functionSearch">Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
+ return `<aside id="arenaSidebar" class="arena-sidebar noprint" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link" aria-label="${esc(systemDisplayName())}" title="${esc(systemDisplayName())}">${brand}</a><button type="button" data-layout-rail aria-label="Recolher barra lateral" title="Recolher barra lateral" aria-expanded="true" aria-controls="arenaSidebar">${arenaIcon("collapse")}</button><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><div class="arena-sidebar-nav"><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" title="Visão geral" aria-label="Visão geral" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Visão geral</span></button>${groups}</div><div class="arena-sidebar-footer">${footerItem("account","Minha conta","account")}${footerItem(role==="admin"?"settings":"preferences","Configurações","maintenance")}${footerItem("profiles","Trocar perfil / conta","profiles")}<button type="button" data-account-guide title="Demonstração e ajuda" aria-label="Demonstração e ajuda">${arenaIcon("help")}<span>Demonstração e ajuda</span></button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener" title="Abrir painel público" aria-label="Abrir painel público">${arenaIcon("games")}<span>Abrir painel público</span></a><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><div class="arena-toolbar noprint"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button></div>${personalTopShortcuts()}<section class="navigation-finder arena-function-search noprint" aria-label="Encontrar função"><label for="functionSearch">Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
 }
 function syncArenaRail() {
  document.body.classList.toggle("arena-rail-collapsed",arenaRailCollapsed);
@@ -3796,7 +3866,7 @@ function teamsDirectoryView(){
 }
 function locationTrail(){
  const labels={overview:"Visão geral",matches:"Acompanhar jogos",championships:"Campeonatos",standings:"Classificação",teams:"Equipes",players:"Jogadores",imports:"Importar",documentation:"Guias",matchSheets:"Súmulas",reports:"Relatórios esportivos",auditReports:"Relatório geral",certificates:"Certificados",monitor:"Operadores e partidas",users:"Usuários e permissões",settings:"Configurações",cleanup:"Limpeza de testes",testData:"Dados de teste",credentials:"Credenciais de eventos",account:"Minha conta"};
- if(section==="account")return '<nav class="location-trail" aria-label="Localização atual"><span>Você está em:</span><strong>Minha conta</strong></nav>';
+ if(["account","profiles","preferences","settings"].includes(section))return '<nav class="location-trail" aria-label="Localização atual"><span>Você está em:</span><strong>'+esc(labels[section]||navigationDescriptions[section]?.label||"Minha conta")+'</strong></nav>';
  const group=workspaceDefinitions.find(g=>g.sections.includes(section));
  const profile=section==="teams"&&selectedTeamId?state.teams.find(t=>t.id===selectedTeamId):null;
  const tabs={data:"Dados e técnico",roster:"Jogadores",games:"Jogos da equipe",stats:"Estatísticas, cartões e faltas",history:"Histórico de alterações"};
@@ -3925,7 +3995,10 @@ function getShortcutCatalog(){
     actions.push({ id: "overview", label: "Home", detail: "Resumo geral" });
   }
   if(role==="admin")for(const [id,label] of [["matches","Acompanhar jogos"],["standings","Classificação"],["imports","Importar"],["matchSheets","Súmulas"],["reports","Relatórios esportivos"],["auditReports","Auditoria geral"],["certificates","Certificados"],["testData","Dados de teste"],["credentials","Credenciais de eventos"],["monitor","Operadores e partidas"],["cleanup","Limpeza de testes"],["documentation","Guias e suporte"],["account","Minha conta"]])if(!actions.some(a=>a.id===id))actions.push({id,label,detail:"Abrir "+label.toLowerCase()});
-  return actions.filter((action) => action.id && (action.id === "overview" || role === "admin" || ["teams","players","championships","createMatch","matches","imports"].includes(action.id)));
+  for(const [id,label] of [["qrCodes","QR codes e links"],["profiles","Trocar perfil / conta"],["preferences","Configurações pessoais"],["account","Minha conta"]])if(!actions.some(a=>a.id===id))actions.push({id,label,detail:"Abrir "+label.toLowerCase()});
+  if(canManageChampionships())actions.push({id:"registrationSheets",label:"Fichas de inscrição",detail:"Imprimir fichas por campeonato"});
+  if(role==="admin")actions.push({id:"accessHistory",label:"Histórico de permissões",detail:"Consultar auditoria de acessos"});
+  return actions.filter((action) => action.id && (action.id === "overview" || role === "admin" || ["teams","players","championships","createMatch","matches","imports","qrCodes","profiles","preferences","account","registrationSheets"].includes(action.id)));
 }
 function getVisibleShortcuts(){
   const catalog = getShortcutCatalog();
@@ -4049,6 +4122,11 @@ document.addEventListener("click",e=>{
 let navigationQuery="";
 const expandedNavigation=new Set();
 const navigationDescriptions={
+ qrCodes:{label:"QR codes e links",description:"Copiar links e baixar QR codes públicos do Arena e dos campeonatos.",keywords:"qr qrcode qr code compartilhar link publico logo svg"},
+ profiles:{label:"Trocar perfil / conta",description:"Conferir o perfil autorizado, trocar de conta ou praticar no treinamento.",keywords:"perfil conta trocar administrador operador treinamento login sair"},
+ preferences:{label:"Configurações pessoais",description:"Aparência, leitura e atalhos deste navegador.",keywords:"preferencias configuracoes tema leitura atalhos favoritos"},
+ registrationSheets:{label:"Fichas de inscrição",description:"Baixar ou imprimir fichas dos campeonatos autorizados.",keywords:"ficha inscricao campeonato participantes documentos imprimir"},
+ accessHistory:{label:"Histórico de permissões",description:"Consultar registros de autorização e alterações de acesso dos operadores.",keywords:"relatorio auditoria permissoes acesso registro operadores historico"},
  overview:{label:"Visão geral",description:"Resumo dos jogos atuais e consulta das finalizadas.",keywords:"inicio home encerradas finalizadas atuais próximas"},
  matches:{label:"Acompanhar jogos",description:"Consultar jogos próximos, ao vivo e encerrados; operar somente os atribuídos.",keywords:"gol gols ponto pontos iniciar tempo relogio pausa intervalo etapa cartao cartões faltas substituicoes var estorno anular arbitragem juiz local futebol basquete volei"},
  createMatch:{label:"Cadastrar partida",description:"Programar uma nova partida (se autorizado).",keywords:"criar cadastrar programar nova jogo partida"},
@@ -4072,7 +4150,7 @@ const navigationDescriptions={
 };
 function navigationSearchResults(){
  if(!navigationQuery.trim())return "";
- const allowed=new Set([...workspaceDefinitions.flatMap(g=>allowedWorkspaceSections(g)),"account"]);
+ const allowed=new Set([...workspaceDefinitions.flatMap(g=>allowedWorkspaceSections(g)),"account","profiles","preferences",...(role==="admin"?["settings"]:[])]);
  const words=searchText(navigationQuery).split(/\s+/).filter(Boolean);
  const found=Object.entries(navigationDescriptions).filter(([id,item])=>allowed.has(id)&&words.every(word=>searchText([item.label,item.description,item.keywords].join(" ")).includes(word)));
  return `<p class="muted">${found.length} função(ões) encontrada(s)</p><div class="navigation-search-results">${found.map(([id,item])=>`<button type="button" data-section="${id}" data-navigation-result><strong>${esc(item.label)}</strong><small>${esc(workspaceDefinitions.find(g=>g.sections.includes(id))?.title||"Conta")} › ${esc(item.description)}</small></button>`).join("")||'<p>Nenhuma função encontrada. Tente uma palavra como jogador, relógio ou relatório.</p>'}</div>`;
