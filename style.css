@@ -2033,3 +2033,41 @@ body:not([data-admin="true"]) .public-event-icon {
 .frequent-shortcuts a {
   min-height: 44px;
 }
+
+
+/* Histórico de lances consultável durante e depois da partida. */
+.match-timeline {
+  margin: 12px 0;
+}
+.match-timeline button {
+  min-height: 44px;
+}
+.timeline-scroll {
+  max-height: 340px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--text);
+  background: var(--bg);
+}
+.timeline-scroll:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.timeline-event {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.timeline-event:last-child {
+  border-bottom: 0;
+}
+.timeline-event p {
+  margin: 6px 0;
+}
+.timeline-event small {
+  display: block;
+  margin-top: 6px;
+}

@@ -183,6 +183,46 @@ export async function connectSpark({
           ? M.elapsed(a.after, a.at?.toMillis?.() || Date.now())
           : null,
       }));
+  const timelineTypes = new Set(["ponto","cartão amarelo","cartão vermelho","falta","substituição","tempo","status","etapa","set"]);
+  function timelineEntry(id, audit) {
+    if (audit.entity !== "matches" || !timelineTypes.has(audit.detail?.type)) return null;
+    const e = audit.detail;
+    const recent = audit.after.publicEvents || [];
+    const last = recent.at(-1);
+    const athlete = last?.id === id ? last : null;
+    return {id, type:e.type, side:e.side, value:e.value, stage:e.stage,
+      from:e.from, to:e.to, correctionOf:e.correctionOf,
+      playerName:athlete?.playerName || "", number:athlete?.number || "",
+      at:audit.at, revision:audit.revision};
+  }
+  function timelineQuery(matchId, cursor = null) {
+    return F.query(F.collection(database, "publicMatches", matchId, "timeline"),
+      F.orderBy("revision","desc"), ...(cursor ? [F.startAfter(cursor)] : []), F.limit(50));
+  }
+  async function loadTimeline(matchId, cursor = null) {
+    const snap = await F.getDocsFromServer(timelineQuery(matchId,cursor));
+    return { rows:snap.docs.map(doc => doc.data()), cursor:snap.docs.at(-1) || null, more:snap.size === 50 };
+  }
+  function watchTimeline(matchId, update, error) {
+    return F.onSnapshot(timelineQuery(matchId), snap => update({
+      rows:snap.docs.map(doc => doc.data()), cursor:snap.docs.at(-1) || null, more:snap.size === 50,
+    }), error);
+  }
+  async function publishTimeline(matchId) {
+    if (!isOwner()) throw Error("Somente o administrador publica os lances antigos.");
+    const snap = await F.getDocsFromServer(F.query(F.collection(database,"audit"),F.where("target","==",matchId)));
+    const existing = await F.getDocsFromServer(F.collection(database,"publicMatches",matchId,"timeline"));
+    const known = new Set(existing.docs.map(doc => doc.id));
+    const entries = snap.docs.filter(doc => !known.has(doc.id))
+      .map(doc => timelineEntry(doc.id,doc.data())).filter(Boolean);
+    for (let offset=0; offset<entries.length; offset+=5) {
+      const batch = F.writeBatch(database);
+      for (const entry of entries.slice(offset,offset+5))
+        batch.set(F.doc(database,"publicMatches",matchId,"timeline",entry.id),entry);
+      await batch.commit();
+    }
+    return entries.length;
+  }
   async function publishPublicEvents(matchId, history) {
     const publicTypes = new Set([
       "ponto",
@@ -626,6 +666,11 @@ export async function connectSpark({
           before,
           after: next,
         });
+        if (entity === "matches") {
+          const entry = timelineEntry(actionId, {entity, detail, after:next,
+            at:F.serverTimestamp(),revision:next._revision});
+          if (entry) tx.set(F.doc(database,"publicMatches",target,"timeline",actionId),entry);
+        }
         if (correctionRef)
           tx.set(correctionRef, {
             matchId: target,
@@ -957,6 +1002,9 @@ export async function connectSpark({
     enterGoogle,
     linkGoogle,
     loadHistory,
+    loadTimeline,
+    watchTimeline,
+    publishTimeline,
     stopHistory,
     auditRows,
     teamHistory: async teamId => {

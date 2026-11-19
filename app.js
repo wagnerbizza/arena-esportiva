@@ -724,6 +724,127 @@ function matchEventSummary(m) {
   return `<section class="match-events" aria-label="Lances da partida"><strong>Gols e ocorrências</strong><ul>${rows}</ul>${remaining ? `<small>+ ${remaining} lance(s) anterior(es)</small>` : ""}</section>`;
 }
 
+let timelineOpenId = "", timelineRows = [], timelineCursor = null, timelineMore = false;
+let timelineStop = null, timelineLoading = false, timelineError = "", timelineRequest = 0;
+function closeTimeline() {
+  timelineRequest++;
+  timelineStop?.();
+  timelineStop = null;
+  timelineOpenId = "";
+  timelineRows = [];
+}
+function timelineControl(m) {
+  return `<div class="match-timeline"><button type="button" data-timeline-toggle="${esc(m.id)}" aria-expanded="${timelineOpenId === m.id}">
+    ${timelineOpenId === m.id ? "Fechar lances anteriores" : "Ver lances anteriores"}</button>
+    ${timelineOpenId === m.id ? `<section id="timeline-panel-${esc(m.id)}" aria-label="Lances anteriores da partida">${timelineContent(m)}</section>` : ""}</div>`;
+}
+function timelineContent(m) {
+  const rows = timelineRows.slice().sort((a,b) => b.revision-a.revision);
+  return `<div class="toolbar"><button type="button" data-timeline-scroll="recent">↑ Recentes</button>
+    <button type="button" data-timeline-scroll="older">↓ Anteriores</button>
+    ${role === "admin" && !C.demo ? '<button type="button" data-timeline-publish>Publicar lances antigos</button>' : ""}</div>
+    <p role="status">${timelineError ? esc(timelineError) : timelineLoading ? "Carregando lances…" : rows.length + " lance(s) carregado(s)"}</p>
+    <div class="timeline-scroll" data-timeline-list tabindex="0" aria-label="Lista de lances, do mais recente para o mais antigo">
+    ${rows.map(e => {
+      const side = [0,1].includes(e.side) ? name([m.home,m.away][e.side]) : "";
+      const label = e.type === "status" ? `Situação: ${e.from} → ${e.to}` :
+        e.type === "etapa" ? `Etapa: ${e.to}` : e.type === "set" ? "Set encerrado" : eventLabel(e,m);
+      return `<article class="timeline-event"><strong>${esc(label)}${side ? " · "+esc(side) : ""}</strong>
+        ${e.playerName ? `<p>${esc(e.number ? e.number+" · " : "")}${esc(e.playerName)}</p>` : ""}
+        <small>Etapa ${esc(e.stage)} · ${esc(e.at ? format(e.at?.toDate ? e.at.toDate().toISOString() : e.at) : "Aguardando confirmação")}</small></article>`;
+    }).join("") || '<p>Nenhum lance publicado neste histórico.</p>'}</div>
+    <p><button type="button" data-timeline-more ${timelineLoading || !timelineMore ? "disabled" : ""}>Carregar lances mais antigos</button></p>`;
+}
+function paintTimeline() {
+  const panel = document.getElementById("timeline-panel-"+timelineOpenId);
+  const match = state.matches.find(m => m.id === timelineOpenId);
+  if (!panel || !match) return;
+  const scroll = panel.querySelector("[data-timeline-list]")?.scrollTop || 0;
+  panel.innerHTML = timelineContent(match);
+  panel.querySelector("[data-timeline-list]").scrollTop = scroll;
+}
+function stopInvisibleTimeline() {
+  if (timelineOpenId && !document.getElementById("timeline-panel-"+timelineOpenId)) closeTimeline();
+}
+document.addEventListener("click", async event => {
+  const button = event.target.closest("[data-timeline-toggle],[data-timeline-scroll],[data-timeline-more],[data-timeline-publish]");
+  if (!button) return;
+  try {
+    if (button.dataset.timelineToggle) {
+      const matchId = button.dataset.timelineToggle;
+      const previous = timelineOpenId;
+      closeTimeline();
+      if (previous === matchId) { render(); return; }
+      const match = state.matches.find(m => m.id === matchId);
+      if (!match) return;
+      timelineOpenId = matchId;
+      timelineRows = [];
+      timelineCursor = null;
+      timelineMore = false;
+      timelineError = "";
+      timelineLoading = !C.demo;
+      render();
+      if (C.demo) {
+        timelineRows = (match.events || match.publicEvents || []).map((e,i) => ({...e,revision:i+1}));
+        timelineLoading = false;
+        paintTimeline();
+        return;
+      }
+      const request = timelineRequest;
+      timelineStop = cloud.watchTimeline(matchId, page => {
+        if (request !== timelineRequest) return;
+        const known = new Map(timelineRows.map(row => [row.id,row]));
+        for (const row of page.rows) known.set(row.id,row);
+        timelineRows = [...known.values()];
+        if (!timelineCursor) {timelineCursor=page.cursor;timelineMore=page.more;}
+        timelineLoading = false;
+        timelineError = "";
+        paintTimeline();
+      }, error => {
+        if (request !== timelineRequest) return;
+        timelineLoading = false;
+        timelineError = "Não foi possível carregar os lances: "+error.message;
+        paintTimeline();
+      });
+      return;
+    }
+    const panel = document.getElementById("timeline-panel-"+timelineOpenId);
+    if (!panel) return;
+    if (button.dataset.timelineScroll) {
+      const list = panel.querySelector("[data-timeline-list]");
+      list.scrollTo({top:button.dataset.timelineScroll === "recent" ? 0 : list.scrollHeight,
+        behavior:preferences.motion ? "auto" : "smooth"});
+      return;
+    }
+    if (timelineLoading) return;
+    const request = timelineRequest, matchId = timelineOpenId;
+    timelineLoading = true;
+    paintTimeline();
+    try {
+      if (button.hasAttribute("data-timeline-publish")) {
+        await cloud.publishTimeline(matchId);
+        if (request !== timelineRequest) return;
+        toast("Lances antigos publicados.");
+      } else if (timelineMore && timelineCursor) {
+        const page = await cloud.loadTimeline(matchId,timelineCursor);
+        if (request !== timelineRequest) return;
+        const known = new Map(timelineRows.map(row => [row.id,row]));
+        for (const row of page.rows) known.set(row.id,row);
+        timelineRows = [...known.values()];
+        timelineCursor = page.cursor;
+        timelineMore = page.more;
+      }
+    } finally {
+      if (request === timelineRequest) { timelineLoading = false; paintTimeline(); }
+    }
+  } catch (error) {
+    timelineLoading = false;
+    timelineError = error.message;
+    paintTimeline();
+    toast(error.message,true);
+  }
+});
+
 function field(label, name, type = "text", extra = "") {
   // Senhas nunca entram na cópia de formulários, mesmo quando visíveis.
   if (type === "password") {
@@ -909,7 +1030,7 @@ function matchCard(m, button = false) {
     b = team(m.away),
     isLive = m.status === "Ao vivo",
     isFinished = ["Encerrada", "Homologada"].includes(m.status);
-  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score"><div>${badge(a)}<div class="name">${esc(a.name)}</div></div><strong>${sc[0]} <span class="muted">:</span> ${sc[1]}</strong><div>${badge(b)}<div class="name">${esc(b.name)}</div></div></div>${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && admin && role === "admin" && cloud && !C.demo && finalStatuses.includes(m.status) ? `<details><summary>Mais ações</summary><button type="button" data-public-visibility="${esc(m.id)}">${m.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button></details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
+  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score"><div>${badge(a)}<div class="name">${esc(a.name)}</div></div><strong>${sc[0]} <span class="muted">:</span> ${sc[1]}</strong><div>${badge(b)}<div class="name">${esc(b.name)}</div></div></div>${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${timelineControl(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && admin && role === "admin" && cloud && !C.demo && finalStatuses.includes(m.status) ? `<details><summary>Mais ações</summary><button type="button" data-public-visibility="${esc(m.id)}">${m.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button></details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
 }
 
 function liveStatusPanel(context) {
@@ -950,6 +1071,7 @@ function render() {
   $("#logout")?.classList.toggle("hidden", C.demo || !user);
   if (admin && !C.demo && (!user || !role)) {
     app.innerHTML = accessView();
+    closeTimeline();
     if (accessBusy) app.querySelectorAll("button").forEach((b) => b.disabled = true);
     return;
   }
@@ -963,6 +1085,7 @@ function render() {
     if (state.settings.banner)
       $("#hero").style.backgroundImage =
         `linear-gradient(90deg,#0c1014ed,#0c1014b0),url("${encodeURI(state.settings.banner).replace(/"/g, "%22")}")`;
+    stopInvisibleTimeline();
     return;
   }
   // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
@@ -992,6 +1115,7 @@ function render() {
     ["imports", "Importar"],
   ];
   app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">${esc(systemDisplayName())}</span><h2>${esc(panelDisplayName())}</h2></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${accountPendingBanner()}${liveStatusPanel("admin")}${workspaceNavigation(sections)}${locationTrail()}<div id="view">${view()}</div>`;
+  stopInvisibleTimeline();
   if (busy || accessBusy) app.querySelectorAll("button").forEach((b) => (b.disabled = true));
   if (["matchSheets","reports"].includes(section) && $("[name=reportMatch]")) {
     $("[name=reportMatch]").value = reportFilter;
