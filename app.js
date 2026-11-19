@@ -3631,16 +3631,6 @@ function setArenaSidebarPinned(pinned) {
  try{localStorage.setItem("arena-barra-fixada-v1",pinned?"1":"0");localStorage.setItem("arena-barra-recolhida-v1",pinned?"0":"1");}catch{}
  syncArenaRail();
 }
-function peekArenaSidebar(open) {
- if(arenaSidebarPinned || !window.matchMedia("(min-width: 768px)").matches)return;
- const side=$("#arenaSidebar");
- if(!open && side?.contains(document.activeElement))return;
- arenaRailPeek=open;arenaRailCollapsed=!open;syncArenaRail();
-}
-document.addEventListener("pointerover",event=>{const side=event.target.closest?.("#arenaSidebar");if(side&&!side.contains(event.relatedTarget))peekArenaSidebar(true);});
-document.addEventListener("pointerout",event=>{const side=event.target.closest?.("#arenaSidebar");if(side&&!side.contains(event.relatedTarget))peekArenaSidebar(false);});
-document.addEventListener("focusin",event=>{if(event.target.closest?.("#arenaSidebar"))peekArenaSidebar(true);});
-document.addEventListener("focusout",event=>{const side=event.target.closest?.("#arenaSidebar");if(side&&!side.contains(event.relatedTarget))requestAnimationFrame(()=>{if(!side.matches(":hover"))peekArenaSidebar(false);});});
 function syncArenaLayout() {
  document.body.classList.add("arena-layout-v2");
  const ready=admin && (C.demo || (user && role));

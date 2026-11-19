@@ -2237,12 +2237,12 @@ body:not([data-admin="true"]) .public-event-icon {
  }
  @media (max-width:767px) {
   #arenaSidebar [data-layout-pin] {display:none}
-  body.arena-central-ready .arena-menu-toggle:not([hidden]) {position:fixed;left:max(12px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));z-index:740;box-shadow:0 4px 18px #0005;background:var(--panel);border-color:var(--accent)}
-  body.arena-central-ready>footer {padding-bottom:90px}
+  body.arena-central-ready .arena-menu-toggle:not([hidden]) {position:fixed;left:max(12px,env(safe-area-inset-left));top:max(10px,env(safe-area-inset-top));bottom:auto;z-index:740;box-shadow:0 4px 18px #0005;background:var(--panel);border-color:var(--accent)}
+  body.arena-layout-v2.arena-central-ready>header {padding-top:70px}
  }
 
  #arenaSidebar {position:fixed;inset:0 auto 0 0;height:100vh;height:100dvh;max-height:100dvh;box-sizing:border-box}
- #arenaSidebar .arena-sidebar-nav {flex:1 1 0;min-height:0;overflow-y:auto;scrollbar-gutter:stable}
+ #arenaSidebar .arena-sidebar-nav {flex:none;min-height:0;overflow:visible}
  #arenaSidebar .arena-side-item>span {min-width:0;overflow-wrap:anywhere}
  #arenaSidebar .arena-side-item .arena-icon {width:18px;height:18px;color:var(--accent)}
  #arenaSidebar .arena-side-scopes {display:grid;grid-template-columns:minmax(0,1fr);gap:2px}
@@ -2252,9 +2252,7 @@ body:not([data-admin="true"]) .public-event-icon {
   body.arena-layout-v2.arena-central-ready>main {container-type:normal;container-name:none}
   body.arena-central-ready #view {container-type:inline-size;container-name:arena-content}
  }
- @media (max-height:620px) {
-  #arenaSidebar .arena-sidebar-footer {max-height:40dvh;overflow-y:auto;overscroll-behavior:contain}
- }
+
  .arena-sidebar {position:fixed;inset:0 auto 0 0;width:252px;background:var(--panel);border-right:1px solid var(--line);padding:24px 14px;overflow:auto;z-index:90;scrollbar-width:thin;overscroll-behavior:contain}
  .arena-sidebar-brand {display:flex;align-items:center;gap:8px;padding:0 6px 22px;border-bottom:1px solid var(--line)}
  .arena-side-brand-link {text-decoration:none;color:var(--text);display:flex;align-items:center;gap:10px;min-width:0;font-size:17px;font-weight:800}
@@ -2331,13 +2329,13 @@ body:not([data-admin="true"]) .public-event-icon {
 /* Barra lateral compacta: independente da rolagem dos documentos. */
 @media screen {
  body.arena-central-ready {--arena-sidebar-width:240px}
- #arenaSidebar {width:var(--arena-sidebar-width,240px);display:flex;flex-direction:column;padding:12px 10px;overflow:hidden;gap:0}
+ #arenaSidebar {width:var(--arena-sidebar-width,240px);display:flex;flex-direction:column;padding:12px 10px;overflow-y:auto;overflow-x:hidden;gap:0;overscroll-behavior:contain;scrollbar-gutter:stable}
  #arenaSidebar .arena-sidebar-brand {flex:none;padding:2px 2px 14px;gap:4px;min-height:66px}
  #arenaSidebar .arena-side-brand-link {flex:1;font-size:14px;gap:8px;line-height:1.2}
  #arenaSidebar .system-logo,#arenaSidebar .system-logo img {width:38px;height:38px;max-width:38px;max-height:38px;min-width:38px}
  #arenaSidebar .brand-copy b {font:700 14px Inter,Arial,sans-serif;letter-spacing:0;line-height:1.25}
  #arenaSidebar .brand-copy small {font-size:8px;letter-spacing:.08em;margin-top:4px}
- #arenaSidebar .arena-sidebar-nav {flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;overscroll-behavior:contain;padding:8px 2px}
+ #arenaSidebar .arena-sidebar-nav {flex:none;min-height:0;overflow:visible;padding:8px 2px}
  #arenaSidebar .arena-side-caption {margin:8px 8px 12px;font-size:9px}
  #arenaSidebar .arena-side-group {margin:4px 0}
  #arenaSidebar .arena-side-group>summary {min-height:44px;margin:0;padding:10px 9px;gap:10px;font-size:13px;line-height:1.25}
