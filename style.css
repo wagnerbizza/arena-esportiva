@@ -2071,3 +2071,38 @@ body:not([data-admin="true"]) .public-event-icon {
   display: block;
   margin-top: 6px;
 }
+
+
+/* Ações rápidas junto ao placar operacional. */
+.quick-event-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.quick-event-buttons button {
+  flex: 1 1 90px;
+  min-height: 44px;
+}
+.quick-event-buttons .quick-yellow {
+  background: #ffda61;
+  border-color: #ffda61;
+  color: #211800;
+}
+.quick-event-buttons .quick-red {
+  background: #a91c2b;
+  border-color: #e36a76;
+  color: #fff;
+}
+.quick-control-group {
+  border-top: 1px solid var(--line);
+  margin-top: 18px;
+  padding-top: 12px;
+}
+.quick-control-group .toolbar {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.quick-control-group button {
+  min-height: 44px;
+}

@@ -1221,6 +1221,21 @@ function view() {
 }
 // 3 — O Firestore valida permissões, auditoria e transições em firestore.rules.
 // 4 — Operação da partida. Sem apagar eventos: pontos errados recebem estorno.
+function quickMatchControls(m,locked,live,c) {
+  return `<section class="quick-control-group"><h3>Tempo</h3><div class="toolbar">
+    <button type="button" data-clock-command="${c.running ? "parar" : "iniciar"}" ${locked || (!c.running && !live) ? "disabled" : ""}>${c.running ? "Parar relógio" : "Iniciar relógio"}</button>
+    <button type="button" data-open-clock ${locked ? "disabled" : ""}>Ajustar tempo</button>
+    </div>
+    ${m.sport === "Futebol" ? `<h3>Acréscimos</h3><div class="toolbar">
+      ${[1,2,3].map(minutes => `<button type="button" data-fast-added="${minutes}" ${!live ? "disabled" : ""}>Anunciar +${minutes} min</button>`).join("")}
+      <button type="button" data-clock-command="iniciar-acrescimos" ${!live || c.running || c.segments?.acrescimos || m.addedTime?.stage !== m.stage || !m.addedTime.minutes ? "disabled" : ""}>Iniciar acréscimos</button>
+      </div><p class="muted">Anunciar publica a duração. Iniciar acréscimos começa a contagem com o relógio normal parado.</p>` : ""}
+    </section><section class="quick-control-group"><h3>Avisos rápidos</h3><div class="toolbar">
+      <button type="button" data-fast-notice="arbitragem" ${locked ? "disabled" : ""}>Aguardando arbitragem</button>
+      <button type="button" data-fast-notice="atendimento" ${locked ? "disabled" : ""}>Atendimento em quadra</button>
+      <button type="button" data-fast-notice="retirar" ${locked || !m.publicNotice ? "disabled" : ""}>Retirar aviso</button>
+      </div><p class="muted">Os avisos aparecem ao público. Para interromper a partida, use Pausar jogo.</p></section>`;
+}
 let operationPanel = "tempo";
 function operate() {
   const m = state.matches.find((m) => m.id === selected);
@@ -1286,7 +1301,12 @@ function operate() {
         )
         .join(
           "",
-        )}</select></label><div class="quick-buttons">${(m.sport === "Basquete" ? [1, 2, 3] : [1]).map((v) => `<button class="quick-score primary" data-quick="${v}" data-side="${side}" ${!live ? "disabled" : ""}>+${v}<small>${m.sport === "Futebol" || m.sport === "Futsal" ? "GOL" : v > 1 ? "PONTOS" : "PONTO"}</small></button>`).join("")}</div></section>`;
+        )}</select></label><div class="quick-buttons">${(m.sport === "Basquete" ? [1, 2, 3] : [1]).map((v) => `<button class="quick-score primary" data-quick="${v}" data-side="${side}" ${!live ? "disabled" : ""}>+${v}<small>${m.sport === "Futebol" || m.sport === "Futsal" ? "GOL" : v > 1 ? "PONTOS" : "PONTO"}</small></button>`).join("")}</div><div class="quick-event-buttons">
+        ${["Futebol","Futsal","Handebol","Vôlei","Vôlei de praia"].includes(m.sport) ? `
+          <button type="button" class="quick-yellow" data-fast-event="cartão amarelo" data-side="${side}" ${!live ? "disabled" : ""}>Amarelo</button>
+          <button type="button" class="quick-red" data-fast-event="cartão vermelho" data-side="${side}" ${!live ? "disabled" : ""}>Vermelho</button>` : ""}
+        <button type="button" data-fast-event="falta" data-side="${side}" ${!live ? "disabled" : ""}>Falta</button>
+      </div></section>`;
     })
     .join("");
   const elapsedMs = M.elapsed(m);
@@ -1296,7 +1316,8 @@ function operate() {
      </label><div class="toolbar">${[1, 2, 3].map(minutes => `<button type="button" data-added-minutes="${minutes}">+${minutes} min</button>`).join("")}
      <button type="submit" class="primary">Publicar acréscimos</button>
      <button type="button" data-clock-command="iniciar-acrescimos" ${c.running || c.segments?.acrescimos || m.addedTime?.stage !== m.stage || !m.addedTime.minutes ? "disabled" : ""}>Iniciar acréscimos</button></div>
-     <p class="muted">Pare o relógio normal para iniciar a contagem dos acréscimos. Use 0 para retirar o aviso.</p></form>` : ""}<div class="toolbar"><button data-clock-command="${c.running ? "parar" : "iniciar"}" ${!c.running && !live ? "disabled" : ""}>${c.running ? "Parar somente o relógio" : "Iniciar relógio"}</button></div><details id="clockSettings"><summary>Configurar duração e ajustar cronômetro</summary><p>Escolha um atalho ou preencha os tempos abaixo conforme o regulamento do seu evento. O atalho apenas preenche; clique em Salvar ajuste para aplicar.</p><div class="toolbar">${[10,20,45].map(n=>`<button type="button" data-clock-preset="${n}" ${c.running?"disabled":""}>${n} minutos</button>`).join("")}</div><form id="clock-config"><div class="formgrid"><label>Modo<select name="clockMode"><option value="up" ${c.mode === "up" ? "selected" : ""}>Crescente (00:00 →)</option><option value="down" ${c.mode === "down" ? "selected" : ""}>Regressivo (duração → 00:00)</option></select></label>${field("Duração da etapa (min)", "durationMin", "number", `min="0" max="360" value="${Math.floor((c.durationMs || 600000) / 60000)}"`)}${field("Tempo no visor (min)", "displayMin", "number", `min="0" max="360" value="${Math.floor(clockDisplayMs / 60000)}"`)}${field("Tempo no visor (seg)", "displaySec", "number", `min="0" max="59" value="${Math.floor(clockDisplayMs / 1000) % 60}"`)}${field("Motivo do ajuste", "clockReason", "text", 'required maxlength="300"')}</div><button ${c.running ? "disabled" : ""}>Salvar ajuste do cronômetro</button><p class="muted">No regressivo, informe quanto falta. No crescente, informe o tempo decorrido. Pare o relógio para ajustar. A troca de etapa não zera o tempo automaticamente. Ao chegar a zero, a contagem regressiva aguarda a decisão da arbitragem.</p></form></details>` : ""}</div><div id="mesa-avisos" ${operationPanel === "avisos" ? "" : "hidden"}><h3>Aviso para quem está assistindo</h3><form id="public-notice"><label>Mensagem pública<textarea name="notice" maxlength="300" ${locked ? "disabled" : ""}>${esc(m.publicNotice || "")}</textarea></label><p><button ${locked ? "disabled" : ""}>Publicar aviso</button> <button name="noticeAction" value="clear" ${locked || !m.publicNotice ? "disabled" : ""}>Retirar aviso</button></p></form></div></div></div><div class="console-actions"><div class="card quick-panel"><span class="tag">LANÇAMENTO RÁPIDO</span><h2>Marcar ponto</h2><p class="muted">Selecione o atleta, se desejar, e toque na pontuação da equipe.</p><div class="quick-grid">${quick}</div>${!live ? '<p class="public-notice">Os lançamentos ficam disponíveis quando o jogo está Ao vivo.</p>' : ""}</div><div class="card"><details><summary>Cartões, faltas, substituições e outros lances</summary>${
+     <p class="muted">Pare o relógio normal para iniciar a contagem dos acréscimos. Use 0 para retirar o aviso.</p></form>` : ""}<div class="toolbar"><button data-clock-command="${c.running ? "parar" : "iniciar"}" ${!c.running && !live ? "disabled" : ""}>${c.running ? "Parar somente o relógio" : "Iniciar relógio"}</button></div><details id="clockSettings"><summary>Configurar duração e ajustar cronômetro</summary><p>Escolha um atalho ou preencha os tempos abaixo conforme o regulamento do seu evento. O atalho apenas preenche; clique em Salvar ajuste para aplicar.</p><div class="toolbar">${[10,20,45].map(n=>`<button type="button" data-clock-preset="${n}" ${c.running?"disabled":""}>${n} minutos</button>`).join("")}</div><form id="clock-config"><div class="formgrid"><label>Modo<select name="clockMode"><option value="up" ${c.mode === "up" ? "selected" : ""}>Crescente (00:00 →)</option><option value="down" ${c.mode === "down" ? "selected" : ""}>Regressivo (duração → 00:00)</option></select></label>${field("Duração da etapa (min)", "durationMin", "number", `min="0" max="360" value="${Math.floor((c.durationMs || 600000) / 60000)}"`)}${field("Tempo no visor (min)", "displayMin", "number", `min="0" max="360" value="${Math.floor(clockDisplayMs / 60000)}"`)}${field("Tempo no visor (seg)", "displaySec", "number", `min="0" max="59" value="${Math.floor(clockDisplayMs / 1000) % 60}"`)}${field("Motivo do ajuste", "clockReason", "text", 'required maxlength="300"')}</div><button ${c.running ? "disabled" : ""}>Salvar ajuste do cronômetro</button><p class="muted">No regressivo, informe quanto falta. No crescente, informe o tempo decorrido. Pare o relógio para ajustar. A troca de etapa não zera o tempo automaticamente. Ao chegar a zero, a contagem regressiva aguarda a decisão da arbitragem.</p></form></details>` : ""}</div><div id="mesa-avisos" ${operationPanel === "avisos" ? "" : "hidden"}><h3>Aviso para quem está assistindo</h3><form id="public-notice"><label>Mensagem pública<textarea name="notice" maxlength="300" ${locked ? "disabled" : ""}>${esc(m.publicNotice || "")}</textarea></label><p><button ${locked ? "disabled" : ""}>Publicar aviso</button> <button name="noticeAction" value="clear" ${locked || !m.publicNotice ? "disabled" : ""}>Retirar aviso</button></p></form></div></div></div><div class="console-actions"><div class="card quick-panel"><span class="tag">LANÇAMENTO RÁPIDO</span><h2>Marcar ponto</h2><p class="muted">Selecione o atleta, se desejar, e toque na pontuação da equipe.</p><div class="quick-grid">${quick}</div>${!live ? '<p class="public-notice">Os lançamentos ficam disponíveis quando o jogo está Ao vivo.</p>' : ""}
+    ${quickMatchControls(m,locked,live,c)}</div><div class="card"><details><summary>Cartões, faltas, substituições e outros lances</summary>${
     locked
       ? "<p>Partida bloqueada.</p>"
       : `<form id="event"><div class="formgrid">${select("Equipe", "side", `<option value="0">${esc(name(m.home))}</option><option value="1">${esc(name(m.away))}</option>`)}${select(
@@ -2276,6 +2297,33 @@ document.addEventListener("click", async (e) => {
         UID:a.target||"",Responsável:a.actor||"",Motivo:a.reason||"",...auditChunks("Antes",a.before),...auditChunks("Depois",a.after)
       }))),"Permissões");
       XLSX.writeFile(wb,"historico-permissoes.xlsx");return;
+    }
+    if (b.dataset.fastEvent || b.dataset.fastAdded || b.dataset.fastNotice) {
+      if (!admin || section !== "matches" || !selected || !["admin","operator"].includes(role))
+        throw Error("Abra uma partida autorizada para usar os atalhos.");
+      const match = state.matches.find(item => item.id === selected);
+      if (!match) throw Error("Partida não encontrada.");
+      if (!C.demo && role !== "admin" && !cloud?.canOperate(match.id))
+        throw Error("Sua conta não está autorizada a operar esta partida.");
+      if (b.dataset.fastEvent) {
+        const kind = b.dataset.fastEvent, side = Number(b.dataset.side);
+        if (!["cartão amarelo","cartão vermelho","falta"].includes(kind) || ![0,1].includes(side))
+          throw Error("Lance inválido.");
+        const player = quickPlayers[side] || "";
+        const athlete = match.roster.find(item => item.id === player);
+        if (kind === "cartão vermelho" && !confirm("Registrar cartão vermelho para "+name([match.home,match.away][side])+
+            (athlete ? " · "+athlete.name : " · sem atleta informado")+"?")) return;
+        await dispatch({type:"event",matchId:selected,kind,side,value:0,player,text:"Lançamento rápido"});
+      } else if (b.dataset.fastAdded) {
+        const minutes = Number(b.dataset.fastAdded);
+        if (![1,2,3].includes(minutes)) throw Error("Acréscimo inválido.");
+        await dispatch({type:"addedTime",matchId:selected,minutes});
+      } else {
+        const notices = {arbitragem:"Aguardando decisão da arbitragem.",atendimento:"Atendimento em quadra.",retirar:""};
+        if (!Object.hasOwn(notices,b.dataset.fastNotice)) throw Error("Aviso inválido.");
+        await dispatch({type:"notice",matchId:selected,notice:notices[b.dataset.fastNotice]});
+      }
+      return;
     }
     if (b.dataset.quick) {
       await dispatch({
