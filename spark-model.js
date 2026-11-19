@@ -173,6 +173,8 @@
             m.status === "Ao vivo" && !c.running,
             "O cronômetro só pode iniciar em partida ao vivo.",
           );
+          need(c.mode !== "down" || elapsed(m) < c.durationMs,
+            "Tempo esgotado. Ajuste o relógio ou decida a próxima etapa antes de iniciar.");
           runClock(m, stamp);
           e.text = "Cronômetro iniciado";
         } else if (a.command === "parar") {
@@ -184,7 +186,8 @@
           need(m.sport === "Futebol" && m.status === "Ao vivo" && added?.stage === m.stage &&
             Number.isInteger(added.minutes) && added.minutes > 0 && added.minutes <= 30,
             "Publique os acréscimos desta etapa primeiro.");
-          need(!c.running && !c.segments.acrescimos, "Pare o relógio normal antes de iniciar os acréscimos.");
+          need(!c.running && !c.segments.acrescimos && added.phase !== "started",
+            "Os acréscimos já foram iniciados ou o relógio normal ainda está em andamento.");
           m.clock = {
             ...emptyClock(),
             mode: "down",
@@ -193,6 +196,7 @@
             current: "acrescimos",
             running: true,
           };
+          m.addedTime = {stage:m.stage,minutes:added.minutes,phase:"started"};
           e.text = "Cronômetro dos acréscimos iniciado";
         } else if (a.command === "ajustar") {
           need(!c.running, "Pare o cronômetro antes de ajustar.");
@@ -221,7 +225,9 @@
       } else if (a.type === "addedTime") {
         need(m.sport === "Futebol" && m.status === "Ao vivo", "Acréscimos disponíveis para futebol ao vivo.");
         need(Number.isInteger(a.minutes) && a.minutes >= 0 && a.minutes <= 30, "Informe de 0 a 30 minutos.");
-        m.addedTime = {stage: m.stage, minutes: a.minutes};
+        const started = m.addedTime?.stage === m.stage &&
+          (m.addedTime.phase === "started" || Object.hasOwn(m.clock?.segments || {},"acrescimos"));
+        m.addedTime = {stage:m.stage,minutes:a.minutes,phase:started ? "started" : "announced"};
         Object.assign(e, {type:"acréscimos", value:a.minutes, text:"Acréscimos: +" + a.minutes + " min"});
       } else if (a.type === "notice") {
         m.publicNotice = text(a.notice, 300);

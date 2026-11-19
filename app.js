@@ -705,13 +705,16 @@ function clockStatus(m, now = Date.now()) {
 }
 function addedClock(m, now = Date.now()) {
   const minutes = m.addedTime?.stage === m.stage ? m.addedTime.minutes : 0;
-  const started = Object.hasOwn(m.clock?.segments || {}, "acrescimos");
+  const started = m.addedTime?.stage === m.stage &&
+    (m.addedTime.phase === "started" || Object.hasOwn(m.clock?.segments || {}, "acrescimos"));
   const waiting = m.status === "Ao vivo" && minutes > 0 && !started &&
+    m.addedTime.phase === "announced" &&
     (!m.clock?.running || clockStatus(m, now) === "TEMPO ESGOTADO");
   return {
     caption: started || waiting ? "Acréscimos" : m.clock?.mode === "down" ? "Tempo restante" : "Tempo de jogo",
     time: waiting ? prettyTime(minutes * 60000) : m.clock ? M.clockText(m, now) : "—",
     status: waiting ? "AGUARDANDO INÍCIO" : clockStatus(m, now),
+    waiting,
   };
 }
 function clockMarkup(m) {
@@ -728,6 +731,21 @@ function updateClocks() {
     el.parentElement.querySelector(".clock-caption").textContent = clock.caption;
     const label = el.parentElement.querySelector("[data-clock-status]");
     if (label) label.textContent = clock.status;
+  }
+  if (admin && selected) {
+    const match = state.matches.find(item => item.id === selected);
+    if (match?.status === "Ao vivo") {
+      const expired = clockStatus(match) === "TEMPO ESGOTADO";
+      const waiting = addedClock(match).waiting;
+      const blocked = expired && !waiting;
+      for (const button of document.querySelectorAll('[data-clock-command="iniciar"],[data-guided-start]')) {
+        button.disabled = busy || accessBusy || blocked;
+        button.textContent = blocked ? "Tempo esgotado" : waiting ? "Iniciar acréscimos" :
+          button.hasAttribute("data-guided-start") ? "Iniciar cronômetro" : "Iniciar relógio";
+      }
+      const heading = document.querySelector("[data-clock-guide-label]");
+      if (heading && expired && !waiting) heading.textContent = "Tempo esgotado · aguardando decisão da arbitragem";
+    }
   }
 }
 // Um intervalo apenas na tela: nenhum acesso ao Firestore a cada segundo.
@@ -1038,6 +1056,13 @@ async function boot() {
   }
 }
 async function dispatch(a) {
+  if (a.type === "clock" && a.command === "iniciar") {
+    const match = state.matches.find(item => item.id === a.matchId);
+    if (match && addedClock(match).waiting && !match.clock?.running)
+      a = {...a,command:"iniciar-acrescimos"};
+    else if (match && clockStatus(match) === "TEMPO ESGOTADO")
+      throw Error("Tempo esgotado. Ajuste o relógio ou decida a próxima etapa antes de iniciar.");
+  }
   if (busy) throw Error("Aguarde a operação anterior.");
   if (a.type === "notes" && role !== "admin") {
     throw Error("Somente o administrador pode editar as observações da súmula.");
@@ -1314,7 +1339,7 @@ function quickMatchControls(m,locked,live,c) {
     </div>
     ${m.sport === "Futebol" ? `<h3>Acréscimos</h3><div class="toolbar">
       ${[1,2,3].map(minutes => `<button type="button" data-fast-added="${minutes}" ${!live ? "disabled" : ""}>Anunciar +${minutes} min</button>`).join("")}
-      <button type="button" data-clock-command="iniciar-acrescimos" ${!live || c.running || c.segments?.acrescimos || m.addedTime?.stage !== m.stage || !m.addedTime.minutes ? "disabled" : ""}>Iniciar acréscimos</button>
+      <button type="button" data-clock-command="iniciar-acrescimos" ${!live || c.running || c.segments?.acrescimos || m.addedTime?.phase === "started" || m.addedTime?.stage !== m.stage || !m.addedTime.minutes ? "disabled" : ""}>Iniciar acréscimos</button>
       </div><p class="muted">Anunciar publica a duração. Iniciar acréscimos começa a contagem com o relógio normal parado.</p>` : ""}
     </section><section class="quick-control-group"><h3>Avisos rápidos</h3><div class="toolbar">
       <button type="button" data-fast-notice="arbitragem" ${locked ? "disabled" : ""}>Aguardando arbitragem</button>
@@ -1401,7 +1426,7 @@ function operate() {
      <input name="addedMinutes" type="number" min="0" max="30" step="1" required value="${m.addedTime?.stage === m.stage ? esc(m.addedTime.minutes) : 0}">
      </label><div class="toolbar">${[1, 2, 3].map(minutes => `<button type="button" data-added-minutes="${minutes}">+${minutes} min</button>`).join("")}
      <button type="submit" class="primary">Publicar acréscimos</button>
-     <button type="button" data-clock-command="iniciar-acrescimos" ${c.running || c.segments?.acrescimos || m.addedTime?.stage !== m.stage || !m.addedTime.minutes ? "disabled" : ""}>Iniciar acréscimos</button></div>
+     <button type="button" data-clock-command="iniciar-acrescimos" ${c.running || c.segments?.acrescimos || m.addedTime?.phase === "started" || m.addedTime?.stage !== m.stage || !m.addedTime.minutes ? "disabled" : ""}>Iniciar acréscimos</button></div>
      <p class="muted">Pare o relógio normal para iniciar a contagem dos acréscimos. Use 0 para retirar o aviso.</p></form>` : ""}<div class="toolbar"><button data-clock-command="${c.running ? "parar" : "iniciar"}" ${!c.running && !live ? "disabled" : ""}>${c.running ? "Parar somente o relógio" : "Iniciar relógio"}</button></div><details id="clockSettings"><summary>Configurar duração e ajustar cronômetro</summary><p>Escolha um atalho ou preencha os tempos abaixo conforme o regulamento do seu evento. O atalho apenas preenche; clique em Salvar ajuste para aplicar.</p><div class="toolbar">${[10,20,45].map(n=>`<button type="button" data-clock-preset="${n}" ${c.running?"disabled":""}>${n} minutos</button>`).join("")}</div><form id="clock-config"><div class="formgrid"><label>Modo<select name="clockMode"><option value="up" ${c.mode === "up" ? "selected" : ""}>Crescente (00:00 →)</option><option value="down" ${c.mode === "down" ? "selected" : ""}>Regressivo (duração → 00:00)</option></select></label>${field("Duração da etapa (min)", "durationMin", "number", `min="0" max="360" value="${Math.floor((c.durationMs || 600000) / 60000)}"`)}${field("Tempo no visor (min)", "displayMin", "number", `min="0" max="360" value="${Math.floor(clockDisplayMs / 60000)}"`)}${field("Tempo no visor (seg)", "displaySec", "number", `min="0" max="59" value="${Math.floor(clockDisplayMs / 1000) % 60}"`)}${field("Motivo do ajuste", "clockReason", "text", 'required maxlength="300"')}</div><button ${c.running ? "disabled" : ""}>Salvar ajuste do cronômetro</button><p class="muted">No regressivo, informe quanto falta. No crescente, informe o tempo decorrido. Pare o relógio para ajustar. A troca de etapa não zera o tempo automaticamente. Ao chegar a zero, a contagem regressiva aguarda a decisão da arbitragem.</p></form></details>` : ""}</div><div id="mesa-avisos" ${operationPanel === "avisos" ? "" : "hidden"}><h3>Aviso para quem está assistindo</h3><form id="public-notice"><label>Mensagem pública<textarea name="notice" maxlength="300" ${locked ? "disabled" : ""}>${esc(m.publicNotice || "")}</textarea></label><p><button ${locked ? "disabled" : ""}>Publicar aviso</button> <button name="noticeAction" value="clear" ${locked || !m.publicNotice ? "disabled" : ""}>Retirar aviso</button></p></form></div></div></div><div class="console-actions"><div class="card quick-panel"><span class="tag">LANÇAMENTO RÁPIDO</span><h2>Marcar ponto</h2><p class="muted">Selecione o atleta, se desejar, e toque na pontuação da equipe.</p><div class="quick-grid">${quick}</div>${!live ? '<p class="public-notice">Os lançamentos ficam disponíveis quando o jogo está Ao vivo.</p>' : ""}
     ${quickMatchControls(m,locked,live,c)}</div><div class="card"><details><summary>Cartões, faltas, substituições e outros lances</summary>${
     locked
@@ -3633,7 +3658,7 @@ let guidedStartBusy=false;
 function matchStartGuide(m){
  const ended=["Encerrada","Homologada","Cancelada"].includes(m.status),running=!!m.clock?.running,live=m.status==="Ao vivo";
  const label=live?(running?"Jogo ao vivo e relógio em andamento":"Jogo ao vivo • relógio parado"):ended?"Partida finalizada ou bloqueada":["Pausada","Suspensa"].includes(m.status)?"Partida interrompida":"Prepare o início da partida";
- return `<section class="card match-guide"><span class="tag">MESA DE OPERAÇÃO</span><h3>${label}</h3><p>${ended?"Confira a súmula e o histórico. Reabrir exige administrador e justificativa.":running?"Use os botões de pontuação para registrar os lances. Pausar o jogo também para o cronômetro.":"Confira as equipes e a etapa. Você pode configurar o tempo antes de começar ou usar o relógio atual."}</p>${!ended?`<div class="toolbar">${!running?`<button type="button" class="primary" data-guided-start ${guidedStartBusy?"disabled":""}>${live?"Iniciar cronômetro":["Pausada","Suspensa"].includes(m.status)?"Retomar jogo e cronômetro":"Iniciar jogo e cronômetro"}</button><button type="button" data-open-clock>Configurar tempo</button>`:""}</div><small>Iniciar/retomar preserva o tempo acumulado. Ajustes e mudanças de etapa continuam disponíveis abaixo.</small>`:""}</section>`;
+ return `<section class="card match-guide"><span class="tag">MESA DE OPERAÇÃO</span><h3 data-clock-guide-label>${label}</h3><p>${ended?"Confira a súmula e o histórico. Reabrir exige administrador e justificativa.":running?"Use os botões de pontuação para registrar os lances. Pausar o jogo também para o cronômetro.":"Confira as equipes e a etapa. Você pode configurar o tempo antes de começar ou usar o relógio atual."}</p>${!ended?`<div class="toolbar">${!running?`<button type="button" class="primary" data-guided-start ${guidedStartBusy?"disabled":""}>${live?"Iniciar cronômetro":["Pausada","Suspensa"].includes(m.status)?"Retomar jogo e cronômetro":"Iniciar jogo e cronômetro"}</button><button type="button" data-open-clock>Configurar tempo</button>`:""}</div><small>Iniciar/retomar preserva o tempo acumulado. Ajustes e mudanças de etapa continuam disponíveis abaixo.</small>`:""}</section>`;
 }
 function updateArenaFavicon(){
  const logo=state.settings.logo||"";
