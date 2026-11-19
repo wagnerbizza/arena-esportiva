@@ -227,16 +227,16 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
           "Acontecimento",
           "Equipe / atleta",
           "Descrição / motivo",
-          "Resp.*",
+          "Responsável",
         ],
         g.events.map((r) => r.map(clean)),
         y,
-        [22, 13, 27, 36, 69, 19],
+        [23, 12, 28, 33, 48, 42],
       ) + 5;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     y = paragraph(
-      "* Identificador abreviado. A auditoria completa preserva o UID integral de cada responsavel.",
+      "Responsaveis identificados pelo nome disponivel e UID. Registros antigos podem nao conter o nome.",
       y,
     );
     y += 3;

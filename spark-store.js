@@ -196,13 +196,15 @@ export async function connectSpark({
         ...a.detail,
         id: a.id,
         actor: a.actor,
+        actorName: a.actorName || "",
+        actorRole: a.actorRole || "",
         at: a.at?.toDate?.().toISOString() || "",
         revision: a.revision,
         gameMs: a.after?.clock
           ? M.elapsed(a.after, a.at?.toMillis?.() || Date.now())
           : null,
       }));
-  const timelineTypes = new Set(["ponto","cartão amarelo","cartão vermelho","falta","substituição","tempo","status","etapa","set"]);
+  const timelineTypes = new Set(["ponto","cartão amarelo","cartão vermelho","falta","substituição","tempo","status","etapa","set","acréscimos","cronômetro"]);
   function timelineEntry(id, audit) {
     if (audit.entity !== "matches" || !timelineTypes.has(audit.detail?.type)) return null;
     const e = audit.detail;
@@ -683,6 +685,8 @@ export async function connectSpark({
           entity,
           target,
           actor: session.uid,
+          actorName: String(profile?.name || session.displayName || session.email || "").slice(0,100),
+          actorRole: isOwner() ? "admin" : "operator",
           at: F.serverTimestamp(),
           revision: next._revision,
           detail,

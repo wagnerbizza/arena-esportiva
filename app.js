@@ -37,6 +37,7 @@ let accessStatus = "loading",
   managedUserId = "";
 const key = trainingMode ? "arena-treinamento-isolado-v1" : "arena-demo-v1",
   app = $("#app");
+let documentFilters = {championship:"",sport:"",status:"",query:"",from:"",to:""};
 let reportFilter = "",
   publicFilter = "";
 const publicEdition = admin ? "" : new URLSearchParams(location.search).get("campeonato") || "";
@@ -751,6 +752,9 @@ function updateClocks() {
 // Um intervalo apenas na tela: nenhum acesso ao Firestore a cada segundo.
 setInterval(updateClocks, 250);
 function eventLabel(e, m) {
+  if (e.type === "status") return `Situação: ${e.from||"—"} → ${e.to||"—"}`;
+  if (e.type === "acréscimos") return e.value ? `Acréscimos autorizados: +${e.value} min` : "Aviso de acréscimos retirado";
+  if (e.type === "cronômetro") return e.text || ({iniciar:"Cronômetro iniciado",parar:"Cronômetro parado","iniciar-acrescimos":"Acréscimos iniciados",ajustar:"Cronômetro ajustado"}[e.from] || "Alteração do cronômetro");
   if (e.type === "ponto")
     return e.correctionOf
       ? (m.sport === "Futebol" || m.sport === "Futsal" ? "Gol anulado" : "Pontuação anulada") + " (" + e.value + ")"
@@ -773,7 +777,7 @@ function eventLabel(e, m) {
 // Apenas apresentação: não altera eventos, placares ou a auditoria gravada.
 function eventDescription(e) {
   const text = String(
-    e.type === "cadastro" ? "Partida cadastrada na central" : e.text || "",
+    e.type === "cadastro" ? "Partida cadastrada na central" : e.text || (e.type==="status"?`${e.from||"—"} → ${e.to||"—"}`:e.type==="acréscimos"?`Acréscimos autorizados: +${e.value||0} min`:""),
   ).trim();
   const reason = String(e.reason || "").trim();
   if (text && reason && text !== reason) {
@@ -1265,7 +1269,7 @@ function render() {
   if (["matchSheets","reports"].includes(section) && $("[name=reportMatch]")) {
     $("[name=reportMatch]").value = reportFilter;
     $("#reportOutput").innerHTML = section==="matchSheets"
-      ? state.matches.filter((m) => !reportFilter || m.id === reportFilter).map(reportMatch).join("")
+      ? documentMatches().map(reportMatch).join("")
       : sportsReportPreview();
   }
 }
@@ -1471,7 +1475,7 @@ function operate() {
       .reverse()
       .map(
         (e) =>
-          `<div class="event"><div><b>${esc(eventLabel(e, m))}</b> ${[0, 1].includes(e.side) ? esc(name([m.home, m.away][e.side])) : ""}</div><p>${esc(eventDescription(e))}</p><small>${esc(format(e.at))} • ${e.gameMs != null ? "Jogo " + prettyTime(e.gameMs) + " • " : ""}Operador ${esc((e.actor || "").slice(0, 8))} • Etapa ${esc(e.stage || "—")}${e.player ? " • " + esc(m.roster.find((p) => p.id === e.player)?.name || "") : ""}</small>${!locked && role === "admin" && e.type === "ponto" && e.value > 0 && !m.events.some((x) => x.correctionOf === e.id) ? ` <button data-correct="${e.id}">Estornar</button>` : ""}</div>`,
+          `<div class="event"><div><b>${esc(eventLabel(e, m))}</b> ${[0, 1].includes(e.side) ? esc(name([m.home, m.away][e.side])) : ""}</div><p>${esc(eventDescription(e))}</p><small>${esc(format(e.at))} • ${e.gameMs != null ? "Jogo " + prettyTime(e.gameMs) + " • " : ""}Operador ${esc(responsibleLabel(e))} • Etapa ${esc(e.stage || "—")}${e.player ? " • " + esc(m.roster.find((p) => p.id === e.player)?.name || "") : ""}</small>${!locked && role === "admin" && e.type === "ponto" && e.value > 0 && !m.events.some((x) => x.correctionOf === e.id) ? ` <button data-correct="${e.id}">Estornar</button>` : ""}</div>`,
       )
       .join("") || empty("Histórico disponível somente ao administrador principal, ou aguardando carregamento.")
   }</div>`;
@@ -1631,16 +1635,16 @@ function reportMatch(m) {
   const rows = m.events
     .map(
       (e) =>
-        `<tr><td>${esc(new Date(e.at).toLocaleTimeString("pt-BR"))}<small class="cell-sub">${e.gameMs != null ? "Jogo " + prettyTime(e.gameMs) : ""}</small></td><td>${esc(e.stage || "—")}</td><td>${esc(eventLabel(e, m))}</td><td>${[0, 1].includes(e.side) ? esc(name([m.home, m.away][e.side])) : "—"}${e.player ? '<small class="cell-sub">' + esc(m.roster.find((p) => p.id === e.player)?.name || "") + "</small>" : ""}</td><td>${esc(eventDescription(e))}</td><td>${esc((e.actor || "").slice(0, 8))}</td></tr>`,
+        `<tr><td>${esc(format(e.at))}<small class="cell-sub">${e.gameMs != null ? "Jogo " + prettyTime(e.gameMs) : ""}</small></td><td>${esc(e.stage || "—")}</td><td>${esc(eventLabel(e, m))}</td><td>${[0, 1].includes(e.side) ? esc(name([m.home, m.away][e.side])) : "—"}${e.player ? '<small class="cell-sub">' + esc(m.roster.find((p) => p.id === e.player)?.name || "") + "</small>" : ""}</td><td>${esc(eventDescription(e))}</td><td>${esc(responsibleLabel(e))}</td></tr>`,
     )
     .join("");
   const organizationLogo = state.settings?.logo || "";
   const logoIsSafe = /^https:\/\//i.test(organizationLogo) || /^data:image\/(png|jpeg|webp);base64,/i.test(organizationLogo);
   const organizationLogoMarkup = logoIsSafe ? `<img src="${esc(organizationLogo)}" alt="Logo da organização" style="display:block;max-width:46px;max-height:46px;object-fit:contain;margin-right:12px">` : "";
-  return `<article class="card report-sheet"><div class="report-header" style="display:flex;align-items:center;gap:10px"><div style="display:flex;align-items:center;min-width:0">${organizationLogoMarkup}<div><span class="tag">SÚMULA DA PARTIDA</span><h2>${esc(m.competition || "Partida avulsa")} • ${esc(m.sport)}</h2></div></div><span class="report-brand">WagnerBIZZA</span></div><div class="report-score"><div>${badge(team(m.home))}<strong>${esc(name(m.home))}</strong></div><b>${sc.join(" × ")}</b><div>${badge(team(m.away))}<strong>${esc(name(m.away))}</strong></div></div><div class="report-meta"><p><b>Data:</b> ${esc(format(m.date))}<br><b>Local:</b> ${esc(m.place || "Não informado")}</p><p><b>Arbitragem / mesa:</b> ${esc(m.referees || "Não informada")}<br><b>Situação:</b> ${esc(m.status)} • <b>Etapa:</b> ${esc(m.stage)} • <b>Relógio:</b> ${m.clock ? M.clockText(m) : "Não utilizado"}</p></div>${m.publicNotice ? '<p class="report-alert"><b>Aviso:</b> ' + esc(m.publicNotice) + "</p>" : ""}${m.sets.length ? "<p><b>Parciais:</b> " + m.sets.map((s) => esc(s.score.join(" × "))).join(" / ") + "</p>" : ""}<div class="roster-grid">${roster}</div><h3>Histórico e ocorrências</h3><div class="tablewrap report-events"><table><thead><tr><th>Horário / jogo</th><th>Etapa</th><th>Acontecimento</th><th>Equipe / atleta</th><th>Descrição / motivo</th><th>Operador*</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Nenhum lançamento carregado.</td></tr>'}</tbody></table></div><small>* Identificador abreviado. A auditoria completa mantém a identificação integral de cada responsável. Horários dos lances referentes a ${esc(new Date(m.date).toLocaleDateString("pt-BR"))}.</small><section class="report-notes"><h3>Observações da súmula</h3><p>${esc(m.notes || "Sem observações.")}</p></section><section class="signatures"><div>Árbitro(a): __________________________</div><div>Mesa: __________________________</div><div>Responsável da equipe da casa: __________________________</div><div>Responsável da equipe visitante: __________________________</div><small>Súmula do sistema. Campos para assinatura em papel.</small></section></article>`;
+  return `<article class="card report-sheet"><div class="report-header" style="display:flex;align-items:center;gap:10px"><div style="display:flex;align-items:center;min-width:0">${organizationLogoMarkup}<div><span class="tag">SÚMULA DA PARTIDA</span><h2>${esc(m.competition || "Partida avulsa")} • ${esc(m.sport)}</h2></div></div><span class="report-brand">WagnerBIZZA</span></div><div class="report-score"><div>${badge(team(m.home))}<strong>${esc(name(m.home))}</strong></div><b>${sc.join(" × ")}</b><div>${badge(team(m.away))}<strong>${esc(name(m.away))}</strong></div></div><div class="report-meta"><p><b>Data:</b> ${esc(format(m.date))}<br><b>Local:</b> ${esc(m.place || "Não informado")}</p><p><b>Arbitragem / mesa:</b> ${esc(m.referees || "Não informada")}<br><b>Situação:</b> ${esc(m.status)} • <b>Etapa:</b> ${esc(m.stage)} • <b>Relógio:</b> ${m.clock ? M.clockText(m) : "Não utilizado"}</p></div>${m.publicNotice ? '<p class="report-alert"><b>Aviso:</b> ' + esc(m.publicNotice) + "</p>" : ""}${m.sets.length ? "<p><b>Parciais:</b> " + m.sets.map((s) => esc(s.score.join(" × "))).join(" / ") + "</p>" : ""}<div class="roster-grid">${roster}</div><h3>Histórico e ocorrências</h3><div class="tablewrap report-events"><table><thead><tr><th>Horário / jogo</th><th>Etapa</th><th>Acontecimento</th><th>Equipe / atleta</th><th>Descrição / motivo</th><th>Responsável</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Nenhum lançamento carregado.</td></tr>'}</tbody></table></div><small>Nomes antigos são recuperados do cadastro disponível; quando ausentes, o UID é preservado.</small><section class="report-notes"><h3>Observações da súmula</h3><p>${esc(m.notes || "Sem observações.")}</p></section><section class="signatures"><div>Árbitro(a): __________________________</div><div>Mesa: __________________________</div><div>Responsável da equipe da casa: __________________________</div><div>Responsável da equipe visitante: __________________________</div><small>Súmula do sistema. Campos para assinatura em papel.</small></section></article>`;
 }
 function certificatePanel() {
-  return `<section class="card certificate-panel noprint"><span class="tag">EMISSÃO DE DOCUMENTOS</span><h2>Certificados</h2><p class="muted">Preencha os dados e abra a visualização de impressão para imprimir ou salvar o certificado em PDF. Também é possível baixar os dados preenchidos em JSON; o sistema não mantém um arquivo permanente de certificados emitidos.</p><form id="arenaCertificateForm"><div class="formgrid">${field("Nome completo do participante", "certificateName", "text", 'required maxlength="120" placeholder="Nome que aparecerá no certificado"')}${field("Participação / reconhecimento", "certificateRole", "text", 'required maxlength="120" value="Participação"')}${field("Evento / campeonato", "certificateEvent", "text", 'required maxlength="150" placeholder="Nome do evento ou campeonato"')}${field("Modalidade", "certificateSport", "text", 'maxlength="80" placeholder="Ex.: Futebol, Basquete, Vôlei"')}${field("Local", "certificatePlace", "text", 'maxlength="120" placeholder="Cidade ou local do evento"')}${field("Data de emissão", "certificateDate", "date", `required value="${new Date().toISOString().slice(0,10)}"`)}${field("Responsável pela emissão", "certificateIssuer", "text", 'required maxlength="100" value="WagnerBIZZA"')}</div><div class="toolbar"><button class="primary" type="submit">Visualizar / imprimir ou salvar em PDF</button><button type="button" data-certificate-json>Baixar dados do certificado (JSON)</button></div></form><div class="certificate-institutional"><h3>Certificado institucional do projeto</h3><p>Documento de reconhecimento da idealização e do desenvolvimento da plataforma Arena Esportiva.</p><div class="toolbar"><button type="button" data-institutional-certificate>Visualizar / imprimir em PDF</button><button type="button" data-institutional-certificate-json>Baixar dados institucionais (JSON)</button></div></div><p class="muted">Cada emissão recebe um código identificador. Nesta etapa, o código identifica o documento, mas ainda não representa uma validação pública online nem um registro permanente no Firebase.</p></section>`;
+  return `<section class="card certificate-panel noprint"><span class="tag">EMISSÃO DE DOCUMENTOS</span><h2>Certificados</h2><p class="muted">Preencha os dados e abra a visualização de impressão para imprimir ou salvar o certificado em PDF. Também é possível baixar os dados preenchidos em JSON; o sistema não mantém um arquivo permanente de certificados emitidos.</p><datalist id="certificateChampionships">${(state.championships||[]).map(c=>`<option value="${esc(championshipTitle(c))}">${esc(c.sport)}</option>`).join("")}</datalist><form id="arenaCertificateForm"><div class="formgrid">${field("Nome completo do participante", "certificateName", "text", 'required maxlength="120" placeholder="Nome que aparecerá no certificado"')}${field("Participação / reconhecimento", "certificateRole", "text", 'required maxlength="120" value="Participação"')}${field("Evento / campeonato", "certificateEvent", "text", 'required maxlength="150" list="certificateChampionships" placeholder="Nome do evento ou campeonato"')}${field("Modalidade", "certificateSport", "text", 'maxlength="80" placeholder="Ex.: Futebol, Basquete, Vôlei"')}${field("Local", "certificatePlace", "text", 'maxlength="120" placeholder="Cidade ou local do evento"')}${field("Data de emissão", "certificateDate", "date", `required value="${new Date().toISOString().slice(0,10)}"`)}${field("Responsável pela emissão", "certificateIssuer", "text", 'required maxlength="100" value="WagnerBIZZA"')}</div><div class="toolbar"><button class="primary" type="submit">Visualizar / imprimir ou salvar em PDF</button><button type="button" data-certificate-json>Baixar dados do certificado (JSON)</button></div></form><div class="certificate-institutional"><h3>Certificado institucional do projeto</h3><p>Documento de reconhecimento da idealização e do desenvolvimento da plataforma Arena Esportiva.</p><div class="toolbar"><button type="button" data-institutional-certificate>Visualizar / imprimir em PDF</button><button type="button" data-institutional-certificate-json>Baixar dados institucionais (JSON)</button></div></div><p class="muted">Cada emissão recebe um código identificador. Nesta etapa, o código identifica o documento, mas ainda não representa uma validação pública online nem um registro permanente no Firebase.</p></section>`;
 }
 function certificateDocument({name:person, role:participation, event, sport, place, date, issuer, institutional=false}) {
   const code = "ARENA-" + new Date().getFullYear() + "-" + (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2,10)).replace(/-/g,"").slice(0,12).toUpperCase();
@@ -1661,7 +1665,12 @@ function certificateDocument({name:person, role:participation, event, sport, pla
   if (!win) { toast("Permita janelas pop-up para gerar o certificado.", true); return; }
   win.document.open(); win.document.write(html); win.document.close();
 }
-let generalAuditRows=[],generalAuditLoaded=false,generalAuditBusy=false;
+let generalAuditRows=[],generalAuditLoaded=false,generalAuditBusy=false,generalAuditSearch="";
+function filteredAuditRows(rows=generalAuditRows) {
+ const normalize=v=>String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+ const q=normalize(generalAuditSearch);
+ return rows.filter(r=>!q||normalize([responsibleLabel(r),r.target,r.entity,JSON.stringify(r.detail),JSON.stringify(r.before),JSON.stringify(r.after)].join(" ")).includes(q));
+}
 function auditReportDate(value){
  if(!value)return "Data não informada";
  const date=value?.toDate?.()||new Date(value||0);
@@ -1676,7 +1685,7 @@ function auditReportValue(value){
 }
 function auditReportPreview(){
  if(!generalAuditLoaded)return '<p class="muted">Clique em Consultar alterações para ver os registros do Firebase. A consulta inclui cadastros, partidas, configurações, permissões e exclusões.</p>';
- const rows=generalAuditRows.slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
+ const rows=filteredAuditRows().slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
  if(!rows.length)return empty("Nenhuma alteração registrada.");
  const visible=rows.slice(0,100),entityNames={settings:"Configurações",teams:"Equipe",players:"Jogador",matches:"Partida",championships:"Campeonato",users:"Acesso de usuário"};
  const details=(items,open=false)=>items.map(r=>{
@@ -1684,30 +1693,44 @@ function auditReportPreview(){
   const changes=keys.slice(0,30).map(k=>tr([k,auditReportValue(before[k]),auditReportValue(after[k])]));
   const description=[r.detail?.text,r.detail?.reason?`Motivo: ${r.detail.reason}`:""].filter(Boolean).join(" • ");
   const target=after.name||before.name||r.target||"—";
-  return `<details class="event" ${open?"open":""}><summary>${esc(auditReportDate(r.at))} • ${esc(entityNames[r.entity]||r.entity||"Registro")} • ${esc(r.detail?.type||"Alteração")} • ${esc(target)}</summary><p>Responsável (UID): ${esc(r.actor||"Não informado")}<br>ID do registro: ${esc(r.target||"—")}${description?`<br>${esc(description)}`:""}</p>${changes.length?table(["Campo","Antes","Depois"],changes):'<p class="muted">Sem diferenças de campos disponíveis.</p>'}${keys.length>changes.length?`<small>Exibindo ${changes.length} de ${keys.length} campos alterados.</small>`:""}</details>`;
+  return `<details class="event" ${open?"open":""}><summary>${esc(auditReportDate(r.at))} • ${esc(entityNames[r.entity]||r.entity||"Registro")} • ${esc(r.detail?.type||"Alteração")} • ${esc(target)}</summary><p>Responsável (UID): ${esc(responsibleLabel(r))}<br>ID do registro: ${esc(r.target||"—")}${description?`<br>${esc(description)}`:""}</p>${changes.length?table(["Campo","Antes","Depois"],changes):'<p class="muted">Sem diferenças de campos disponíveis.</p>'}${keys.length>changes.length?`<small>Exibindo ${changes.length} de ${keys.length} campos alterados.</small>`:""}</details>`;
  }).join("");
  return `<h2 class="audit-print-title">Relatório geral de alterações</h2><p class="muted" role="status">${rows.length} alteração(ões) encontradas. ${rows.length>visible.length?"Na tela, exibindo as 100 mais recentes; a impressão e as exportações incluem todas.":""} Os horários são de Brasília.</p><div class="audit-screen-only">${details(visible)}</div><div class="audit-print-only">${details(rows,true)}</div>`;
 }
 function generalAuditPanel(){
- return `<section class="card noprint"><h2>Relatório geral de alterações</h2><p>Consulte as alterações registradas no Firebase: equipes, jogadores, campeonatos, partidas, configurações, permissões de operadores e exclusões de partidas de teste. A visualização mostra as 100 alterações mais recentes; as exportações incluem o histórico completo.</p><div class="toolbar"><button type="button" data-audit-view ${generalAuditBusy?"disabled":""}>${generalAuditBusy?"Consultando…":generalAuditLoaded?"Atualizar e visualizar alterações":"Consultar alterações"}</button><button type="button" data-audit-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-audit-json>Baixar relatório completo (JSON)</button><button type="button" data-audit-excel>Baixar relatório completo (Excel)</button></div></section><div id="generalAuditOutput">${auditReportPreview()}</div>`;
+ return `<section class="card noprint"><h2>Relatório geral de alterações</h2><p>Consulte as alterações registradas no Firebase: equipes, jogadores, campeonatos, partidas, configurações, permissões de operadores e exclusões de partidas de teste. A visualização mostra as 100 alterações mais recentes; as exportações incluem todos os registros que correspondem à pesquisa.</p>${field("Pesquisar nome, UID, campeonato, equipe ou acontecimento","audit-search","search",`value="${esc(generalAuditSearch)}"`)}<p>Deixe a pesquisa vazia para incluir todos os registros.</p><div class="toolbar"><button type="button" data-audit-view ${generalAuditBusy?"disabled":""}>${generalAuditBusy?"Consultando…":generalAuditLoaded?"Atualizar e visualizar alterações":"Consultar alterações"}</button><button type="button" data-audit-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-audit-json>Baixar relatório completo (JSON)</button><button type="button" data-audit-excel>Baixar relatório completo (Excel)</button></div></section><div id="generalAuditOutput">${auditReportPreview()}</div>`;
+}
+function documentMatches(includeSelection = true) {
+ const f=documentFilters;
+ const normalize=v=>String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+ return state.matches.filter(m=>{
+  const c=(state.championships||[]).find(c=>c.id===m.championshipId);
+  const day=String(m.date||"").slice(0,10);
+  return (!includeSelection||!reportFilter||m.id===reportFilter)
+   && (!f.championship||m.championshipId===f.championship)
+   && (!f.sport||m.sport===f.sport) && (!f.status||m.status===f.status)
+   && (!f.from||day>=f.from) && (!f.to||day<=f.to)
+   && (!f.query||normalize([m.id,m.competition,c?.name,c?.season,c?.category,name(m.home),name(m.away),m.place].join(" ")).includes(normalize(f.query)));
+ }).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+}
+function responsibleLabel(e) {
+ const id=e.actor||"";
+ const person=(state.users||[]).find(p=>p.id===id);
+ const title=e.actorName||person?.name||person?.email||(id===user?.uid?(user.displayName||user.email):"");
+ const adminActor=e.actorRole==="admin"||cloud?.isAdministratorUID?.(id);
+ return `${title||"Nome não disponível"} • ${adminActor?"Administrador":e.actorRole==="operator"||person?"Operador":"Perfil não registrado"}${id?" • UID: "+id:""}`;
 }
 function reportMatchSelector() {
- return `<div class="formgrid">${select(
-    "Partida",
-    "reportMatch",
-    '<option value="">Todas as partidas</option>' +
-      options(
-        state.matches,
-        (m) => m.id,
-        (m) => name(m.home) + " × " + name(m.away) + " • " + format(m.date),
-      ),
-  )}</div>`;
+ if (reportFilter && !documentMatches(false).some(m=>m.id===reportFilter)) reportFilter="";
+ const f=documentFilters;
+ const pick=(label,key,rows)=>select(label,"document-"+key,'<option value="">Todos</option>'+rows.map(([id,text])=>`<option value="${esc(id)}" ${f[key]===id?"selected":""}>${esc(text)}</option>`).join(""));
+ return `<div class="formgrid">${pick("Campeonato / temporada","championship",(state.championships||[]).map(c=>[c.id,championshipTitle(c)+" • "+c.sport+(c.category?" • "+c.category:"")]))}${pick("Modalidade","sport",[...new Set(state.matches.map(m=>m.sport))].map(v=>[v,v]))}${pick("Situação","status",[...new Set(state.matches.map(m=>m.status))].map(v=>[v,v]))}${field("Pesquisar equipe, campeonato, local ou ID","document-query","search",`value="${esc(f.query)}"`)}${field("De","document-from","date",`value="${esc(f.from)}"`)}${field("Até","document-to","date",`value="${esc(f.to)}"`)}${select("Partida","reportMatch",'<option value="">Todas as partidas filtradas</option>'+options(documentMatches(false),m=>m.id,m=>name(m.home)+" × "+name(m.away)+" • "+format(m.date)+" • "+(m.competition||"Avulsa")))}</div><p role="status">${documentMatches().length} partida(s) selecionada(s). Os filtros são usados na visualização e nas exportações.</p><button type="button" data-document-clear>Limpar filtros dos documentos</button>`;
 }
 function matchSheetsView() {
- return `<section class="card noprint"><h2>Súmulas</h2><p>Escolha uma partida para visualizar sua súmula, imprimir ou salvar em PDF. A exportação JSON contém os dados das partidas selecionadas.</p>${reportMatchSelector()}<div class="toolbar"><button type="button" data-report-pdf>Visualizar / salvar súmula em PDF</button><button type="button" data-report-print>Imprimir visualização</button><button type="button" data-match-json>Baixar súmula (JSON)</button></div></section><div id="reportOutput">${state.matches.map(reportMatch).join("") || empty("Cadastre uma partida para gerar a súmula.")}</div>`;
+ return `<section class="card noprint"><h2>Súmulas</h2><p>Escolha uma partida para visualizar sua súmula, imprimir ou salvar em PDF. A exportação JSON contém os dados das partidas selecionadas.</p>${reportMatchSelector()}<div class="toolbar"><button type="button" data-report-pdf>Visualizar / salvar súmula em PDF</button><button type="button" data-report-print>Imprimir visualização</button><button type="button" data-match-json>Baixar súmula (JSON)</button></div></section><div id="reportOutput">${documentMatches().map(reportMatch).join("") || empty("Cadastre uma partida para gerar a súmula.")}</div>`;
 }
 function sportsReportPreview(){
- const matches=state.matches.filter(m=>!reportFilter||m.id===reportFilter);
+ const matches=documentMatches();
  if(!matches.length)return empty("Nenhuma partida corresponde à seleção.");
  return `<section class="card"><h3>Resultados das partidas • ${matches.length}</h3>${table(["Modalidade","Campeonato","Partida","Placar","Data","Local","Situação"],matches.map(m=>tr([m.sport,m.competition||"Partida avulsa",name(m.home)+" × "+name(m.away),gameResult(m).join(" × "),format(m.date),m.place||"Não informado",m.status])))}</section>`;
 }
@@ -1743,8 +1766,7 @@ document.addEventListener("click", event => {
 
 function exportExcel() {
   sheetReady();
-  const filter = $("[name=reportMatch]").value,
-    ms = state.matches.filter((m) => !filter || m.id === filter),
+  const ms = documentMatches(),
     wb = XLSX.utils.book_new();
   const add = (title, rows, headers) => {
     const sh = XLSX.utils.json_to_sheet(rows, { header: headers });
@@ -1829,6 +1851,7 @@ function exportExcel() {
         Pontuação: e.type === "ponto" ? e.value : "",
         Descrição: eventDescription(e),
         Justificativa: e.reason || "",
+        "Responsável": responsibleLabel(e),
         "Responsável (UID)": e.actor,
         "ID do lançamento": e.id,
         "Lançamento estornado": e.correctionOf || "",
@@ -1845,6 +1868,7 @@ function exportExcel() {
       "Pontuação",
       "Descrição",
       "Justificativa",
+      "Responsável",
       "Responsável (UID)",
       "ID do lançamento",
       "Lançamento estornado",
@@ -2647,20 +2671,18 @@ document.addEventListener("click", async (e) => {
         pendingImport = null;
         if (!C.demo) toast("Importação concluída.");
       }
+    } else if (b.hasAttribute("data-document-clear")) {
+      documentFilters={championship:"",sport:"",status:"",query:"",from:"",to:""};reportFilter="";render();
     } else if (b.hasAttribute("data-report-pdf")) {
       if (!C.demo) {
         const filter = $("[name=reportMatch]").value;
         await cloud.loadHistory(
-          state.matches
-            .filter((m) => !filter || m.id === filter)
-            .map((m) => m.id),
+          documentMatches().map((m) => m.id),
         );
       }
       toast("Preparando súmula PDF…");
       const { downloadReportPDF } = await import("./report-pdf.js");
-      const ms = state.matches.filter(
-        (m) => !reportFilter || m.id === reportFilter,
-      );
+      const ms = documentMatches();
       await downloadReportPDF(
         ms.map((m) => ({
           title: m.competition || "Partida avulsa",
@@ -2687,7 +2709,7 @@ document.addEventListener("click", async (e) => {
             p.reserve ? "Reserva" : "Titular",
           ]),
           events: m.events.map((e) => [
-            new Date(e.at).toLocaleTimeString("pt-BR") +
+            format(e.at) +
               (e.gameMs != null ? "\nJogo " + prettyTime(e.gameMs) : ""),
             e.stage || "—",
             eventLabel(e, m),
@@ -2696,16 +2718,19 @@ document.addEventListener("click", async (e) => {
                 ? "\n" + (m.roster.find((p) => p.id === e.player)?.name || "")
                 : ""),
             eventDescription(e),
-            (e.actor || "").slice(0, 8),
+            responsibleLabel(e),
           ]),
           notes: m.notes,
         })),
       );
       toast("PDF gerado.");
     } else if (b.hasAttribute("data-report-print")||b.hasAttribute("data-sports-report-pdf")) {
+      if (!C.demo) await cloud.loadHistory(documentMatches().map(m=>m.id));
+      render();
       window.print();
     } else if (b.hasAttribute("data-match-json")||b.hasAttribute("data-sports-report-json")) {
-      const matches=state.matches.filter(m=>!reportFilter||m.id===reportFilter);
+      if (!C.demo) await cloud.loadHistory(documentMatches().map(m=>m.id));
+      const matches=documentMatches();
       if(!matches.length)throw Error("Não há partidas para exportar nesta seleção.");
       download(b.hasAttribute("data-match-json")?"sumulas-esportivas.json":"relatorio-esportivo.json",JSON.stringify({
         formato:b.hasAttribute("data-match-json")?"arena-sumulas-v1":"arena-relatorio-esportivo-v1",
@@ -2715,9 +2740,7 @@ document.addEventListener("click", async (e) => {
       if (!C.demo) {
         const filter = $("[name=reportMatch]").value;
         await cloud.loadHistory(
-          state.matches
-            .filter((m) => !filter || m.id === filter)
-            .map((m) => m.id),
+          documentMatches().map((m) => m.id),
         );
       }
       exportExcel();
@@ -2735,7 +2758,7 @@ document.addEventListener("click", async (e) => {
       if(role!=="admin"||C.demo)throw Error("O relatório oficial exige a conta de administrador conectada ao Firebase.");
       if(!generalAuditLoaded){generalAuditBusy=true;render();try{generalAuditRows=await cloud.auditRows();generalAuditLoaded=true;}finally{generalAuditBusy=false;render();}}
       if(b.hasAttribute("data-audit-pdf"))window.print();
-      else download("relatorio-geral-alteracoes.json",JSON.stringify({formato:"arena-auditoria-v1",geradoEm:new Date().toISOString(),alteracoes:generalAuditRows},(_key,value)=>value?.toDate?value.toDate().toISOString():value,2));
+      else download("relatorio-geral-alteracoes.json",JSON.stringify({formato:"arena-auditoria-v1",geradoEm:new Date().toISOString(),alteracoes:filteredAuditRows()},(_key,value)=>value?.toDate?value.toDate().toISOString():value,2));
     } else if (b.hasAttribute("data-audit-excel")) {
       if (role !== "admin")
         throw Error("Exportação exclusiva do administrador principal.");
@@ -2745,7 +2768,7 @@ document.addEventListener("click", async (e) => {
         );
       sheetReady();
       toast("Consultando auditoria…");
-      const rows = await cloud.auditRows(),
+      const rows = filteredAuditRows(await cloud.auditRows()),
         wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(
         wb,
@@ -2753,7 +2776,8 @@ document.addEventListener("click", async (e) => {
           rows.map((r) => ({
             ID: r.ID,
             Data: r.at?.toDate?.().toLocaleString("pt-BR") || "",
-            Usuário: r.actor,
+            Usuário: responsibleLabel(r),
+            UID: r.actor,
             Entidade: r.entity,
             Registro: r.target,
             Revisão: r.revision,
@@ -2828,10 +2852,19 @@ document.addEventListener("change", async (e) => {
       publicFilter = e.target.value;
       render();
     }
+    if (e.target.name === "audit-search") {
+      generalAuditSearch=e.target.value;
+      $("#generalAuditOutput").innerHTML=auditReportPreview();
+    }
+    if (e.target.name?.startsWith("document-")) {
+      const key=e.target.name.slice(9);
+      if (Object.hasOwn(documentFilters,key)) documentFilters[key]=e.target.value;
+      reportFilter="";render();
+    }
     if (e.target.name === "reportMatch") {
       reportFilter = e.target.value;
       $("#reportOutput").innerHTML = section==="matchSheets"
-        ? state.matches.filter((m) => !reportFilter || m.id === reportFilter).map(reportMatch).join("")
+        ? documentMatches().map(reportMatch).join("")
         : sportsReportPreview();
     }
     if (e.target.name === "importKind") {
