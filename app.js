@@ -22,6 +22,8 @@ const $ = (s) => document.querySelector(s),
     );
 let testRawState = null;
 let arenaDrawerOpen=false,arenaOpenGroups=new Map(),arenaInertNodes=[];
+let arenaRailCollapsed=false;
+try { arenaRailCollapsed=localStorage.getItem("arena-barra-recolhida-v1")==="1"; } catch {}
 let state = D.fresh(),
   section = "overview",
   selected = "",
@@ -3500,7 +3502,7 @@ function frequentWorkspaceShortcuts(allowed) {
   </div></nav>`;
 }
 function arenaIcon(name) {
- const paths={overview:"M3 10 12 3l9 7v11h-6v-7H9v7H3Z",games:"M4 4h16v16H4z M8 4v16 M16 4v16 M4 10h16 M4 14h16",records:"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M20 21v-2a4 4 0 0 0-3-3.87",documents:"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z M14 2v6h6 M8 13h8 M8 17h6",administration:"M12 3 3 7v6c0 5 9 9 9 9s9-4 9-9V7Z M8 12l3 3 5-6",account:"M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M4 22v-3a8 6 0 0 1 16 0v3",menu:"M4 6h16 M4 12h16 M4 18h16",close:"M6 6l12 12 M18 6 6 18",help:"M9 9a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 18h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",cup:"M8 3h8v7a4 4 0 0 1-8 0V3Z M8 5H4v3a4 4 0 0 0 4 4 M16 5h4v3a4 4 0 0 1-4 4 M12 14v7 M8 21h8"};
+ const paths={overview:"M3 10 12 3l9 7v11h-6v-7H9v7H3Z",games:"M4 4h16v16H4z M8 4v16 M16 4v16 M4 10h16 M4 14h16",records:"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M20 21v-2a4 4 0 0 0-3-3.87",documents:"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z M14 2v6h6 M8 13h8 M8 17h6",administration:"M12 3 3 7v6c0 5 9 9 9 9s9-4 9-9V7Z M8 12l3 3 5-6",account:"M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M4 22v-3a8 6 0 0 1 16 0v3",menu:"M4 6h16 M4 12h16 M4 18h16",close:"M6 6l12 12 M18 6 6 18",help:"M9 9a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 18h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",collapse:"M14 6l-6 6 6 6",qr:"M3 3h6v6H3z M15 3h6v6h-6z M3 15h6v6H3z M15 15h3v3h3v3h-6z",cup:"M8 3h8v7a4 4 0 0 1-8 0V3Z M8 5H4v3a4 4 0 0 0 4 4 M16 5h4v3a4 4 0 0 1-4 4 M12 14v7 M8 21h8"};
  return `<svg class="arena-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]||paths.documents}"/></svg>`;
 }
 function workspaceNavigation(sections){
@@ -3510,10 +3512,15 @@ function workspaceNavigation(sections){
  const publicHref=trainingMode?"./index.html?demonstracao=1":"./index.html";
  const groups=visible.map(group=>{
    const ids=allowedWorkspaceSections(group).filter(id=>!seen.has(id));ids.forEach(id=>seen.add(id));if(!ids.length)return "";
-   const active=ids.includes(section),open=arenaOpenGroups.has(group.id)?arenaOpenGroups.get(group.id):(active||group.id==="games");
-   return `<details class="arena-side-group" data-layout-group="${group.id}" ${open?"open":""}><summary>${arenaIcon(group.id)}<span>${esc(group.title)}</span></summary><nav aria-label="${esc(group.title)}">${ids.map(id=>`<button type="button" data-section="${id}" class="arena-side-item ${section===id?"is-current":""}" ${section===id?'aria-current="page"':""}>${esc(labels[id]||id)}</button>${id==="matches"?'<div class="arena-side-scopes"><button type="button" data-games-shortcut="live">Ao vivo</button><button type="button" data-games-shortcut="scheduled">Agenda</button><button type="button" data-games-shortcut="finished">Resultados</button></div>':""}`).join("")}</nav></details>`;
+   const active=ids.includes(section),open=arenaOpenGroups.has(group.id)?arenaOpenGroups.get(group.id):active;
+   return `<details class="arena-side-group" data-layout-group="${group.id}" ${open?"open":""}><summary title="${esc(group.title)}" aria-label="${esc(group.title)}">${arenaIcon(group.id)}<span>${esc(group.title)}</span></summary><nav aria-label="${esc(group.title)}">${ids.map(id=>`<button type="button" data-section="${id}" title="${esc(labels[id]||id)}" class="arena-side-item ${section===id?"is-current":""}" ${section===id?'aria-current="page"':""}>${esc(labels[id]||id)}</button>${id==="matches"?'<div class="arena-side-scopes" aria-label="Filtrar jogos"><button type="button" data-games-shortcut="live">Ao vivo</button><button type="button" data-games-shortcut="scheduled">Agenda</button><button type="button" data-games-shortcut="finished">Resultados</button></div>':""}`).join("")}</nav></details>`;
  }).join("");
- return `<aside id="arenaSidebar" class="arena-sidebar noprint" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link">${brand}</a><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Visão geral</span></button>${groups}<div class="arena-sidebar-footer"><button type="button" data-section="account">${arenaIcon("account")}Minha conta</button><button type="button" data-account-guide>${arenaIcon("help")}Demonstração e ajuda</button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener">Abrir painel público</a><button type="button" data-share-qr="${esc(new URL(publicHref,location.href).href)}" ${state.settings.logo?"data-qr-logo":""}>Baixar QR code${state.settings.logo?" com logo":""}</button><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><div class="arena-toolbar noprint"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button></div>${personalTopShortcuts()}<section class="navigation-finder arena-function-search noprint" aria-label="Encontrar função"><label for="functionSearch">Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
+ return `<aside id="arenaSidebar" class="arena-sidebar noprint" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link" aria-label="${esc(systemDisplayName())}" title="${esc(systemDisplayName())}">${brand}</a><button type="button" data-layout-rail aria-label="Recolher barra lateral" title="Recolher barra lateral" aria-expanded="true" aria-controls="arenaSidebar">${arenaIcon("collapse")}</button><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><div class="arena-sidebar-nav"><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" title="Visão geral" aria-label="Visão geral" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Visão geral</span></button>${groups}</div><div class="arena-sidebar-footer"><button type="button" data-section="account" title="Minha conta" aria-label="Minha conta">${arenaIcon("account")}<span>Minha conta</span></button><button type="button" data-account-guide title="Demonstração e ajuda" aria-label="Demonstração e ajuda">${arenaIcon("help")}<span>Demonstração e ajuda</span></button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener" title="Abrir painel público" aria-label="Abrir painel público">${arenaIcon("games")}<span>Abrir painel público</span></a><button type="button" data-share-qr="${esc(new URL(publicHref,location.href).href)}" ${state.settings.logo?"data-qr-logo":""} title="Baixar QR code" aria-label="Baixar QR code">${arenaIcon("qr")}<span>Baixar QR code${state.settings.logo?" com logo":""}</span></button><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><div class="arena-toolbar noprint"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button></div>${personalTopShortcuts()}<section class="navigation-finder arena-function-search noprint" aria-label="Encontrar função"><label for="functionSearch">Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
+}
+function syncArenaRail() {
+ document.body.classList.toggle("arena-rail-collapsed",arenaRailCollapsed);
+ if(arenaRailCollapsed && window.matchMedia("(min-width: 1080px)").matches)for(const group of document.querySelectorAll(".arena-side-group[open]")){group.open=false;arenaOpenGroups.set(group.dataset.layoutGroup,false);}
+ for(const button of document.querySelectorAll("[data-layout-rail]")){const label=arenaRailCollapsed?"Expandir barra lateral":"Recolher barra lateral";button.setAttribute("aria-label",label);button.title=label;button.setAttribute("aria-expanded",String(!arenaRailCollapsed));}
 }
 function syncArenaLayout() {
  document.body.classList.add("arena-layout-v2");
@@ -3528,6 +3535,7 @@ function syncArenaLayout() {
 function releaseArenaInert(){for(const [el,value] of arenaInertNodes)el.inert=value;arenaInertNodes=[];document.body.classList.remove("arena-drawer-open");}
 function applyArenaDrawer() {
  releaseArenaInert();
+ syncArenaRail();
  const side=$("#arenaSidebar"),mobile=window.matchMedia("(max-width: 1079px)").matches;
  if(!side)return;
  const open=arenaDrawerOpen&&mobile;document.body.classList.toggle("arena-drawer-open",open);
@@ -3542,12 +3550,20 @@ function applyArenaDrawer() {
  }
 }
 document.addEventListener("click",event=>{
+ const rail=event.target.closest("[data-layout-rail]");
+ if(rail){arenaRailCollapsed=!arenaRailCollapsed;try{localStorage.setItem("arena-barra-recolhida-v1",arenaRailCollapsed?"1":"0");}catch{}syncArenaRail();return;}
+ const groupSummary=event.target.closest(".arena-side-group > summary");
+ if(groupSummary && arenaRailCollapsed && window.matchMedia("(min-width: 1080px)").matches){event.preventDefault();arenaRailCollapsed=false;try{localStorage.setItem("arena-barra-recolhida-v1","0");}catch{}syncArenaRail();groupSummary.parentElement.open=true;}
  const button=event.target.closest("[data-layout-menu],[data-layout-close]");
  if(button){arenaDrawerOpen=button.hasAttribute("data-layout-menu")?!arenaDrawerOpen:false;applyArenaDrawer();if(!arenaDrawerOpen)$("#arenaMenuToggle")?.focus({preventScroll:true});return;}
  const action=event.target.closest("[data-section],[data-games-shortcut],[data-account-guide],[data-workspace]");
- if(action){const id=action.dataset.section;const group=id&&workspaceDefinitions.find(g=>g.sections.includes(id));if(group)arenaOpenGroups.set(group.id,true);arenaDrawerOpen=false;applyArenaDrawer();}
+ if(action){const id=action.dataset.section;const group=id&&workspaceDefinitions.find(g=>g.sections.includes(id));if(id||action.dataset.gamesShortcut){for(const g of workspaceDefinitions)arenaOpenGroups.set(g.id,g.id===(group?.id||(action.dataset.gamesShortcut?"games":"")));}arenaDrawerOpen=false;applyArenaDrawer();}
 },true);
-document.addEventListener("toggle",event=>{if(event.target.matches?.("[data-layout-group]"))arenaOpenGroups.set(event.target.dataset.layoutGroup,event.target.open);},true);
+document.addEventListener("toggle",event=>{
+ const group=event.target;if(!group.matches?.("[data-layout-group]")||!group.isConnected)return;
+ arenaOpenGroups.set(group.dataset.layoutGroup,group.open);
+ if(group.open)for(const other of document.querySelectorAll(".arena-side-group[open]")){if(other!==group){other.open=false;arenaOpenGroups.set(other.dataset.layoutGroup,false);}}
+},true);
 document.addEventListener("keydown",event=>{
  if(!arenaDrawerOpen)return;
  if(event.key==="Escape"){event.preventDefault();arenaDrawerOpen=false;applyArenaDrawer();$("#arenaMenuToggle")?.focus({preventScroll:true});}
