@@ -1698,7 +1698,7 @@ function auditReportValue(value){
 function auditReportPreview(){
  if(!generalAuditLoaded)return '<p class="muted">Clique em Consultar alterações para ver os registros do Firebase. A consulta inclui cadastros, partidas, configurações, permissões e exclusões.</p>';
  const rows=filteredAuditRows().slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
- if(!rows.length)return empty("Nenhuma alteração registrada.");
+ if(!rows.length)return documentReportHeader("Relatório geral de alterações")+empty("Nenhuma alteração registrada.");
  const visible=rows.slice(0,100),entityNames={settings:"Configurações",teams:"Equipe",players:"Jogador",matches:"Partida",championships:"Campeonato",users:"Acesso de usuário"};
  const details=(items,open=false)=>items.map(r=>{
   const before=r.before||{},after=r.after||{},keys=[...new Set([...Object.keys(before),...Object.keys(after)])].filter(k=>!["_audit","_updatedAt","updatedAt","createdAt","revision","auditId"].includes(k)&&JSON.stringify(before[k]??null)!==JSON.stringify(after[k]??null));
@@ -1707,7 +1707,7 @@ function auditReportPreview(){
   const target=after.name||before.name||r.target||"—";
   return `<details class="event" ${open?"open":""}><summary>${esc(auditReportDate(r.at))} • ${esc(entityNames[r.entity]||r.entity||"Registro")} • ${esc(r.detail?.type||"Alteração")} • ${esc(target)}</summary><p>Responsável (UID): ${esc(responsibleLabel(r))}<br>ID do registro: ${esc(r.target||"—")}${description?`<br>${esc(description)}`:""}</p>${changes.length?table(["Campo","Antes","Depois"],changes):'<p class="muted">Sem diferenças de campos disponíveis.</p>'}${keys.length>changes.length?`<small>Exibindo ${changes.length} de ${keys.length} campos alterados.</small>`:""}</details>`;
  }).join("");
- return `<h2 class="audit-print-title">Relatório geral de alterações</h2><p class="muted" role="status">${rows.length} alteração(ões) encontradas. ${rows.length>visible.length?"Na tela, exibindo as 100 mais recentes; a impressão e as exportações incluem todas.":""} Os horários são de Brasília.</p><div class="audit-screen-only">${details(visible)}</div><div class="audit-print-only">${details(rows,true)}</div>`;
+ return `${documentReportHeader("Relatório geral de alterações")}<p class="muted" role="status">${rows.length} alteração(ões) encontradas. ${rows.length>visible.length?"Na tela, exibindo as 100 mais recentes; a impressão e as exportações incluem todas.":""} Os horários são de Brasília.</p><div class="audit-screen-only">${details(visible)}</div><div class="audit-print-only">${details(rows,true)}</div>`;
 }
 function generalAuditPanel(){
  return `<section class="card noprint"><h2>Relatório geral de alterações</h2><p>Consulte as alterações registradas no Firebase: equipes, jogadores, campeonatos, partidas, configurações, permissões de operadores e exclusões de partidas de teste. A visualização mostra as 100 alterações mais recentes; as exportações incluem todos os registros que correspondem à pesquisa.</p>${field("Pesquisar nome, UID, campeonato, equipe ou acontecimento","audit-search","search",`value="${esc(generalAuditSearch)}"`)}<p>Deixe a pesquisa vazia para incluir todos os registros.</p><div class="toolbar"><button type="button" data-audit-view ${generalAuditBusy?"disabled":""}>${generalAuditBusy?"Consultando…":generalAuditLoaded?"Atualizar e visualizar alterações":"Consultar alterações"}</button><button type="button" data-audit-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-audit-json>Baixar relatório completo (JSON)</button><button type="button" data-audit-excel>Baixar relatório completo (Excel)</button></div></section><div id="generalAuditOutput">${auditReportPreview()}</div>`;
@@ -1741,10 +1741,24 @@ function reportMatchSelector() {
 function matchSheetsView() {
  return `<section class="card noprint"><h2>Súmulas</h2><p>Escolha uma partida para visualizar sua súmula, imprimir ou salvar em PDF. A exportação JSON contém os dados das partidas selecionadas.</p>${reportMatchSelector()}<div class="toolbar"><button type="button" data-report-pdf>Visualizar / salvar súmula em PDF</button><button type="button" data-report-print>Imprimir visualização</button><button type="button" data-match-json>Baixar súmula (JSON)</button></div></section><div id="reportOutput">${documentMatches().map(reportMatch).join("") || empty("Cadastre uma partida para gerar a súmula.")}</div>`;
 }
+function documentReportHeader(title) {
+ const logo=state.settings.logo||"";
+ const safe=/^https:\/\//i.test(logo)||/^data:image\/(png|jpeg|webp);base64,/i.test(logo);
+ return `<div class="document-report-header">${safe?`<img class="document-report-logo" src="${esc(logo)}" alt="Logo da organização">`:""}<div class="document-report-titles"><p>${esc(systemDisplayName())}</p><h2>${esc(title)}</h2></div><span class="report-brand">WagnerBIZZA</span></div>`;
+}
+async function prepareReportImages(selector) {
+ const images=[...document.querySelectorAll(selector+" img")].filter(image=>!image.complete);
+ await Promise.all(images.map(image=>new Promise(resolve=>{
+  let timer;
+  const done=()=>{clearTimeout(timer);image.removeEventListener("load",done);image.removeEventListener("error",done);resolve();};
+  image.addEventListener("load",done,{once:true});image.addEventListener("error",done,{once:true});timer=setTimeout(done,5000);
+  if(image.complete)done();
+ })));
+}
 function sportsReportPreview(){
  const matches=documentMatches();
- if(!matches.length)return empty("Nenhuma partida corresponde à seleção.");
- return `<section class="card"><h3>Resultados das partidas • ${matches.length}</h3>${table(["Modalidade","Campeonato","Partida","Placar","Data","Local","Situação"],matches.map(m=>tr([m.sport,m.competition||"Partida avulsa",name(m.home)+" × "+name(m.away),gameResult(m).join(" × "),format(m.date),m.place||"Não informado",m.status])))}</section>`;
+ if(!matches.length)return `<section class="card">${documentReportHeader("Relatório esportivo")}${empty("Nenhuma partida corresponde à seleção.")}</section>`;
+ return `<section class="card">${documentReportHeader("Relatório esportivo")}<h3>Resultados das partidas • ${matches.length}</h3>${table(["Modalidade","Campeonato","Partida","Placar","Data","Local","Situação"],matches.map(m=>tr([m.sport,m.competition||"Partida avulsa",name(m.home)+" × "+name(m.away),gameResult(m).join(" × "),format(m.date),m.place||"Não informado",m.status])))}</section>`;
 }
 function reports() {
  return `<section class="card noprint"><h2>Relatórios esportivos</h2><p>Visualize resultados das partidas e exporte os dados selecionados. O Excel detalhado contém resultados, elencos, eventos e parciais.</p>${reportMatchSelector()}<div class="toolbar"><button type="button" data-sports-report-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-report-excel class="primary">Baixar relatório (Excel)</button><button type="button" data-sports-report-json>Baixar relatório (JSON)</button></div></section><div id="reportOutput">${sportsReportPreview()}</div>`;
@@ -2167,7 +2181,7 @@ function usersView() {
     return `<details class="event" ${accessAuditExpanded?"open":""}><summary>${esc(accessAuditDate(a.at))} • ${esc(a.action||"Alteração")} • ${esc(after.name||before.name||a.target||"Usuário")}</summary><p>${esc(after.email||before.email||"E-mail não informado")}<br>Motivo: ${esc(a.reason||"Não informado")}<br>UID: ${esc(a.target||"—")}</p>${details}</details>`;
   }).join("")||empty("Nenhuma alteração de permissão registrada.");
   const accessLabel = (u) => u.enabled !== false && u.role === "operator" && (u.permissions||[]).includes("gamesView") ? "Sim" : "Não";
-  return `<section class="card"><h2>Usuários e permissões</h2><p><strong>${esc(accountRole())}: ${esc(user?.email || "Wagner")}</strong><br>Sua conta é protegida. Esta tela não permite alterar, bloquear ou remover sua autoridade.</p><label>Link para solicitar acesso<input readonly value="${esc(link.href)}"></label><p><button type="button" data-access-copy>Copiar link de cadastro</button></p><p class="muted">Envie esse link ao novo operador. Para testar outra conta neste computador, use uma janela anônima.</p></section><section class="card"><h3>Solicitações e operadores</h3><div class="toolbar" role="group" aria-label="Situação dos operadores"><button type="button" data-operators-group="current" aria-pressed="${!showRemovedOperators}" class="${!showRemovedOperators ? "primary" : ""}">Atuais</button><button type="button" data-operators-group="removed" aria-pressed="${showRemovedOperators}" class="${showRemovedOperators ? "primary" : ""}">Excluídos</button></div><h4>${showRemovedOperators ? "Operadores excluídos" : "Solicitações e operadores atuais"}</h4>${table(["Pessoa", "Situação", "Métodos de entrada", "Partidas para operar", "Cadastros esportivos", "Acompanha jogos", "Ação"], users.map((u) => `<tr><td>${esc(u.name || "Operador cadastrado")}<br><small>${esc(u.email || u.id)}</small></td><td>${esc(label(u))}</td><td>${esc(methodLabel(u.id))}</td><td>${state.matches.filter(m => (u.matches || []).includes(m.id) || (m.championshipId && (u.operatedChampionships || []).includes(m.championshipId))).length}${u.operatedChampionships?.length ? " · por campeonato" : ""}</td><td>${esc(registrationPermissions(u.permissions||[]))}</td><td>${accessLabel(u)}</td><td><button type="button" data-access-edit="${esc(u.id)}" ${u.deleted ? "disabled" : ""}>Revisar permissões</button></td></tr>`))}${users.length ? "" : empty("Nenhuma solicitação recebida ainda.")}</section>${editor}<section id="accessAuditReport" class="card"><h3>Últimos 50 registros de permissões</h3><p class="muted">Abra um registro para ver seus detalhes, ou expanda todos para revisar e imprimir o histórico completo.</p><div class="toolbar noprint"><button type="button" data-access-audit-expand>Expandir todos</button><button type="button" data-access-audit-collapse>Recolher todos</button><button type="button" data-access-audit-print>Imprimir / salvar em PDF</button><button type="button" data-access-audit-json>Baixar registros (JSON)</button><button type="button" data-access-audit-excel>Baixar registros (Excel)</button></div><p class="muted">${accessAuditRows.length} de até 50 registros mais recentes.</p>${accessAuditReport}</section>`;
+  return `<section class="card"><h2>Usuários e permissões</h2><p><strong>${esc(accountRole())}: ${esc(user?.email || "Wagner")}</strong><br>Sua conta é protegida. Esta tela não permite alterar, bloquear ou remover sua autoridade.</p><label>Link para solicitar acesso<input readonly value="${esc(link.href)}"></label><p><button type="button" data-access-copy>Copiar link de cadastro</button></p><p class="muted">Envie esse link ao novo operador. Para testar outra conta neste computador, use uma janela anônima.</p></section><section class="card"><h3>Solicitações e operadores</h3><div class="toolbar" role="group" aria-label="Situação dos operadores"><button type="button" data-operators-group="current" aria-pressed="${!showRemovedOperators}" class="${!showRemovedOperators ? "primary" : ""}">Atuais</button><button type="button" data-operators-group="removed" aria-pressed="${showRemovedOperators}" class="${showRemovedOperators ? "primary" : ""}">Excluídos</button></div><h4>${showRemovedOperators ? "Operadores excluídos" : "Solicitações e operadores atuais"}</h4>${table(["Pessoa", "Situação", "Métodos de entrada", "Partidas para operar", "Cadastros esportivos", "Acompanha jogos", "Ação"], users.map((u) => `<tr><td>${esc(u.name || "Operador cadastrado")}<br><small>${esc(u.email || u.id)}</small></td><td>${esc(label(u))}</td><td>${esc(methodLabel(u.id))}</td><td>${state.matches.filter(m => (u.matches || []).includes(m.id) || (m.championshipId && (u.operatedChampionships || []).includes(m.championshipId))).length}${u.operatedChampionships?.length ? " · por campeonato" : ""}</td><td>${esc(registrationPermissions(u.permissions||[]))}</td><td>${accessLabel(u)}</td><td><button type="button" data-access-edit="${esc(u.id)}" ${u.deleted ? "disabled" : ""}>Revisar permissões</button></td></tr>`))}${users.length ? "" : empty("Nenhuma solicitação recebida ainda.")}</section>${editor}<section id="accessAuditReport" class="card">${documentReportHeader("Histórico de permissões")}<h3>Últimos 50 registros de permissões</h3><p class="muted">Abra um registro para ver seus detalhes, ou expanda todos para revisar e imprimir o histórico completo.</p><div class="toolbar noprint"><button type="button" data-access-audit-expand>Expandir todos</button><button type="button" data-access-audit-collapse>Recolher todos</button><button type="button" data-access-audit-print>Imprimir / salvar em PDF</button><button type="button" data-access-audit-json>Baixar registros (JSON)</button><button type="button" data-access-audit-excel>Baixar registros (Excel)</button></div><p class="muted">${accessAuditRows.length} de até 50 registros mais recentes.</p>${accessAuditReport}</section>`;
 }
 // EVENTOS DE INTERFACE — um único ponto de entrada para cada ação.
 document.addEventListener("submit", async (e) => {
@@ -2478,6 +2492,7 @@ document.addEventListener("click", async (e) => {
         document.body.classList.remove("access-audit-print");
         entries.forEach((item,index)=>item.open=previous[index]);
       },{once:true});
+      await prepareReportImages("#accessAuditReport");
       window.print();return;
     }
     if(b.hasAttribute("data-access-audit-expand")||b.hasAttribute("data-access-audit-collapse")){
@@ -2739,6 +2754,7 @@ document.addEventListener("click", async (e) => {
     } else if (b.hasAttribute("data-report-print")||b.hasAttribute("data-sports-report-pdf")) {
       if (!C.demo) await cloud.loadHistory(documentMatches().map(m=>m.id));
       render();
+      await prepareReportImages("#reportOutput");
       window.print();
     } else if (b.hasAttribute("data-match-json")||b.hasAttribute("data-sports-report-json")) {
       if (!C.demo) await cloud.loadHistory(documentMatches().map(m=>m.id));
@@ -2769,7 +2785,7 @@ document.addEventListener("click", async (e) => {
     } else if (b.hasAttribute("data-audit-pdf")||b.hasAttribute("data-audit-json")) {
       if(role!=="admin"||C.demo)throw Error("O relatório oficial exige a conta de administrador conectada ao Firebase.");
       if(!generalAuditLoaded){generalAuditBusy=true;render();try{generalAuditRows=await cloud.auditRows();generalAuditLoaded=true;}finally{generalAuditBusy=false;render();}}
-      if(b.hasAttribute("data-audit-pdf"))window.print();
+      if(b.hasAttribute("data-audit-pdf")){await prepareReportImages("#generalAuditOutput");window.print();}
       else download("relatorio-geral-alteracoes.json",JSON.stringify({formato:"arena-auditoria-v1",geradoEm:new Date().toISOString(),alteracoes:filteredAuditRows()},(_key,value)=>value?.toDate?value.toDate().toISOString():value,2));
     } else if (b.hasAttribute("data-audit-excel")) {
       if (role !== "admin")

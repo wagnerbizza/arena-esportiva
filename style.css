@@ -2344,3 +2344,18 @@ body:not([data-admin="true"]) .public-event-icon {
  #arenaSidebar .arena-sidebar-footer button,#arenaSidebar .arena-sidebar-footer a.button {min-height:44px}
 }
 @media screen {#arenaSidebar button.is-current{background:color-mix(in srgb,var(--accent) 18%,var(--panel));border-color:var(--accent);box-shadow:inset 3px 0 var(--accent)}#arenaSidebar button.is-current:hover{border-color:var(--accent)}}
+
+/* Identidade faz parte do documento, independente do cabeçalho da central. */
+.document-report-header {display:flex;align-items:center;gap:14px;border-bottom:2px solid var(--accent,#15c3ed);margin:0 0 18px;padding:0 0 12px;break-inside:avoid}
+.document-report-logo {display:block;flex:0 0 auto;width:64px;height:52px;object-fit:contain}
+.document-report-titles {flex:1;min-width:0;overflow-wrap:anywhere}
+.document-report-titles p {margin:0 0 5px;font-size:12px;color:var(--muted)}
+.document-report-titles h2 {margin:0;font-size:26px;line-height:1.15}
+@media(max-width:600px){.document-report-header{flex-wrap:wrap;gap:10px}.document-report-header .report-brand{width:100%;font-size:11px}.document-report-titles h2{font-size:23px}}
+@media print {
+ .document-report-header {display:flex!important;flex-wrap:nowrap;align-items:center;border-bottom:2px solid #333;margin:0 0 12px;padding:0 0 8px;break-inside:avoid;color:#111!important}
+ .document-report-header .document-report-logo {display:block!important;width:17mm;height:14mm;object-fit:contain}
+ .document-report-header .document-report-titles p {color:#333!important;font-size:9pt}
+ .document-report-header .document-report-titles h2 {display:block!important;color:#111!important;font-size:16pt;margin:0}
+ .document-report-header .report-brand {width:auto;color:#333!important;font-size:9pt}
+}
