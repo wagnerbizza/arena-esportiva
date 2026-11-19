@@ -243,45 +243,121 @@ function registrationStyle() {
   }
 }
 
+function registrationLogoPreview(urls, group) {
+  return urls.map((url,index) => `<div class="registration-logo-item"><img src="${esc(url)}" alt="${group === "school" ? "Logo da escola" : registrationLogoGroups[Number(group)]}">
+    <button type="button" data-registration-logo-remove="${group}" data-logo-index="${index}">Remover imagem</button></div>`).join("");
+}
 function registrationStyleForm() {
   const style = registrationStyle();
   return `<section class="card"><h2>Identidade da ficha de inscrição</h2>
-    <p>As preferências da ficha são salvas neste navegador.</p>
+    <p>O logo da escola aparece no cabeçalho da ficha, ao lado do logo principal da Arena.
+    Organizadores, patrocinadores e colaboradores aparecem após a lista de participantes.
+    A marca d’água fica ao fundo das páginas.</p>
+    <p>Estas preferências são usadas na ficha de inscrição e ficam salvas neste navegador.
+    O logo principal do sistema é configurado acima e também é usado nos painéis, documentos e QR codes que o incluem.</p>
     <form id="registration-style"><div class="formgrid">
-      ${field("Nome da escola", "school", "text", `maxlength="150" value="${esc(style.school)}"`)}
-      ${field("URL HTTPS do logo da escola", "schoolLogo", "url", `maxlength="1500" value="${esc(style.schoolLogo)}"`)}
-      <label>Fonte<select name="font">${Object.keys(registrationFonts).map((font) =>
+      ${field("Nome da escola", "school", "text", `maxlength="150" value="${esc(style.school || "")}"`)}
+      <div><label>Logo da escola · arquivo do computador<input type="file" data-registration-logo-file="school" accept="image/png,image/jpeg,image/webp"></label>
+        ${field("Ou URL HTTPS do logo da escola", "schoolLogoURL", "url", `maxlength="1500" value="${esc(style.schoolLogo?.startsWith("https://") ? style.schoolLogo : "")}"`)}
+        <input type="hidden" name="schoolLogo" value="${esc(style.schoolLogo || "")}">
+        <div data-registration-logo-preview="school" class="registration-logo-preview">${registrationLogoPreview(style.schoolLogo ? [style.schoolLogo] : [],"school")}</div></div>
+      <label>Fonte<select name="font">${Object.keys(registrationFonts).map(font =>
         `<option ${style.font === font ? "selected" : ""}>${esc(font)}</option>`).join("")}</select></label>
       ${field("Tamanho do texto (pt)", "size", "number", `min="9" max="16" required value="${esc(style.size || 11)}"`)}
-      ${field("Texto da marca d’água", "watermark", "text", `maxlength="60" value="${esc(style.watermark)}"`)}
-      ${registrationLogoGroups.map((group, i) => `<label>Logos de ${group.toLowerCase()} (um link HTTPS por linha)
-        <textarea name="logos${i}" maxlength="9070">${esc(style.logos?.[i]?.join("\n"))}</textarea></label>`).join("")}
-    </div><button type="submit">Salvar preferências da ficha</button></form></section>`;
+      ${field("Texto da marca d’água", "watermark", "text", `maxlength="60" value="${esc(style.watermark || "")}"`)}
+      ${registrationLogoGroups.map((group,i) => {
+        const logos = Array.isArray(style.logos?.[i]) ? style.logos[i] : [];
+        return `<div><label>Logos de ${group.toLowerCase()} · arquivos do computador<input type="file" data-registration-logo-file="${i}" accept="image/png,image/jpeg,image/webp" multiple></label>
+          <label>Ou links HTTPS · um por linha<textarea name="logos${i}" maxlength="9070">${esc(logos.filter(url=>url.startsWith("https://")).join("\n"))}</textarea></label>
+          <input type="hidden" name="logoFiles${i}" value="${esc(JSON.stringify(logos.filter(url=>url.startsWith("data:image/"))))}">
+          <div data-registration-logo-preview="${i}" class="registration-logo-preview">${registrationLogoPreview(logos,String(i))}</div></div>`;
+      }).join("")}
+    </div><p class="muted">PNG, JPG ou WebP, até 5 MB por arquivo. As imagens são reduzidas automaticamente. Até seis logos por grupo.</p>
+    <button type="submit">Salvar preferências da ficha</button></form></section>`;
 }
-
-document.addEventListener("submit", (event) => {
-  const form = event.target;
+let registrationImageBusy = false;
+function registrationGroupLogos(form,group) {
+  const files = JSON.parse(form.elements["logoFiles"+group].value || "[]");
+  return [...form.elements["logos"+group].value.split(/\r?\n/).map(url=>url.trim()).filter(Boolean),...files];
+}
+function setRegistrationGroup(form,group,urls) {
+  form.elements["logos"+group].value = urls.filter(url=>url.startsWith("https://")).join("\n");
+  form.elements["logoFiles"+group].value = JSON.stringify(urls.filter(url=>url.startsWith("data:image/")));
+  form.querySelector(`[data-registration-logo-preview="${group}"]`).innerHTML = registrationLogoPreview(registrationGroupLogos(form,group),group);
+}
+document.addEventListener("change", async event => {
+  const input = event.target;
+  if (!input.hasAttribute("data-registration-logo-file")) return;
+  let form = input.closest("#registration-style");
+  if (!form || role !== "admin" || !input.files?.length) return;
+  if (registrationImageBusy) {toast("Aguarde a preparação das imagens.",true);return;}
+  registrationImageBusy = true;
+  try {
+    const group = input.dataset.registrationLogoFile;
+    const files = [...input.files];
+    if (group !== "school" && registrationGroupLogos(form,group).length+files.length > 6)
+      throw Error("Use até seis logos por grupo. Remova uma imagem antes de adicionar outra.");
+    const images = [];
+    for (const file of files) images.push(await compactLogo(file));
+    if (role !== "admin") return;
+    form = document.getElementById("registration-style");
+    if (!form) return;
+    if (group !== "school" && registrationGroupLogos(form,group).length+images.length > 6)
+      throw Error("O grupo já possui seis logos. Remova uma imagem para continuar.");
+    if (group === "school") {
+      form.elements.schoolLogo.value = images[0];
+      form.elements.schoolLogoURL.value = "";
+      form.querySelector('[data-registration-logo-preview="school"]').innerHTML = registrationLogoPreview([images[0]],"school");
+    } else setRegistrationGroup(form,group,[...registrationGroupLogos(form,group),...images]);
+    toast("Prévia preparada. Clique em Salvar preferências da ficha para guardar.");
+  } catch (error) {toast(error.message,true);}
+  finally {registrationImageBusy=false;input.value="";}
+});
+document.addEventListener("input", event => {
+  const input = event.target, form = input.closest("#registration-style");
+  if (!form) return;
+  if (input.name === "schoolLogoURL") {
+    form.elements.schoolLogo.value = input.value.trim();
+    form.querySelector('[data-registration-logo-preview="school"]').innerHTML =
+      registrationLogoPreview(input.value.trim() ? [input.value.trim()] : [],"school");
+  }
+  if (/^logos[0-2]$/.test(input.name)) {
+    const group=input.name.slice(-1);
+    form.querySelector(`[data-registration-logo-preview="${group}"]`).innerHTML = registrationLogoPreview(registrationGroupLogos(form,group),group);
+  }
+});
+document.addEventListener("click", event => {
+  const button = event.target.closest("[data-registration-logo-remove]");
+  if (!button || registrationImageBusy || role !== "admin") return;
+  const form = button.closest("#registration-style"),group=button.dataset.registrationLogoRemove;
+  if (group === "school") {
+    form.elements.schoolLogo.value="";
+    form.elements.schoolLogoURL.value="";
+    form.querySelector('[data-registration-logo-preview="school"]').innerHTML="";
+  } else {
+    const urls=registrationGroupLogos(form,group);
+    urls.splice(Number(button.dataset.logoIndex),1);
+    setRegistrationGroup(form,group,urls);
+  }
+});
+document.addEventListener("submit", event => {
+  const form=event.target;
   if (form.id !== "registration-style") return;
   event.preventDefault();
   if (!admin || role !== "admin") return;
-  const data = new FormData(form);
-  const get = (key) => String(data.get(key) || "").trim();
-  const schoolLogo = get("schoolLogo");
-  const logos = registrationLogoGroups.map((_, i) => get(`logos${i}`).split(/\r?\n/).map((url) => url.trim()).filter(Boolean));
-  const validLogo = (url) => url.length <= 1500 && /^https:\/\/[^\s]+$/i.test(url);
-  if ((schoolLogo && !validLogo(schoolLogo)) || logos.some((group) => group.length > 6 || group.some((url) => !validLogo(url)))) {
-    toast("Use links HTTPS e até seis logos por grupo.", true);
-    return;
-  }
+  if (registrationImageBusy) {toast("Aguarde a preparação das imagens.",true);return;}
   try {
-    localStorage.setItem(registrationStyleKey, JSON.stringify({
-      school: get("school"), schoolLogo, font: get("font"), size: Number(get("size")),
-      watermark: get("watermark"), logos
+    const data=new FormData(form),get=key=>String(data.get(key)||"").trim();
+    const schoolLogo=get("schoolLogo"),logos=registrationLogoGroups.map((_,i)=>registrationGroupLogos(form,String(i)));
+    const validLogo=url=>(url.length<=1500 && /^https:\/\/[^\s]+$/i.test(url)) ||
+      (url.length<=40000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(url));
+    if ((schoolLogo && !validLogo(schoolLogo)) || logos.some(group=>group.length>6 || group.some(url=>!validLogo(url))))
+      throw Error("Use arquivos PNG, JPG ou WebP ou links HTTPS válidos, até seis logos por grupo.");
+    localStorage.setItem(registrationStyleKey,JSON.stringify({
+      school:get("school"),schoolLogo,font:get("font"),size:Number(get("size")),watermark:get("watermark"),logos
     }));
     toast("Preferências da ficha salvas neste navegador.");
-  } catch {
-    toast("Não foi possível salvar as preferências neste navegador.", true);
-  }
+  } catch (error) {toast(error.message || "Não foi possível salvar as preferências.",true);}
 });
 
 function printRegistrationSheet(championship) {
@@ -345,7 +421,10 @@ function printRegistrationSheet(championship) {
     <table class="registration-players"><colgroup><col style="width:7%"><col style="width:30%"><col style="width:10%"><col style="width:11%"><col style="width:17%"><col style="width:25%"></colgroup><thead><tr><th>Nº</th><th>Nome do participante</th><th>Turma</th><th>Nº da camisa</th><th>Posição</th><th>Assinatura</th></tr></thead>
     <tbody>${participants}</tbody></table>${partners ? `<aside class="partners">${partners}</aside>` : ""}<button type="button" id="print">Imprimir / Salvar PDF</button></html>`);
   sheet.document.close();
-  sheet.document.getElementById("print").onclick = () => sheet.print();
+  sheet.document.getElementById("print").onclick = async () => {
+    await Promise.all([...sheet.document.images].map(img => img.decode().catch(() => {})));
+    sheet.print();
+  };
 }
 
 async function qrLogoData(source) {
@@ -559,6 +638,13 @@ function refresh() {
     $("#preview").innerHTML = importDraft.preview;
   }
   if ($("#settings")?.elements.logo) setSystemLogoDraft($("#settings").elements.logo.value);
+  const registrationForm = $("#registration-style");
+  if (registrationForm) {
+    const schoolLogo=registrationForm.elements.schoolLogo.value;
+    registrationForm.querySelector('[data-registration-logo-preview="school"]').innerHTML=registrationLogoPreview(schoolLogo ? [schoolLogo] : [],"school");
+    for (let i=0;i<registrationLogoGroups.length;i++)
+      registrationForm.querySelector(`[data-registration-logo-preview="${i}"]`).innerHTML=registrationLogoPreview(registrationGroupLogos(registrationForm,String(i)),String(i));
+  }
   if (championshipFocus) {
     const el = document.querySelector(`[data-championship-filter="${championshipFocus.key}"]`);
     if (el) { el.focus({preventScroll:true}); if (el.type === "search") el.setSelectionRange(championshipFocus.start, championshipFocus.end); }

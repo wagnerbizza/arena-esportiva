@@ -2117,3 +2117,23 @@ body:not([data-admin="true"]) .public-event-icon {
 .championship-operation-group > div {
   padding-left: 12px;
 }
+
+
+.registration-logo-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 12px 0;
+}
+.registration-logo-item {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.registration-logo-item img {
+  max-width: 140px;
+  height: 80px;
+  object-fit: contain;
+}
