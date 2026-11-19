@@ -2368,3 +2368,25 @@ body:not([data-admin="true"]) .public-event-icon {
 .arena-qr-grid .toolbar {margin-top:14px}
 @media screen {#arenaSidebar .arena-sidebar-footer button,#arenaSidebar .arena-sidebar-footer a.button{min-height:34px;padding-top:6px;padding-bottom:6px}}
 @media screen and (max-width:1079px){#arenaSidebar .arena-sidebar-footer button,#arenaSidebar .arena-sidebar-footer a.button{min-height:44px}}
+
+/* A pesquisa lateral usa o mesmo catálogo e as mesmas permissões da busca central. */
+@media screen {
+ #arenaSidebar .arena-side-search {flex:none;padding:12px 2px 4px}
+ #arenaSidebar .arena-side-search>label {display:block;margin:0 0 6px;font-size:11px;font-weight:700;color:var(--muted)}
+ #arenaSidebar .arena-side-search-field {position:relative}
+ #arenaSidebar #sideFunctionSearch {width:100%;min-width:0;min-height:44px;padding:9px 36px 9px 10px;font-size:13px}
+ #arenaSidebar #sideFunctionSearch::-webkit-search-cancel-button {display:none}
+ #arenaSidebar [data-side-clear] {position:absolute;right:4px;top:5px;width:30px;min-width:30px;min-height:34px;padding:6px;justify-content:center}
+ #arenaSidebar .arena-side-search-launch {display:none}
+ #arenaSidebar.arena-search-active .arena-sidebar-nav>.arena-side-caption,#arenaSidebar.arena-search-active .arena-sidebar-nav>.arena-side-home,#arenaSidebar.arena-search-active .arena-sidebar-nav>.arena-side-group {display:none}
+ #arenaSideSearchResults:empty {display:none}
+ #arenaSideSearchResults>p {font-size:12px;line-height:1.4;margin:8px 4px}
+ #arenaSideSearchResults .navigation-search-results {display:grid;grid-template-columns:minmax(0,1fr);gap:6px;margin:8px 0}
+ #arenaSideSearchResults .navigation-search-results>button {display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-height:48px;white-space:normal;border-color:var(--line);padding:10px}
+ #arenaSideSearchResults strong {font-size:12px;color:var(--text)}
+ #arenaSideSearchResults small {font-size:11px;line-height:1.4;color:var(--muted);overflow-wrap:anywhere}
+}
+@media screen and (min-width:1080px) {
+ body.arena-rail-collapsed #arenaSidebar .arena-side-search>label,body.arena-rail-collapsed #arenaSidebar .arena-side-search-field,body.arena-rail-collapsed #arenaSideSearchResults {display:none}
+ body.arena-rail-collapsed #arenaSidebar .arena-side-search-launch {display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;padding:10px}
+}
