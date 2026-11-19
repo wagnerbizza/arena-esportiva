@@ -21,6 +21,7 @@ const $ = (s) => document.querySelector(s),
         })[c],
     );
 let testRawState = null;
+let arenaDrawerOpen=false,arenaOpenGroups=new Map(),arenaInertNodes=[];
 let state = D.fresh(),
   section = "overview",
   selected = "",
@@ -1219,6 +1220,7 @@ function render() {
   document.documentElement.style.setProperty("--accent", state.settings.color);
   document.title = systemDisplayName()+" — "+(admin?panelDisplayName():"Jogos e Resultados");
   renderBrandAndIdentity();
+  syncArenaLayout();
   document.body.classList.toggle("report-mode", admin && ["matchSheets","reports","auditReports"].includes(section));
   $("#logout")?.classList.toggle("hidden", C.demo || !user);
   if (admin && !C.demo && (!user || !role)) {
@@ -1268,8 +1270,9 @@ function render() {
     ["monitor", "Operadores e partidas"],
     ["imports", "Importar"],
   ];
-  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">${esc(systemDisplayName())}</span><h2>${esc(panelDisplayName())}</h2></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${accountPendingBanner()}${liveStatusPanel("admin")}${workspaceNavigation(sections)}${locationTrail()}<div id="view">${view()}</div>`;
+  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">${esc(panelDisplayName())}</span><h1>${esc(selected && section==="matches" ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${accountPendingBanner()}${liveStatusPanel("admin")}${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>`;
   stopInvisibleTimeline();
+  applyArenaDrawer();
   if (busy || accessBusy) app.querySelectorAll("button").forEach((b) => (b.disabled = true));
   if (["matchSheets","reports"].includes(section) && $("[name=reportMatch]")) {
     $("[name=reportMatch]").value = reportFilter;
@@ -3078,7 +3081,7 @@ function tutorialSteps() {
     step("Recuperação e segurança", "Use a recuperação de senha quando necessário. A demonstração com dados fictícios é aberta em outra aba, pelo Treinamento.", "#app"),
   ];
   const steps=[...common,
-    step("Visão geral e atalhos", "Use os botões de navegação e os atalhos para encontrar as áreas. A busca de funções ajuda a localizar controles.", ".workspace-home-actions, #view", "overview"),
+    step("Visão geral e atalhos", "Use os botões de navegação e os atalhos para encontrar as áreas. A busca de funções ajuda a localizar controles.", ".arena-toolbar, #view", "overview"),
     step("Meus atalhos e favoritos", "Escolha as funções no topo. Clique com o botão direito ou segure uma aba para fixar, favoritar e escolher a cor. As preferências são desta conta e deste navegador; as permissões continuam valendo.", ".personal-shortcuts, #view", "overview"),
     step("Localizar partidas", "Pesquise equipe, competição ou local e filtre por modalidade, situação e campeonato. Todas inclui os jogos encerrados.", "#view", "matches"),
     step("Placar da partida", "Confira equipes, modalidade, etapa e situação antes de operar. Se não houver partida acessível, o tour informa a ausência; use o Treinamento para praticar.", ".console-score .score, #view", "matches", true),
@@ -3116,7 +3119,7 @@ function tutorialSteps() {
 }
 let tutorialFrame=0, tutorialStep=null, tutorialOpenedDetails=[];
 function tutorialTarget(selector) {
-  for(const part of selector.split(",")){const el=$(part.trim());if(el && !el.closest("[hidden]"))return el;}
+  for(const part of selector.split(",")){const el=$(part.trim());if(el && !el.closest("[hidden]") && el.getClientRects().length)return el;}
   return null;
 }
 function positionTutorial() {
@@ -3181,7 +3184,7 @@ setupTutorial();
 // Não altera window.CONFIG e não abre conexão com Firebase neste modo.
 function trainingSeed() {
   let s = D.fresh();
-  s = D.reduce(s,{type:"settings",data:{title:"Arena — Treinamento",subtitle:"Dados fictícios para aprender sem alterar o evento real.",color:"#c8fa64",banner:"",logo:""}});
+  s = D.reduce(s,{type:"settings",data:{title:"Arena — Treinamento",subtitle:"Dados fictícios para aprender sem alterar o evento real.",color:"#15c3ed",banner:"",logo:""}});
   for(const [name,short,coach] of [["Treino Azul","AZL","Técnico fictício Azul"],["Treino Verde","VER","Técnico fictício Verde"]]) s=D.reduce(s,{type:"team",data:{name,short,coach,category:"Demonstração",badge:""}});
   for(const t of s.teams) for(let i=1;i<=2;i++) s=D.reduce(s,{type:"player",data:{name:`Atleta fictício ${t.short} ${i}`,team:t.id,number:String(i+6),position:"Treinamento",reserve:i===2}});
   for(const sport of ["Futebol","Basquete"]){
@@ -3477,7 +3480,7 @@ setupAccountTools();
 const workspaceDefinitions=[
  {id:"games",title:"Jogos",intro:"Acompanhar e operar partidas",sections:["overview","matches","standings"]},
  {id:"records",title:"Cadastros",intro:"Equipes, jogadores, campeonatos e partidas",sections:["teams","players","championships","createMatch","imports"]},
- {id:"documents",title:"Backups e suporte",intro:"Cópias, recuperação e guias de uso",sections:["documentation","matchSheets","reports","auditReports","certificates"]},
+ {id:"documents",title:"Documentos e suporte",intro:"Súmulas, relatórios, certificados e guias",sections:["documentation","matchSheets","reports","auditReports","certificates"]},
  {id:"administration",title:"Administração",intro:"Operadores, acessos, relatórios e configurações",sections:["monitor","users","matchSheets","reports","auditReports","certificates","settings","cleanup","testData","credentials"]}
 ];
 function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canCreateMatches()&&id==="createMatch"));}
@@ -3496,35 +3499,65 @@ function frequentWorkspaceShortcuts(allowed) {
   <button type="button" data-share-qr="${esc(new URL("./index.html",location.href).href)}" ${state.settings.logo ? "data-qr-logo" : ""}>Baixar QR code${state.settings.logo ? " com logo" : ""}</button>
   </div></nav>`;
 }
-function workspaceNavigation(sections){
- const visible=workspaceDefinitions.filter(g=>allowedWorkspaceSections(g).length);
- const group=visible.find(g=>g.sections.includes(section))||visible[0];
- const labels=Object.fromEntries(sections);
- const related = {
-  overview: ["matches", "createMatch", "reports"],
-  matches: ["createMatch", "standings", "matchSheets"],
-  createMatch: ["matches", "teams", "championships"],
-  standings: ["matches", "championships", "reports"],
-  teams: ["players", "matches", "imports"],
-  players: ["teams", "imports", "matches"],
-  championships: ["standings", "matches", "createMatch"],
-  imports: ["teams", "players"],
-  matchSheets: ["matches", "reports", "documentation"],
-  reports: ["matchSheets", "auditReports", "documentation"],
-  auditReports: ["reports", "documentation"],
-  certificates: ["documentation", "reports"],
-  cleanup: ["auditReports", "matches"],
-  monitor: ["users", "matches"],
-  users: ["monitor", "matches"],
-  documentation: ["matches", "matchSheets", "reports"],
- };
- const allowed = new Set(visible.flatMap(allowedWorkspaceSections));
- const shortcuts = ["overview", ...(related[section] || ["matches", "documentation"])]
-  .filter(id => allowed.has(id) && (id === "overview" || id !== section))
-  .slice(0, 4);
- const homeActions = `${role === "operator" && !(section === "matches" && selected) ? operatorStartPanel(section === "overview") : ""}<nav class="workspace-home-actions noprint" aria-label="Atalhos desta tela">${shortcuts.map(id => `<button type="button" data-section="${id}" ${id === section ? 'class="primary" aria-current="page"' : ""}>${id === "overview" ? "Home" : esc(labels[id] || id)}</button>`).join("")}</nav>`;
- return `${homeActions}${personalTopShortcuts()}<section class="navigation-finder noprint" aria-label="Encontrar função"><label for="functionSearch">O que você quer fazer?</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: gol, jogador, PDF, logo, permissões…" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><p class="muted">Digite para encontrar uma função ou expanda uma área pela seta abaixo.</p><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section><nav class="workspace-tabs workspace-disclosures noprint" style="--workspace-count:${visible.length}" aria-label="Áreas da central">${visible.map(g=>`<details name="arena-navigation" data-navigation-group="${g.id}" ${expandedNavigation.has(g.id)?"open":""} class="${group?.id===g.id&&section!=="account"?"current-area":""}"><summary><span><strong>${g.title}</strong><small>${g.intro}</small></span><span class="navigation-disclosure-action" aria-hidden="true"><span class="navigation-closed-label">Ver opções</span><span class="navigation-open-label">Fechar</span><svg class="navigation-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" focusable="false"><path d="m8 5 7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></summary><div class="navigation-options">${allowedWorkspaceSections(g).map(id=>`<button type="button" data-section="${id}" ${id===section?'aria-current="page"':""}><strong>${esc(labels[id]||id)}</strong><small>${esc(navigationDescriptions[id]?.description||"")}</small></button>`).join("")}</div></details>`).join("")}</nav>${section!=="account"?`<nav class="workspace-subtabs noprint" aria-label="Seções de ${esc(group.title)}">${allowedWorkspaceSections(group).map(id=>sections.find(s=>s[0]===id)).filter(Boolean).map(([id,label])=>`<button type="button" data-section="${id}" class="${section===id?"active":""}" ${section===id?'aria-current="page"':""}>${label}</button>`).join("")}</nav>`:""}`;
+function arenaIcon(name) {
+ const paths={overview:"M3 10 12 3l9 7v11h-6v-7H9v7H3Z",games:"M4 4h16v16H4z M8 4v16 M16 4v16 M4 10h16 M4 14h16",records:"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M20 21v-2a4 4 0 0 0-3-3.87",documents:"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z M14 2v6h6 M8 13h8 M8 17h6",administration:"M12 3 3 7v6c0 5 9 9 9 9s9-4 9-9V7Z M8 12l3 3 5-6",account:"M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M4 22v-3a8 6 0 0 1 16 0v3",menu:"M4 6h16 M4 12h16 M4 18h16",close:"M6 6l12 12 M18 6 6 18",help:"M9 9a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 18h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",cup:"M8 3h8v7a4 4 0 0 1-8 0V3Z M8 5H4v3a4 4 0 0 0 4 4 M16 5h4v3a4 4 0 0 1-4 4 M12 14v7 M8 21h8"};
+ return `<svg class="arena-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]||paths.documents}"/></svg>`;
 }
+function workspaceNavigation(sections){
+ const labels=Object.fromEntries(sections),visible=workspaceDefinitions.filter(g=>allowedWorkspaceSections(g).length);
+ const seen=new Set(["overview","account"]);
+ const brand=$("#systemBrand")?.innerHTML||esc(systemDisplayName());
+ const publicHref=trainingMode?"./index.html?demonstracao=1":"./index.html";
+ const groups=visible.map(group=>{
+   const ids=allowedWorkspaceSections(group).filter(id=>!seen.has(id));ids.forEach(id=>seen.add(id));if(!ids.length)return "";
+   const active=ids.includes(section),open=arenaOpenGroups.has(group.id)?arenaOpenGroups.get(group.id):(active||group.id==="games");
+   return `<details class="arena-side-group" data-layout-group="${group.id}" ${open?"open":""}><summary>${arenaIcon(group.id)}<span>${esc(group.title)}</span></summary><nav aria-label="${esc(group.title)}">${ids.map(id=>`<button type="button" data-section="${id}" class="arena-side-item ${section===id?"is-current":""}" ${section===id?'aria-current="page"':""}>${esc(labels[id]||id)}</button>${id==="matches"?'<div class="arena-side-scopes"><button type="button" data-games-shortcut="live">Ao vivo</button><button type="button" data-games-shortcut="scheduled">Agenda</button><button type="button" data-games-shortcut="finished">Resultados</button></div>':""}`).join("")}</nav></details>`;
+ }).join("");
+ return `<aside id="arenaSidebar" class="arena-sidebar noprint" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link">${brand}</a><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Visão geral</span></button>${groups}<div class="arena-sidebar-footer"><button type="button" data-section="account">${arenaIcon("account")}Minha conta</button><button type="button" data-account-guide>${arenaIcon("help")}Demonstração e ajuda</button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener">Abrir painel público</a><button type="button" data-share-qr="${esc(new URL(publicHref,location.href).href)}" ${state.settings.logo?"data-qr-logo":""}>Baixar QR code${state.settings.logo?" com logo":""}</button><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><div class="arena-toolbar noprint"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button></div>${personalTopShortcuts()}<section class="navigation-finder arena-function-search noprint" aria-label="Encontrar função"><label for="functionSearch">Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
+}
+function syncArenaLayout() {
+ document.body.classList.add("arena-layout-v2");
+ const ready=admin && (C.demo || (user && role));
+ document.body.classList.toggle("arena-central-ready",Boolean(ready));
+ document.body.classList.toggle("arena-operation-page",Boolean(ready&&section==="matches"&&selected));
+ let toggle=$("#arenaMenuToggle");
+ if(admin&&!toggle){toggle=document.createElement("button");toggle.id="arenaMenuToggle";toggle.type="button";toggle.dataset.layoutMenu="";toggle.className="arena-menu-toggle noprint";toggle.setAttribute("aria-controls","arenaSidebar");document.querySelector("header")?.prepend(toggle);}
+ if(toggle){toggle.hidden=!ready;toggle.setAttribute("aria-label","Abrir menu da central");toggle.setAttribute("aria-expanded",String(arenaDrawerOpen));toggle.innerHTML=arenaIcon("menu")+"<span>Menu</span>";}
+ if(!ready){arenaDrawerOpen=false;releaseArenaInert();}
+}
+function releaseArenaInert(){for(const [el,value] of arenaInertNodes)el.inert=value;arenaInertNodes=[];document.body.classList.remove("arena-drawer-open");}
+function applyArenaDrawer() {
+ releaseArenaInert();
+ const side=$("#arenaSidebar"),mobile=window.matchMedia("(max-width: 1079px)").matches;
+ if(!side)return;
+ const open=arenaDrawerOpen&&mobile;document.body.classList.toggle("arena-drawer-open",open);
+ side.setAttribute("role",open?"dialog":"complementary");if(open)side.setAttribute("aria-modal","true");else side.removeAttribute("aria-modal");
+ $("#arenaMenuToggle")?.setAttribute("aria-expanded",String(open));
+ const shade=document.querySelector(".arena-drawer-backdrop");if(shade)shade.hidden=!open;
+ if(open){for(const el of [...app.children,...[...document.body.children].filter(el=>!el.contains(app)&&!["SCRIPT","STYLE"].includes(el.tagName))]){
+   if(el===side||el.classList.contains("arena-drawer-backdrop"))continue;
+   arenaInertNodes.push([el,el.inert]);el.inert=true;
+  }
+  if(!side.contains(document.activeElement))requestAnimationFrame(()=>{if(arenaDrawerOpen)side.querySelector("[data-layout-close]")?.focus({preventScroll:true});});
+ }
+}
+document.addEventListener("click",event=>{
+ const button=event.target.closest("[data-layout-menu],[data-layout-close]");
+ if(button){arenaDrawerOpen=button.hasAttribute("data-layout-menu")?!arenaDrawerOpen:false;applyArenaDrawer();if(!arenaDrawerOpen)$("#arenaMenuToggle")?.focus({preventScroll:true});return;}
+ const action=event.target.closest("[data-section],[data-games-shortcut],[data-account-guide],[data-workspace]");
+ if(action){const id=action.dataset.section;const group=id&&workspaceDefinitions.find(g=>g.sections.includes(id));if(group)arenaOpenGroups.set(group.id,true);arenaDrawerOpen=false;applyArenaDrawer();}
+},true);
+document.addEventListener("toggle",event=>{if(event.target.matches?.("[data-layout-group]"))arenaOpenGroups.set(event.target.dataset.layoutGroup,event.target.open);},true);
+document.addEventListener("keydown",event=>{
+ if(!arenaDrawerOpen)return;
+ if(event.key==="Escape"){event.preventDefault();arenaDrawerOpen=false;applyArenaDrawer();$("#arenaMenuToggle")?.focus({preventScroll:true});}
+ if(event.key==="Tab"){
+  const side=$("#arenaSidebar"),items=[...(side?.querySelectorAll("button,a[href],summary")||[])].filter(el=>!el.disabled && el.getClientRects().length);
+  if(!items.length)return;const first=items[0],last=items.at(-1);
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+ }
+},true);
+window.addEventListener("resize",()=>{if(window.matchMedia("(min-width: 1080px)").matches)arenaDrawerOpen=false;applyArenaDrawer();},{passive:true});
 function documentationView(){
  const central=new URL("painel.html",location.href);central.search="";
  const pub=new URL("index.html",location.href);pub.search="";
@@ -3938,7 +3971,7 @@ function operatorStartPanel(showTasks = false) {
 
 function overviewMatchView(){
  const rows=scopeMatches(state.matches,overviewGameScope).slice().sort((a,b)=>{if(overviewGameScope!=="finished"){const priority=m=>m.status==="Ao vivo"?0:m.status==="Pausada"?1:2;const d=priority(a)-priority(b);if(d)return d;}return overviewGameScope==="finished"?new Date(b.date)-new Date(a.date):new Date(a.date)-new Date(b.date);});
- return `${quickActionCards()}<div class="grid">${[["Equipes",state.teams.length,"teams"],["Jogadores",state.players.length,"players"],["Partidas ao vivo",state.matches.filter(m=>m.status==="Ao vivo").length,"live"]].filter(([, , target]) => target === "live" || canManageRosters()).map(([label,n,target]) =>
+ return `<details class="card arena-quick-actions"><summary>Ações rápidas e personalização</summary>${quickActionCards()}</details><div class="grid">${[["Equipes",state.teams.length,"teams"],["Jogadores",state.players.length,"players"],["Partidas ao vivo",state.matches.filter(m=>m.status==="Ao vivo").length,"live"]].filter(([, , target]) => target === "live" || canManageRosters()).map(([label,n,target]) =>
   `<button type="button" class="card overview-shortcut" ${target === "live" ? 'data-games-shortcut="live"' : `data-section="${target}"`}><span>${label}</span><strong class="kpi">${n}</strong></button>`).join("")}</div><section class="card"><h2>Quadra e campo</h2>${matchScopeButtons("overview",overviewGameScope)}<p class="muted">Jogos encerrados ficam em Finalizadas. Esta seleção muda apenas a visualização.</p></section><div class="grid">${rows.slice(0,6).map(m=>matchCard(m,true)).join("")||empty(overviewGameScope==="active"?"Nenhuma partida atual. Consulte Finalizadas ou programe um novo jogo.":"Nenhuma partida nesta seleção.")}</div>${rows.length>6?'<p>Exibindo seis partidas. Abra Jogos → Acompanhar jogos para consultar a lista completa.</p>':""}`;
 }
 document.addEventListener("click",e=>{
