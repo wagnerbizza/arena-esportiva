@@ -14,7 +14,7 @@
     settings: {
       title: "Arena • Esporte ao vivo",
       subtitle: "Cada lance, uma história.",
-      color: "#c8fa64",
+      color: "#15c3ed",
       banner: "",
       logo: "",
     },
@@ -75,7 +75,7 @@
       s.settings = {
         title: str(a.data.title, 100) || "Arena",
         subtitle: str(a.data.subtitle, 200),
-        color: /^#[0-9a-f]{6}$/i.test(a.data.color) ? a.data.color : "#c8fa64",
+        color: /^#[0-9a-f]{6}$/i.test(a.data.color) ? a.data.color : "#15c3ed",
         banner: url(a.data.banner),
         logo: url(a.data.logo ?? s.settings.logo ?? ""),
         summaryLimit: limit,

@@ -1,7 +1,7 @@
 /* VISUAL — cores gerais aqui; título, destaque e banner também no painel. */
 @import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap");
 :root {
-  --accent: #c8fa64;
+  --accent: #15c3ed;
   --bg: #0c1014;
   --panel: #151c23;
   --line: #2b3640;

@@ -4,6 +4,23 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Arena • Esporte ao vivo</title>
+    <!-- Aplica o tema local antes da primeira pintura da página. -->
+    <style>html,body{background:#0c1014;color:#eef3f6}html{color-scheme:dark}html[data-theme="light"],html[data-theme="light"] body{background:#f4f7fa;color:#18232e}html[data-theme="light"]{color-scheme:light}</style>
+    <script>
+      (() => {
+        const root = document.documentElement;
+        root.dataset.theme = "dark";
+        try {
+          const p = JSON.parse(localStorage.getItem("arena-preferencias-v1") || "null") || {};
+          root.dataset.theme = p.theme === "auto"
+            ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+            : p.theme === "light" ? "light" : "dark";
+          root.dataset.textSize = ["normal","large","larger"].includes(p.text) ? p.text : "normal";
+          root.classList.toggle("high-contrast", p.contrast === true);
+          root.classList.toggle("reduce-motion", p.motion === true);
+        } catch { /* Mantém a abertura escura se o armazenamento estiver indisponível. */ }
+      })();
+    </script>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body data-admin="false">
