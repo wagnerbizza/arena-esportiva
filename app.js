@@ -3046,66 +3046,124 @@ function setupAccessibility(){
 }
 setupAccessibility();
 
-// 14 — COMO USAR. Guia por perfil, sem gravar ou alterar dados esportivos.
-let tutorialIndex = 0, tutorialReturnFocus = null;
+// 14 — Tour visual. Navega somente na interface; não envia comandos nem grava dados.
+let tutorialIndex = 0, tutorialReturnFocus = null, tutorialContext = null;
 function tutorialSteps() {
+  const step=(title,body,target,area=null,game=false)=>({title,body,target,area,game});
+  const common=[
+    step("Sua identidade", "Confira a conta e o perfil no cabeçalho. O tour apenas explica: os controles destacados não são acionados. Use Próximo, Anterior ou o índice para explorar.", "#sessionIdentity, #systemBrand"),
+  ];
   if (!admin) return [
-    ["Bem-vindo ao painel público", "Aqui você acompanha resultados, situação das partidas e avisos publicados pela organização. Não é necessário fazer login para assistir."],
-    ["Escolha a modalidade", "Use Filtrar modalidade acima dos jogos. Cada cartão mostra as equipes, placar, etapa, data e local. O cronômetro depende da ativação pela organização."],
-    ["Entenda as interrupções", "Ao vivo, pausada, suspensa e encerrada são situações diferentes. Quando houver um aviso da organização, ele aparecerá no cartão. Você não precisa atualizar a página a cada lance."],
-    ["Ajuste a leitura", "Em Aparência, acessibilidade e ajuda, escolha tema, tamanho do texto e contraste. Para participar da organização, use Área da organização; novos operadores precisam solicitar acesso."]
+    step("Painel público", "Acompanhe partidas sem entrar em uma conta. Os dados publicados são atualizados pela organização.", "#hero"),
+    step("Modalidade", "Filtre os jogos pela modalidade. O filtro muda a consulta na tela, sem alterar resultados.", "#filter"),
+    step("Atalhos e números", "Os indicadores abrem jogos ao vivo, agenda, resultados e equipes.", ".public-metrics"),
+    step("Abas de acompanhamento", "Jogos atuais, Ao vivo, Agenda, Resultados, Equipes, Classificação e Diversão organizam o conteúdo público.", ".public-navigation"),
+    step("Placar e situação", "O placar pertence às duas equipes mostradas. Ao vivo é a situação da partida; o relógio pode estar parado. Chegar a zero não encerra automaticamente o jogo.", ".match-card .score, #publicHubContent"),
+    step("Tempo e acréscimos", "A organização publica os minutos e inicia a contagem separadamente. Tempo esgotado aguarda a decisão de encerramento.", ".match-card [data-clock], .match-card, #publicHubContent"),
+    step("Lances anteriores", "Abra Ver lances anteriores para consultar os acontecimentos publicados. Recentes e Anteriores rolam a lista; Carregar lances mais antigos busca outro grupo. Motivos privados e responsáveis da auditoria não são divulgados.", "[data-timeline-toggle], .match-events, .match-card, #publicHubContent"),
+    step("Compartilhar e QR code", "Compartilhe o endereço público. Os recursos disponíveis permitem copiar o link e baixar o QR code, inclusive com o logo.", "#publicTools, header"),
+    step("Leitura e ajuda", "Tema, tamanho do texto, contraste e movimentos são preferências deste navegador. As setas laterais vão ao topo e ao fim da página.", ".accessibility-float, #arenaPageNavigation, header"),
   ];
   if (!C.demo && (!user || !role)) return [
-    ["Entrar ou solicitar acesso", "Quem já possui uma conta pode entrar com seu método atual. Para uma conta nova, escolha Solicitar acesso e cadastre com Google ou e-mail e senha."],
-    ["Confirmação e aprovação", "Confirme seu e-mail quando solicitado. O cadastro não autoriza mudanças de resultados: o administrador principal precisa aprovar o acesso e atribuir partidas."],
-    ["Adicionar Google à conta existente", "Entre primeiro com o método que já utiliza. Depois, em Minha conta, use Vincular Google para manter a mesma conta. Se houver conflito com outra conta, o sistema não faz mesclagem automática."],
-    ["Recuperar acesso", "Esqueci minha senha envia instruções ao seu e-mail. Se estiver bloqueado ou sem partidas atribuídas, procure o administrador principal."]
+    ...common,
+    step("Entrar ou solicitar acesso", "Use e-mail e senha ou Google. Novo operador informa nome, e-mail e telefone e aguarda aprovação. Uma conta existente deve vincular Google por Minha conta.", "#login, #app"),
+    step("Confirmação e aprovação", "Confirme o e-mail quando solicitado. O administrador aprova o acesso e libera partidas ou campeonatos; criar conta não concede operação automaticamente.", "#app"),
+    step("Recuperação e segurança", "Use a recuperação de senha quando necessário. A demonstração com dados fictícios é aberta em outra aba, pelo Treinamento.", "#app"),
   ];
-  if (role === "operator") return [
-    ["Sua conta de operador", "O cabeçalho identifica sua conta. Em Cadastros, aparecem somente os tipos de cadastro autorizados. Em Jogos, você acompanha as partidas liberadas; só pode alterar placar e registrar lances nas partidas atribuídas pelo administrador."],
-    ["Encontre sua partida", "Abra Jogos → Acompanhar jogos. Use busca, modalidade, situação e campeonato. Em andamento e próximas esconde as finalizadas; Todas permite localizar qualquer partida disponível para sua conta."],
-    ["Durante o jogo", "Abra Operar partida, confira as equipes e inicie o jogo quando autorizado. Use o lançamento rápido para registrar pontos ou gols na equipe correta. Se desejar, selecione o atleta antes do lançamento."],
-    ["Interrupções e avisos", "Pausar e suspender registram o motivo e interrompem o cronômetro. O campo Aviso para quem está assistindo publica informações. Observações operacionais compõem a súmula. Confira sempre o que ficará público."],
-    ["Correções e encerramento", "Se registrar um resultado errado, avise o administrador principal para realizar o estorno auditado. Ao encerrar, confira o placar. Reabertura, homologação, auditoria e relatórios são funções administrativas."],
-    ["Ajuda quando precisar", "Use Tab e Enter para navegar pelo teclado. A ajuda contextual explica controles sem modificar o jogo. Quando Ajuda da função estiver ativada, o toque apenas consulta; desative para voltar a operar."]
+  const steps=[...common,
+    step("Visão geral e atalhos", "Use os botões de navegação e os atalhos para encontrar as áreas. A busca de funções ajuda a localizar controles.", ".workspace-home-actions, #view", "overview"),
+    step("Localizar partidas", "Pesquise equipe, competição ou local e filtre por modalidade, situação e campeonato. Todas inclui os jogos encerrados.", "#view", "matches"),
+    step("Placar da partida", "Confira equipes, modalidade, etapa e situação antes de operar. Se não houver partida acessível, o tour informa a ausência; use o Treinamento para praticar.", ".console-score .score, #view", "matches", true),
+    step("Iniciar ou retomar", "O atalho inicia o jogo e o relógio conforme a situação atual. Retomar preserva o tempo acumulado. Não reinicie um período esgotado sem configurar a próxima decisão.", ".match-guide, #view", "matches", true),
+    step("Gol ou ponto rápido", "Selecione o atleta quando desejar e use o valor da equipe correta. Basquete possui valores próprios. O lançamento real só fica disponível nas condições autorizadas.", ".quick-grid, #view", "matches", true),
+    step("Cartões e faltas rápidos", "Amarelo, vermelho e falta usam a equipe e o atleta selecionados. Vermelho exige conferência. Outros acontecimentos ficam no formulário de lances.", ".quick-buttons, #view", "matches", true),
+    step("Interrupção e etapa", "Pausar ou suspender para o relógio e publica o motivo indicado. Atualizar etapa não zera o tempo automaticamente. Encerrar é uma decisão separada.", "[data-status], #view", "matches", true),
+    step("Acréscimos", "Defina os minutos e publique. O anúncio aparece no painel, mas a contagem começa em Iniciar acréscimos. Ao zerar, confira a decisão da arbitragem e encerre ou ajuste conforme necessário.", "#added-time, [name=addedMinutes], #view", "matches", true),
+    step("Configuração do relógio", "Pare o relógio, escolha modo e duração, informe o tempo já decorrido e o motivo e salve. Os atalhos de duração apenas preenchem; confirme em Salvar ajuste.", "#clockSettings, #view", "matches", true),
+    step("Avisos ao público", "Use a aba Avisos e os atalhos para comunicar decisões. A mensagem publicada é pública. Não escreva dados pessoais ou orientações internas nesse campo.", "[data-operation-panel], #view", "matches", true),
+    step("Histórico público e auditoria", "Lances anteriores mostra a publicação esportiva. O administrador consulta também a auditoria privada e pode publicar lances antigos. A quantidade exibida é definida em Configurações.", "[data-timeline-toggle], #view", "matches", true),
   ];
-  return [
-    ["Administrador principal", "Sua conta gerencia cadastros, permissões, jogos e relatórios. O cabeçalho mostra com qual conta você entrou. Como usar pode ser aberto novamente a qualquer momento."],
-    ["Equipes e jogadores", "Cadastre as equipes e seus escudos em Equipes. Em Jogadores, informe equipe, número, posição e titular ou reserva. Prepare o elenco antes de criar a partida: a súmula preserva uma cópia daquele momento."],
-    ["Importação com prévia", "Em Importar, selecione equipes ou jogadores e forneça a planilha ou o texto. Confira a prévia antes de confirmar. Corrija linhas inválidas e verifique duplicados. A importação não deve ser confirmada sem essa revisão."],
-    ["Campeonatos e temporadas", "O administrador ou um operador autorizado pode cadastrar edições por modalidade e categoria. A modalidade fica fixa após salvar. Encerrar o campeonato impede novas partidas vinculadas, mas não encerra os jogos automaticamente."],
-    ["Programar e localizar partidas", "Em Cadastros → Cadastrar partida, escolha campeonato, equipes diferentes, data e local. O vínculo preenche a modalidade. Em Jogos → Acompanhar jogos, use Todas para encontrar jogos encerrados e Ver partidas no cartão do campeonato para filtrar seus jogos."],
-    ["Operar um jogo", "Confira as equipes antes de iniciar. Use +1 para gols no futebol e os valores próprios nas outras modalidades. O cronômetro possui início, parada e ajuste com justificativa. Cartões, faltas e outros lances ficam na seção de detalhes."],
-    ["Gol anulado e VAR", "Se um gol for anulado, localize o ponto no Histórico e use Estornar com justificativa. Em uma partida encerrada, primeiro reabra com motivo. Para uma análise de VAR, publique um aviso ao público e aguarde a decisão antes do estorno."],
-    ["Interrupções e súmula", "Informe o motivo ao pausar, suspender ou cancelar. Avisos são públicos; observações operacionais entram na súmula e ficam disponíveis a quem opera a partida. Ao concluir, confira o resultado e encerre. Homologação é uma ação separada."],
-    ["Documentos e relatórios", "Em Documentação, use as áreas separadas: Súmulas, Relatórios esportivos, Relatório geral de alterações e Certificados. Escolha PDF, Excel ou JSON dentro de cada área; arquivos JSON são cópias para consulta e não têm restauração automática."],
-    ["Operadores e permissões", "Em Usuários e permissões, copie o link de cadastro, revise o pedido, aprove e atribua somente os jogos necessários. Bloquear retira o acesso operacional. Operadores não recebem sua autoridade de administrador principal."],
-    ["Logo, conta e leitura", "Configurações publica logo, título, cor e capa. Minha conta mostra sua identidade e permite vincular Google. Tema e acessibilidade são preferências deste navegador e não mudam as escolhas dos outros usuários."],
-    ["Antes de usar em um evento", "Confira equipes, elenco, campeonato e permissões. Teste um lançamento e a atualização do painel público. A demonstração interativa usa dados fictícios em outra aba. A classificação do futebol está disponível na central e no painel público. Idiomas e limpeza dos testes ainda estão em preparação nesta etapa."]
-  ];
+  if (role==="admin" || canManageRosters()) steps.push(
+    step("Equipes", "Cadastre nome, sigla, técnico e escudo. O perfil da equipe reúne elenco e informações. Arquivar preserva os vínculos; alterações atuais não reescrevem súmulas antigas.", "#view", "teams"),
+    step("Jogadores", "Informe equipe, nome, camisa, posição e titular ou reserva. Confira o elenco antes de criar a partida, pois a súmula guarda a escalação daquele momento.", "#view", "players"),
+    step("Importar com prévia", "Escolha equipes ou jogadores, carregue os dados e confira a prévia. Só a confirmação importa os registros. O tour nunca confirma importação.", "#view", "imports"));
+  if (role==="admin" || canManageChampionships()) steps.push(step("Campeonatos e fichas", "Cadastre temporada, modalidade e categoria. Use as fichas de inscrição com camisa e posição. Encerrar um campeonato impede novas partidas vinculadas, sem encerrar os jogos existentes.", "#view", "championships"));
+  if (role==="admin" || canCreateMatches()) steps.push(step("Cadastrar partida", "Vincule o campeonato, escolha equipes diferentes e informe data e local. O vínculo identifica a competição e ajuda a conceder operação por campeonato.", "#view", "createMatch"));
+  if (role==="admin") steps.push(
+    step("Anulação e correção", "Na auditoria privada da partida, Estornar exige justificativa e preserva o lançamento original. Partidas encerradas precisam de reabertura com motivo. O tour não estorna nem reabre.", "#view", "matches", true),
+    step("Classificação", "Confira a classificação dos campeonatos de futebol disponíveis e a situação das partidas usadas no cálculo.", "#view", "standings"),
+    step("Operadores e partidas", "Monitore os operadores e as partidas. Aprovação e atribuição são controles distintos; acompanhar um campeonato não equivale a operar.", "#view", "monitor"),
+    step("Usuários e permissões", "Aprove, bloqueie e conceda operação por partida ou campeonato inteiro. A exclusão de acesso preserva auditoria e não apaga automaticamente o login do Firebase Authentication.", "#view", "users"),
+    step("Súmulas", "Filtre campeonato, modalidade, situação, período e equipe. A súmula inclui elenco, lances, interrupções, acréscimos e responsáveis disponíveis. PDF, impressão e JSON usam a seleção.", "#view", "matchSheets"),
+    step("Relatórios esportivos", "Use os mesmos filtros e exporte resultados e detalhes. O Excel separa os dados em abas. O histórico deve estar carregado antes de gerar o documento.", "#view", "reports"),
+    step("Auditoria geral", "Consulte alterações e pesquise nome, UID, campeonato, equipe ou acontecimento. Antes e depois ajudam a conferir o que mudou. Esses detalhes são administrativos.", "#view", "auditReports"),
+    step("Certificados", "Preencha participante, participação, evento e emissão. O código identifica a emissão, mas não representa validação pública online. O sistema não mantém um arquivo permanente das emissões.", "#view", "certificates"),
+    step("Identidade e documentos", "Configure título, logo, cor, capa e limites de lances. Salvar aparência publica a mudança. Os logos e preferências da ficha de inscrição são locais a este navegador.", "#view", "settings"),
+    step("Limpeza e lixeira", "A limpeza exige conferência e cópia. Partidas elegíveis podem ser recuperadas por 30 dias. A purga definitiva é separada e remove os detalhes; não use sem revisar.", "#view", "cleanup"));
+  steps.push(step("Minha conta", "Confira os dados pessoais e os métodos de entrada. Vincule Google à conta existente, mantendo a identidade. Conflitos entre contas precisam ser tratados sem criar cadastros duplicados.", "#view", "account"),
+    step("Treinamento e suporte", "Treinamento abre dados fictícios em outra aba. Pratique iniciar, lançar, pausar, publicar acréscimos e encerrar. Este tour não executou nenhuma dessas ações.", "#view", "documentation"));
+  return steps;
+}
+let tutorialFrame=0, tutorialStep=null, tutorialOpenedDetails=[];
+function tutorialTarget(selector) {
+  for(const part of selector.split(",")){const el=$(part.trim());if(el && !el.closest("[hidden]"))return el;}
+  return null;
+}
+function positionTutorial() {
+  const dialog=$("#arenaTutorial");
+  if(!dialog?.open || !tutorialStep)return;
+  const panel=$("#arenaTourPanel"), svg=$("#arenaTourShade"), ring=$("#arenaTourRing");
+  const w=window.innerWidth,h=window.innerHeight;
+  svg.setAttribute("viewBox",`0 0 ${w} ${h}`);
+  const target=tutorialTarget(tutorialStep.target);
+  const r=target?.getBoundingClientRect();
+  const panelTop=panel.getBoundingClientRect().top-12;
+  const x=r?Math.max(6,r.left-6):0,y=r?Math.max(6,r.top-6):0;
+  const right=r?Math.min(w-6,r.right+6):0,bottom=r?Math.min(panelTop,r.bottom+6):0;
+  const visible=r && right>x && bottom>y;
+  $("#arenaTourMask").setAttribute("d",`M0 0H${w}V${h}H0Z`+(visible?` M${x} ${y}H${right}V${bottom}H${x}Z`:""));
+  ring.hidden=!visible;
+  if(visible)Object.assign(ring.style,{left:x+"px",top:y+"px",width:(right-x)+"px",height:(bottom-y)+"px"});
 }
 function drawTutorial() {
-  const steps = tutorialSteps(); tutorialIndex = Math.max(0,Math.min(tutorialIndex,steps.length-1));
-  const [title,body] = steps[tutorialIndex];
-  document.getElementById("arenaTutorialProgress").textContent=`Passo ${tutorialIndex+1} de ${steps.length}`;
-  document.getElementById("arenaTutorialTitle").textContent=title;
-  document.getElementById("arenaTutorialBody").textContent=body;
-  document.getElementById("arenaTutorialPrevious").disabled=tutorialIndex===0;
-  document.getElementById("arenaTutorialNext").textContent=tutorialIndex===steps.length-1?"Concluir":"Próximo";
+  for(const d of tutorialOpenedDetails)if(d.isConnected)d.open=false;
+  tutorialOpenedDetails=[];
+  const steps=tutorialSteps();tutorialIndex=Math.max(0,Math.min(tutorialIndex,steps.length-1));
+  const step=steps[tutorialIndex];tutorialStep=step;
+  if(step.area && admin){section=step.area;selected="";
+    if(step.game)operationPanel=step.title==="Avisos ao público"?"avisos":"tempo";
+    if(step.game){const match=state.matches.find(m=>m.status==="Ao vivo"&&(role==="admin"||C.demo||cloud?.canOperate(m.id)))||state.matches.find(m=>role==="admin"||C.demo||cloud?.canOperate(m.id));selected=match?.id||"";}
+    render();
+  }
+  const target=tutorialTarget(step.target);
+  if(target)for(let d=target.closest("details");d;d=d.parentElement?.closest("details")){if(!d.open){d.open=true;tutorialOpenedDetails.push(d);}}
+  $("#arenaTutorialProgress").textContent=`Passo ${tutorialIndex+1} de ${steps.length}`;
+  $("#arenaTutorialTitle").textContent=step.title;
+  $("#arenaTutorialBody").textContent=step.body+(step.game&&!selected?" Nenhuma partida autorizada está disponível nesta sessão.":"");
+  const index=$("#arenaTourIndex");index.innerHTML=steps.map((s,i)=>`<option value="${i}" ${i===tutorialIndex?"selected":""}>${i+1}. ${esc(s.title)}</option>`).join("");
+  $("#arenaTutorialPrevious").disabled=tutorialIndex===0;
+  $("#arenaTutorialNext").textContent=tutorialIndex===steps.length-1?"Concluir":"Próximo";
+  if(target){const r=target.getBoundingClientRect(),available=Math.max(80,window.innerHeight-$("#arenaTourPanel").getBoundingClientRect().height-40);window.scrollTo({top:Math.max(0,window.scrollY+r.top-Math.max(16,(available-Math.min(r.height,available))/2)),behavior:"instant"});}
+  cancelAnimationFrame(tutorialFrame);tutorialFrame=requestAnimationFrame(positionTutorial);
+  $("#arenaTutorialTitle").focus({preventScroll:true});
 }
 function setupTutorial() {
-  const bar=document.querySelector(".accessibility-bar"); if(!bar)return;
-  const open=document.createElement("button");open.type="button";open.dataset.openTutorial="";open.textContent="Como usar — guia passo a passo";open.style.marginTop="8px";bar.append(open);
-  const dialog=document.createElement("dialog");dialog.id="arenaTutorial";
+  const bar=$(".accessibility-bar");if(!bar)return;
+  const open=document.createElement("button");open.type="button";open.dataset.openTutorial="";open.textContent="Demonstração guiada das funções";bar.append(open);
+  const dialog=document.createElement("dialog");dialog.id="arenaTutorial";dialog.className="arena-visual-tour noprint";
   dialog.setAttribute("aria-labelledby","arenaTutorialTitle");dialog.setAttribute("aria-describedby","arenaTutorialBody");
-  dialog.style.cssText="width:min(92vw,650px);max-height:85vh;overflow:auto;background:var(--panel);color:var(--text);border:2px solid var(--line);border-radius:12px;padding:24px";
-  dialog.innerHTML='<p id="arenaTutorialProgress" class="muted" aria-live="polite"></p><h2 id="arenaTutorialTitle" tabindex="-1"></h2><p id="arenaTutorialBody"></p><p class="muted">Este guia apenas orienta: não cria nem altera registros.</p><div class="toolbar"><button type="button" id="arenaTutorialPrevious">Anterior</button><button type="button" id="arenaTutorialNext" class="primary">Próximo</button><button type="button" id="arenaTutorialClose">Fechar guia</button></div>';
+  dialog.innerHTML='<svg id="arenaTourShade" aria-hidden="true" preserveAspectRatio="none"><path id="arenaTourMask" fill-rule="evenodd"/></svg><div id="arenaTourRing" aria-hidden="true" hidden></div><section id="arenaTourPanel"><p id="arenaTutorialProgress" aria-live="polite"></p><h2 id="arenaTutorialTitle" tabindex="-1"></h2><p id="arenaTutorialBody"></p><label>Ir para uma função<select id="arenaTourIndex"></select></label><p class="muted">Demonstração explicativa. Nenhum botão do jogo é acionado.</p><div class="toolbar"><button type="button" id="arenaTutorialPrevious">Anterior</button><button type="button" id="arenaTutorialNext" class="primary">Próximo</button><button type="button" id="arenaTutorialClose">Fechar</button></div></section>';
   document.body.append(dialog);
-  open.addEventListener("click",()=>{hideContextHelp();tutorialReturnFocus=document.body.classList.contains("has-account-menu")?$("#accountMenuToggle"):document.activeElement?.closest("#publicTools")?$("#publicTools > summary"):document.activeElement;tutorialIndex=0;drawTutorial();dialog.showModal();document.getElementById("arenaTutorialTitle").focus();});
-  document.getElementById("arenaTutorialPrevious").addEventListener("click",()=>{tutorialIndex--;drawTutorial();document.getElementById("arenaTutorialTitle").focus();});
-  document.getElementById("arenaTutorialNext").addEventListener("click",()=>{if(tutorialIndex>=tutorialSteps().length-1)dialog.close();else{tutorialIndex++;drawTutorial();document.getElementById("arenaTutorialTitle").focus();}});
-  document.getElementById("arenaTutorialClose").addEventListener("click",()=>dialog.close());
-  dialog.addEventListener("close",()=>{hideContextHelp();if(tutorialReturnFocus?.isConnected)tutorialReturnFocus.focus();});
+  open.addEventListener("click",()=>{hideContextHelp();tutorialReturnFocus=document.body.classList.contains("has-account-menu")?$("#accountMenuToggle"):$("#publicTools > summary")||document.activeElement;tutorialContext={section,selected,operationPanel,scroll:window.scrollY,role};tutorialIndex=0;dialog.showModal();drawTutorial();});
+  $("#arenaTutorialPrevious").addEventListener("click",()=>{tutorialIndex--;drawTutorial();});
+  $("#arenaTutorialNext").addEventListener("click",()=>{if(tutorialIndex>=tutorialSteps().length-1)dialog.close();else{tutorialIndex++;drawTutorial();}});
+  $("#arenaTourIndex").addEventListener("change",e=>{tutorialIndex=Number(e.target.value);drawTutorial();});
+  $("#arenaTutorialClose").addEventListener("click",()=>dialog.close());
+  dialog.addEventListener("close",()=>{cancelAnimationFrame(tutorialFrame);tutorialStep=null;for(const d of tutorialOpenedDetails)if(d.isConnected)d.open=false;tutorialOpenedDetails=[];if(tutorialContext){section=tutorialContext.section;selected=tutorialContext.selected;operationPanel=tutorialContext.operationPanel;render();window.scrollTo({top:tutorialContext.scroll,behavior:"instant"});tutorialContext=null;}hideContextHelp();if(tutorialReturnFocus?.isConnected)tutorialReturnFocus.focus({preventScroll:true});});
+  const reposition=()=>{cancelAnimationFrame(tutorialFrame);tutorialFrame=requestAnimationFrame(()=>{if(dialog.open && tutorialContext?.role!==role){dialog.close();return;}positionTutorial();});};
+  window.addEventListener("resize",reposition,{passive:true});
+  window.addEventListener("scroll",reposition,{passive:true});
+  new MutationObserver(reposition).observe(app,{childList:true,subtree:true});
 }
 setupTutorial();
 
