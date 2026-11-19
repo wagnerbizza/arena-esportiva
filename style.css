@@ -2142,7 +2142,7 @@ body:not([data-admin="true"]) .public-event-icon {
 .arena-back-to-top {
   position: fixed;
   right: max(18px, env(safe-area-inset-right));
-  bottom: calc(90px + env(safe-area-inset-bottom));
+  bottom: calc(140px + env(safe-area-inset-bottom));
   z-index: 450;
   min-height: 44px;
   padding: 10px 16px;
