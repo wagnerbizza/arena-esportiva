@@ -2137,3 +2137,24 @@ body:not([data-admin="true"]) .public-event-icon {
   height: 80px;
   object-fit: contain;
 }
+
+/* Retorno rápido em documentos e demais páginas longas. */
+.arena-back-to-top {
+  position: fixed;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: calc(90px + env(safe-area-inset-bottom));
+  z-index: 450;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 2px solid var(--accent, #15c3ed);
+  border-radius: 10px;
+  background: var(--panel, #162027);
+  color: var(--text, #f0f7fb);
+  font-weight: 700;
+  box-shadow: 0 3px 14px #0006;
+  cursor: pointer;
+}
+.arena-back-to-top[hidden] { display: none !important; }
+.arena-back-to-top:hover { filter: brightness(1.2); }
+.arena-back-to-top:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
+@media print { .arena-back-to-top { display: none !important; } }

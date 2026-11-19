@@ -4046,3 +4046,32 @@ function setupPublicTools(){
  tools.addEventListener('keydown',event=>{if(event.key==='Escape'){tools.open=false;summary.focus();}});
 }
 setupPublicTools();
+
+// Disponível em todas as abas; fica fora do conteúdo substituído por render().
+function setupBackToTop() {
+  if (document.getElementById("arenaBackToTop")) return;
+  const button = document.createElement("button");
+  button.id = "arenaBackToTop";
+  button.type = "button";
+  button.className = "arena-back-to-top noprint";
+  button.textContent = "↑ Voltar ao topo";
+  button.setAttribute("aria-label", "Voltar ao topo da página");
+  button.hidden = true;
+  document.body.append(button);
+  let scheduled = false;
+  const update = () => {
+    scheduled = false;
+    button.hidden = (window.scrollY || document.documentElement.scrollTop || 0) < 280;
+  };
+  const schedule = () => {
+    if (!scheduled) { scheduled = true; requestAnimationFrame(update); }
+  };
+  window.addEventListener("scroll", schedule, { passive: true });
+  window.addEventListener("resize", schedule, { passive: true });
+  button.addEventListener("click", () => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, left: 0, behavior: reduceMotion ? "instant" : "smooth" });
+  });
+  update();
+}
+setupBackToTop();
