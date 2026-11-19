@@ -743,7 +743,19 @@ export async function connectSpark({
     // Só repetimos se o servidor confirmar que outra revisão foi gravada entretanto.
     for (let attempt = 0; ; attempt++) {
       try {
-        return await commit();
+        const result = await commit();
+        if (entity === "championships") {
+          const saved = await F.getDocFromServer(reference);
+          const row = saved.exists() ? {...saved.data(), id:saved.id} : null;
+          const fields=["name","season","sport","category","status"];
+          if(!row || fields.some(key=>row[key]!==prepared[key]))
+            throw Error("O campeonato não confirmou os dados enviados. Confira a conexão e possíveis alterações em outra aba antes de tentar novamente.");
+          const index=state.championships.findIndex(item=>item.id===row.id);
+          if(index<0)state.championships.push(row);else state.championships[index]=row;
+          publish();
+          return {championship:row};
+        }
+        return result;
       } catch (error) {
         if (
           error.code !== "permission-denied" ||
