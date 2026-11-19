@@ -15,6 +15,14 @@ export async function connectSpark({
   const isOwner = () => administratorUIDs.has(session?.uid);
   const authorized = () => isOwner() || (profile?.role === "operator" && profile.enabled !== false && session?.emailVerified === true);
   // Permissão parcial de cadastro: não dá acesso à administração.
+  function canOperateMatch(id) {
+    if (isOwner()) return true;
+    if (!authorized()) return false;
+    if ((profile?.matches || []).includes(id)) return true;
+    const match = state.matches.find(item => item.id === id);
+    return Boolean(match?.championshipId &&
+      (profile?.operatedChampionships || []).includes(match.championshipId));
+  }
   const canManageRosters = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("rosters"));
   const canCreateMatches = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("matchesCreate"));
   const canManageChampionships = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("championships"));
@@ -473,7 +481,7 @@ export async function connectSpark({
     const matchCreation = action.type === "match" && !action.data?.id && canCreateMatches();
     const championshipAction = action.type === "championship" && canManageChampionships();
     if (!isOwner() && !rosterAction && !matchCreation && !championshipAction && (["team", "player", "settings", "match", "import", "correct", "championship", "championshipLink","teamArchive"].includes(action.type) ||
-      !profile?.matches?.includes(action.matchId))) {
+      !canOperateMatch(action.matchId))) {
       throw Error("Sua conta não tem permissão para esta ação ou partida.");
     }
     if (!navigator.onLine)
@@ -1046,10 +1054,7 @@ export async function connectSpark({
     deleteTestMatch,
     restoreDeletedMatch,
     purgeDeletedMatch,
-    canOperate: (id) =>
-      isOwner() || (authorized() && (profile?.matches?.includes(id) ||
-        (state.matches.find(match => match.id === id)?.championshipId &&
-          (profile?.operatedChampionships || []).includes(state.matches.find(match => match.id === id).championshipId)))),
+    canOperate: canOperateMatch,
     close: () => {
       stop();
       profileStop();
