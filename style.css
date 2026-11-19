@@ -2192,3 +2192,14 @@ body:not([data-admin="true"]) .public-event-icon {
 #arenaTutorialProgress { font-weight:700;color:var(--accent,#15c3ed); }
 @media(max-width:600px){#arenaTourPanel{padding:12px;max-height:51dvh}#arenaTourPanel h2{font-size:21px}#arenaTourPanel .toolbar button{min-height:44px;flex:1}}
 @media print { #arenaTutorial { display:none!important; } }
+
+/* Preferências pessoais, dados de teste e documentos de identificação. */
+.personal-shortcuts { padding:12px 14px;border:1px solid var(--line);border-radius:12px;margin:12px 0;background:var(--panel); }
+.personal-shortcuts .toolbar { margin:4px 0 10px; }
+.personal-shortcuts small { display:block;color:var(--muted);line-height:1.5; }
+.personal-tools-dialog { width:min(900px,calc(100vw - 24px));max-height:85dvh;overflow:auto;background:var(--panel);color:var(--text);border:2px solid var(--accent);border-radius:14px;padding:20px; }
+.personal-tools-dialog::backdrop { background:#000b; }
+.personal-tools-dialog button { min-height:44px; }
+#event-credential input,#event-credential select { width:100%; }
+@media(max-width:600px){.personal-tools-dialog{padding:12px}.personal-shortcuts .toolbar button{min-height:44px}}
+@media print{.personal-shortcuts,.personal-tools-dialog{display:none!important}}

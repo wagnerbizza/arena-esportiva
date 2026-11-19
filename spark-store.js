@@ -18,8 +18,9 @@ export async function connectSpark({
   function canOperateMatch(id) {
     if (isOwner()) return true;
     if (!authorized()) return false;
-    if ((profile?.matches || []).includes(id)) return true;
     const match = state.matches.find(item => item.id === id);
+    if (!match || match.testData) return false;
+    if ((profile?.matches || []).includes(id)) return true;
     return Boolean(match?.championshipId &&
       (profile?.operatedChampionships || []).includes(match.championshipId));
   }
@@ -104,7 +105,12 @@ export async function connectSpark({
           );
           publish();
         },
-        message,
+        error => {
+          if(path.startsWith("matches/") && !isOwner() && error.code === "permission-denied") {
+            assign(null); publish(); return;
+          }
+          message(error);
+        },
       ),
     );
   }
@@ -128,7 +134,7 @@ export async function connectSpark({
     const ownerView = full && isOwner();
     watchDoc(ownerView ? "settings/main" : "publicSettings/main",
       (d) => (state.settings = d || D.fresh().settings));
-    watchCollection(ownerView || (full && canManageRosters()) ? "teams" : "publicTeams", (d) => (state.teams = d));
+    watchCollection(ownerView || (full && canManageRosters()) ? "teams" : "publicTeams", (d) => (state.teams = d), !ownerView && full && canManageRosters() ? [F.where("testData","==",false)] : []);
     if (ownerView) {
       watchCollection("championships", (d) => (state.championships = d));
       watchCollection("players", (d) => (state.players = d));
@@ -154,8 +160,8 @@ export async function connectSpark({
             .map(p => [p.id,p])).values()];
       };
       // Os jogadores disponíveis são os elencos congelados nessas partidas.
-      if(canManageRosters())watchCollection("players",d=>state.players=d);
-      if(canManageChampionships())watchCollection("championships",d=>state.championships=d);
+      if(canManageRosters())watchCollection("players",d=>state.players=d,[F.where("testData","==",false)]);
+      if(canManageChampionships())watchCollection("championships",d=>state.championships=d,[F.where("testData","==",false)]);
       if(canViewAllGames())watchCollection("publicMatches",d=>{publicGames.clear();for(const game of d)publicGames.set(game.id,game);publishOperatorGames();});
       else {
         for (const edition of profile?.followedEditions || []) {
@@ -176,7 +182,7 @@ export async function connectSpark({
         watchCollection("matches", games => {
           championshipGames.set(championshipId,games);
           publishOperatorGames();
-        }, [F.where("championshipId","==",championshipId)]);
+        }, [F.where("championshipId","==",championshipId),F.where("testData","==",false)]);
       }
       const ids = [...new Set(profile?.matches || [])];
       for (const id of ids) {
@@ -297,7 +303,7 @@ export async function connectSpark({
       detail.setIndex = before.sets.length;
       detail.text = "Atualização dos lances publicados no placar";
       tx.set(reference, next);
-      if (!next.publicHidden) tx.set(publicRef, M.publicMatch(next));
+      if (!next.publicHidden && !next.testData) tx.set(publicRef, M.publicMatch(next));
       tx.set(auditRef, {
         entity: "matches",
         target: matchId,
@@ -400,7 +406,7 @@ export async function connectSpark({
         state:"lixeira",expiresAt:new Date(Date.now()+30*24*60*60*1000),home:before.home,away:before.away,
         sport:before.sport,competition:before.competition||"",status:before.status,score:before.score});
       tx.delete(ref);
-      if (!before.publicHidden) tx.delete(F.doc(database,"publicMatches",plan.matchId));
+      if (!before.publicHidden && !before.testData) tx.delete(F.doc(database,"publicMatches",plan.matchId));
     });
     cache.delete(plan.matchId);
   }
@@ -419,7 +425,7 @@ export async function connectSpark({
       const before=archived.before,after={...before,_revision:before._revision+1,_audit:auditId,_updatedBy:session.uid,_updatedAt:F.serverTimestamp()};
       const detail=M.detail("recuperação");detail.stage=before.stage;detail.setIndex=before.sets.length;detail.reason=reason;detail.text="Partida recuperada da lixeira";
       tx.set(matchRef,after);
-      if (!after.publicHidden) tx.set(publicRef,M.publicMatch(after));
+      if (!after.publicHidden && !after.testData) tx.set(publicRef,M.publicMatch(after));
       tx.set(auditRef,{entity:"matches",target:matchId,actor:session.uid,at:F.serverTimestamp(),revision:after._revision,detail,before:null,after});
       tx.update(cleanupRef,{...archived,before:null,after:null,state:"restaurada",restoredBy:session.uid,restoredAt:F.serverTimestamp(),restoredAuditId:auditId});
     });
@@ -519,7 +525,8 @@ export async function connectSpark({
       target,
       prepared = null;
     if (["team", "player", "settings", "match", "championship"].includes(action.type)) {
-      const checked = D.reduce(state, action, session.uid);
+      const activeState={...state};for(const entity of ["matches","teams","players","championships"])activeState[entity]=(state[entity]||[]).filter(r=>!r.testData);
+      const checked = D.reduce(activeState, action, session.uid);
       entity = {
         championship: "championships",
         team: "teams",
@@ -661,6 +668,7 @@ export async function connectSpark({
           next = result.match;
           detail = result.detail;
         }
+        if (["matches","teams","players","championships"].includes(entity)) next.testData = before?.testData === true;
         next._revision = (before?._revision || 0) + 1;
         next._audit = actionId;
         next._updatedBy = session.uid;
@@ -669,8 +677,10 @@ export async function connectSpark({
         if (JSON.stringify(next).length > 200000)
           throw Error("Cadastro muito grande para esta edição.");
         tx.set(reference, next);
-        if (entity === "teams")
-          tx.set(F.doc(database, "publicTeams", target), M.publicTeam(next));
+        if (entity === "teams") {
+          const publicTeam=F.doc(database,"publicTeams",target);
+          if(next.testData)tx.delete(publicTeam);else tx.set(publicTeam,M.publicTeam(next));
+        }
         if (entity === "settings")
           tx.set(
             F.doc(database, "publicSettings", target),
@@ -678,7 +688,7 @@ export async function connectSpark({
           );
         if (entity === "matches") {
           const publication = F.doc(database, "publicMatches", target);
-          if (!next.publicHidden) tx.set(publication, M.publicMatch(next));
+          if (!next.publicHidden && !next.testData) tx.set(publication, M.publicMatch(next));
           else if (action.type === "matchVisibility") tx.delete(publication);
         }
         tx.set(auditRef, {
@@ -1012,6 +1022,66 @@ export async function connectSpark({
     publicBranding = snap.exists() ? snap.data() : D.fresh().settings;
     if (!isOwner()) { state.settings = publicBranding; publish(); }
   }, message);
+  async function classifyTestRecord(entity, id, hidden, reason) {
+    if(!isOwner() || !["teams","players","championships","matches"].includes(entity))throw Error("Classificação exclusiva do administrador.");
+    const ref=F.doc(database,entity,id),auditRef=F.doc(F.collection(database,"audit"));
+    await F.runTransaction(database,async tx=>{
+      const snap=await tx.get(ref);if(!snap.exists())throw Error("Registro não encontrado: "+id);
+      const before=snap.data();
+      if(entity==="matches" && (before.clock?.running || ["Ao vivo","Pausada","Suspensa"].includes(before.status)))throw Error("Finalize a partida antes de separar os testes.");
+      const next={...before,testData:hidden,_revision:(before._revision||0)+1,_audit:auditRef.id,_updatedBy:session.uid,_updatedAt:F.serverTimestamp()};
+      tx.set(ref,next);
+      if(entity==="teams"){const pub=F.doc(database,"publicTeams",id);if(hidden)tx.delete(pub);else tx.set(pub,M.publicTeam(next));}
+      if(entity==="matches"){const pub=F.doc(database,"publicMatches",id);if(hidden||next.publicHidden)tx.delete(pub);else tx.set(pub,M.publicMatch(next));}
+      const detail=M.detail("classificação de teste");if(entity==="matches"){detail.stage=before.stage;detail.setIndex=(before.sets||[]).length;}detail.reason=reason;detail.text=hidden?"Reservado na aba de testes do administrador":"Disponível nas telas normais";
+      tx.set(auditRef,{entity,target:id,actor:session.uid,actorName:String(profile?.name||session.displayName||session.email||"").slice(0,100),actorRole:"admin",at:F.serverTimestamp(),revision:next._revision,detail,before,after:next});
+    });
+  }
+  async function testMaintenance(active) {
+    if(!isOwner())throw Error("Ação exclusiva do administrador.");
+    const control=F.doc(database,"testControl","main");
+    if(active)await F.runTransaction(database,async tx=>{const snap=await tx.get(control);if(snap.exists()&&snap.data().active)throw Error("Já existe uma classificação em andamento. Confira a outra aba antes de liberar a operação.");tx.set(control,{active:true,actor:session.uid,at:F.serverTimestamp()});});
+    else await F.setDoc(control,{active:false,actor:session.uid,at:F.serverTimestamp()});
+  }
+  async function classifyTestRecords(items,hidden,reason,progress=()=>{}) {
+    if(!isOwner() || typeof hidden!=="boolean" || !Array.isArray(items)||!items.length||items.length>500)throw Error("Selecione de 1 a 500 registros.");
+    reason=String(reason||"").trim();if(reason.length<5||reason.length>300)throw Error("Informe um motivo de 5 a 300 caracteres.");
+    await testMaintenance(true);
+    try {
+      const collections=await Promise.all(["teams","players","championships","matches"].map(async entity=>[entity,(await F.getDocsFromServer(F.collection(database,entity))).docs.map(d=>({...d.data(),id:d.id}))]));
+      const all=Object.fromEntries(collections),selected=new Set(items.map(r=>r.entity+"/"+r.id));
+      const marked=(entity,id)=>selected.has(entity+"/"+id);
+      const reserved=(entity,id)=>all[entity].some(r=>r.id===id&&r.testData);
+      if(hidden){
+        for(const game of all.matches)if(!game.testData&&!marked("matches",game.id)&&
+          (marked("championships",game.championshipId)||marked("teams",game.home)||marked("teams",game.away)||(game.roster||[]).some(p=>marked("players",p.id))))throw Error("Os vínculos mudaram. Refaça a prévia incluindo as partidas relacionadas.");
+        for(const player of all.players)if(!player.testData&&!marked("players",player.id)&&marked("teams",player.team))throw Error("O elenco mudou. Refaça a prévia.");
+      }else{
+        for(const item of items){const record=all[item.entity]?.find(r=>r.id===item.id);if(!record)throw Error("Um registro mudou. Refaça a prévia.");
+          const blocked=(entity,id)=>reserved(entity,id)&&!marked(entity,id);
+          if(item.entity==="players"&&blocked("teams",record.team))throw Error("Restaure também a equipe deste jogador.");
+          if(item.entity==="matches"&&(blocked("championships",record.championshipId)||blocked("teams",record.home)||blocked("teams",record.away)||(record.roster||[]).some(p=>blocked("players",p.id))))throw Error("Restaure também os vínculos da partida.");
+        }
+      }
+      for(let i=0;i<items.length;i++){await classifyTestRecord(items[i].entity,items[i].id,hidden,reason);progress(i+1,items.length);}
+    }
+    finally {await testMaintenance(false);}
+  }
+  async function eventCredentials() {
+    if(!isOwner())throw Error("Consulta exclusiva do administrador.");
+    const snap=await F.getDocsFromServer(F.collection(database,"eventCredentials"));return snap.docs.map(d=>({...d.data(),id:d.id}));
+  }
+  async function issueCredential(data) {
+    if(!isOwner())throw Error("Emissão exclusiva do administrador.");
+    const ref=F.doc(F.collection(database,"eventCredentials"));
+    const record={id:ref.id,name:String(data.name||"").trim(),eventId:String(data.eventId||""),function:String(data.function||"").trim(),organization:String(data.organization||"").trim(),validUntil:String(data.validUntil||""),userId:String(data.userId||""),status:"ativa",issuedBy:session.uid,issuedAt:F.serverTimestamp(),updatedAt:F.serverTimestamp()};
+    if(!record.name||record.name.length>150||!record.function||record.function.length>80||record.organization.length>150||!/^\d{4}-\d{2}-\d{2}$/.test(record.validUntil))throw Error("Confira nome, função e organização.");
+    await F.setDoc(ref,record);return ref.id;
+  }
+  async function revokeCredential(id) {
+    if(!isOwner())throw Error("Revogação exclusiva do administrador.");
+    await F.updateDoc(F.doc(database,"eventCredentials",id),{status:"revogada",updatedAt:F.serverTimestamp()});
+  }
   return {
     auth,
     authentication,
@@ -1058,6 +1128,7 @@ export async function connectSpark({
     deleteTestMatch,
     restoreDeletedMatch,
     purgeDeletedMatch,
+    classifyTestRecords, testMaintenance, eventCredentials, issueCredential, revokeCredential,
     canOperate: canOperateMatch,
     close: () => {
       stop();
