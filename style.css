@@ -2106,3 +2106,14 @@ body:not([data-admin="true"]) .public-event-icon {
 .quick-control-group button {
   min-height: 44px;
 }
+
+
+.championship-operation-group {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+}
+.championship-operation-group > div {
+  padding-left: 12px;
+}

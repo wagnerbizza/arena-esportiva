@@ -133,11 +133,17 @@ export async function connectSpark({
     } else {
       // Operador não consulta a coleção privada inteira: recebe cada partida autorizada.
       // A lista pública é somente leitura; os documentos privados autorizados preservam os detalhes operacionais.
-      const publicGames = new Map(), assignedGames = new Map();
+      const publicGames = new Map(), assignedGames = new Map(), championshipGames = new Map();
       const publishOperatorGames = () => {
         const visibleGames = new Map(publicGames);
+        for (const games of championshipGames.values())
+          for (const game of games) visibleGames.set(game.id,game);
         for (const [id, game] of assignedGames) visibleGames.set(id, game);
         state.matches = [...visibleGames.values()];
+        if (!canManageRosters()) state.players = [...new Map(
+          [...championshipGames.values()].flat().concat([...assignedGames.values()])
+            .flatMap(m => m.roster || []).filter(p => p && typeof p === "object")
+            .map(p => [p.id,p])).values()];
       };
       // Os jogadores disponíveis são os elencos congelados nessas partidas.
       if(canManageRosters())watchCollection("players",d=>state.players=d);
@@ -158,13 +164,18 @@ export async function connectSpark({
           }, [F.where("competition", "==", edition)]);
         }
       }
+      for (const championshipId of [...new Set(profile?.operatedChampionships || [])]) {
+        watchCollection("matches", games => {
+          championshipGames.set(championshipId,games);
+          publishOperatorGames();
+        }, [F.where("championshipId","==",championshipId)]);
+      }
       const ids = [...new Set(profile?.matches || [])];
       for (const id of ids) {
         watchDoc("matches/" + id, (d) => {
           if(d)assignedGames.set(id,d);else assignedGames.delete(id);
           publishOperatorGames();
-          if(!canManageRosters())state.players = [...new Map([...assignedGames.values()].flatMap((m) => m.roster || [])
-            .map((p) => [p.id, p])).values()];
+
         });
       }
     }
@@ -858,7 +869,7 @@ export async function connectSpark({
       if (!snap.exists()) throw Error("Cadastro não encontrado.");
       const before = snap.data();
       if (before.deleted || before.removalRequested) throw Error("Já existe uma solicitação ou exclusão deste acesso.");
-      const after = { ...before, enabled: false, matches: [], permissions: [], followedEditions: [],
+      const after = { ...before, enabled: false, matches: [], permissions: [], followedEditions: [], operatedChampionships: [],
         removalRequested: true, removalReason: reason, updatedAt: F.serverTimestamp(),
         revision: (before.revision || 0) + 1, auditId: aid };
       tx.set(ref, after);
@@ -884,7 +895,7 @@ export async function connectSpark({
         id: userId, name: before.name || "Operador cadastrado", email: before.email || "",
         ...(before.phone ? {phone: before.phone} : {}),
         role: "operator", enabled: false, deleted: true,
-        matches: [], permissions: [], followedEditions: [],
+        matches: [], permissions: [], followedEditions: [], operatedChampionships: [],
         createdAt: before.createdAt || F.serverTimestamp(),
         updatedAt: F.serverTimestamp(), revision: (before.revision || 0) + 1, auditId: aid,
       };
@@ -895,13 +906,13 @@ export async function connectSpark({
       });
     });
   }
-  async function manageUser({ userId, access, matches, reason, permissions, followedEditions }) {
+  async function manageUser({ userId, access, matches, reason, permissions, followedEditions, operatedChampionships }) {
     if (!isOwner()) throw Error("Somente o administrador principal gerencia usuários.");
     if (administratorUIDs.has(userId)) throw Error("A conta administrativa está protegida e não pode ser alterada.");
     if (!["active", "blocked", "pending"].includes(access)) throw Error("Situação de acesso inválida.");
     reason = String(reason || "").trim();
     if (!reason || reason.length > 500) throw Error("Informe o motivo, com até 500 caracteres.");
-    matches = access === "pending" ? [] : [...new Set(matches || [])];
+    matches = access !== "active" ? [] : [...new Set(matches || [])];
     if (matches.length > 100 || matches.some((id) => !state.matches.some((m) => m.id === id)))
       throw Error("Selecione até 100 partidas existentes.");
     const ref = F.doc(database, "users", userId), aid = uid();
@@ -919,9 +930,14 @@ export async function connectSpark({
         !known.has(title) && !before.followedEditions?.includes(title))) {
         throw Error("Selecione até 20 edições de campeonatos.");
       }
+      const operated = access === "active"
+        ? [...new Set(operatedChampionships ?? before.operatedChampionships ?? [])] : [];
+      if (operated.length > 100 || operated.some(id =>
+        typeof id !== "string" || !state.championships.some(c => c.id === id)))
+        throw Error("Selecione até 100 modalidades e categorias de campeonatos existentes.");
       const after = { id: userId, name: before.name || "Operador cadastrado", email: before.email || "",
         ...(before.phone ? {phone: before.phone} : {}),
-        role: access === "pending" ? "pending" : "operator", enabled: access === "active", matches, permissions:granted, followedEditions:editions,
+        role: access === "pending" ? "pending" : "operator", enabled: access === "active", matches, permissions:granted, followedEditions:editions, operatedChampionships:operated,
         createdAt: before.createdAt || F.serverTimestamp(), updatedAt: F.serverTimestamp(),
         revision: (before.revision || 0) + 1, auditId: aid };
       const action = access === "blocked" ? "bloqueio" : access === "pending" ? "pendente" :
@@ -1031,7 +1047,9 @@ export async function connectSpark({
     restoreDeletedMatch,
     purgeDeletedMatch,
     canOperate: (id) =>
-      isOwner() || (authorized() && profile?.matches?.includes(id)),
+      isOwner() || (authorized() && (profile?.matches?.includes(id) ||
+        (state.matches.find(match => match.id === id)?.championshipId &&
+          (profile?.operatedChampionships || []).includes(state.matches.find(match => match.id === id).championshipId)))),
     close: () => {
       stop();
       profileStop();
