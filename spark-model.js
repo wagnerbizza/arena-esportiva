@@ -341,7 +341,7 @@
   }
   function publicSettings(t) {
     const { id, title, subtitle, color, banner, _revision, _updatedAt } = t;
-    return { ...(Object.hasOwn(t, "logo") ? { logo: t.logo } : {}), id, title, subtitle, color, banner, _revision, _updatedAt };
+    return { ...(Object.hasOwn(t, "logo") ? { logo: t.logo } : {}), ...(Object.hasOwn(t, "summaryLimit") ? {summaryLimit:t.summaryLimit} : {}), id, title, subtitle, color, banner, _revision, _updatedAt };
   }
   function publicMatch(m) {
     const {
