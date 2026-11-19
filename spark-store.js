@@ -350,9 +350,7 @@ export async function connectSpark({
       if(!isOwner()||epoch!==generation)return;
       cache.set(id, events(snap));
     }
-    if (live && ids.length === 1) {
-      await publishPublicEvents(ids[0], cache.get(ids[0]) || []);
-    }
+    // Abrir detalhes é somente leitura; publicar lances exige uma ação explícita.
     publish();
     if (live && ids.length === 1) {
       historyId = ids[0];
