@@ -2138,23 +2138,33 @@ body:not([data-admin="true"]) .public-event-icon {
   object-fit: contain;
 }
 
-/* Retorno rápido em documentos e demais páginas longas. */
-.arena-back-to-top {
+/* Setas de navegação, acima do controle de acessibilidade. */
+.arena-page-navigation {
   position: fixed;
   right: max(18px, env(safe-area-inset-right));
   bottom: calc(140px + env(safe-area-inset-bottom));
   z-index: 450;
-  min-height: 44px;
-  padding: 10px 16px;
-  border: 2px solid var(--accent, #15c3ed);
-  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.arena-page-arrow {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  min-width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 1px solid var(--accent, #15c3ed);
+  border-radius: 50%;
   background: var(--panel, #162027);
   color: var(--text, #f0f7fb);
-  font-weight: 700;
   box-shadow: 0 3px 14px #0006;
   cursor: pointer;
 }
-.arena-back-to-top[hidden] { display: none !important; }
-.arena-back-to-top:hover { filter: brightness(1.2); }
-.arena-back-to-top:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
-@media print { .arena-back-to-top { display: none !important; } }
+.arena-page-arrow svg { pointer-events: none; }
+.arena-page-navigation[hidden] { display: none !important; }
+.arena-page-arrow:hover:not(:disabled) { filter: brightness(1.25); }
+.arena-page-arrow:disabled { opacity: .4; cursor: default; }
+.arena-page-arrow:focus-visible { outline: 3px solid var(--accent, #15c3ed); outline-offset: 3px; }
+@media print { .arena-page-navigation { display: none !important; } }

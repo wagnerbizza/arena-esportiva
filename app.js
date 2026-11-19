@@ -4047,31 +4047,47 @@ function setupPublicTools(){
 }
 setupPublicTools();
 
-// Disponível em todas as abas; fica fora do conteúdo substituído por render().
+// Navegação da página, fora do conteúdo substituído por render().
 function setupBackToTop() {
-  if (document.getElementById("arenaBackToTop")) return;
-  const button = document.createElement("button");
-  button.id = "arenaBackToTop";
-  button.type = "button";
-  button.className = "arena-back-to-top noprint";
-  button.textContent = "↑ Voltar ao topo";
-  button.setAttribute("aria-label", "Voltar ao topo da página");
-  button.hidden = true;
-  document.body.append(button);
+  if (document.getElementById("arenaPageNavigation")) return;
+  const navigation = document.createElement("nav");
+  navigation.id = "arenaPageNavigation";
+  navigation.className = "arena-page-navigation noprint";
+  navigation.setAttribute("aria-label", "Navegação rápida da página");
+  const makeButton = (direction, label, path) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "arena-page-arrow";
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
+    button.addEventListener("click", () => {
+      const height = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.scrollTo({top: direction === "up" ? 0 : height, behavior: reduceMotion ? "instant" : "smooth"});
+    });
+    navigation.append(button);
+    return button;
+  };
+  const up = makeButton("up", "Ir ao topo da página", "M12 19V5 M5 12l7-7 7 7");
+  const down = makeButton("down", "Ir ao fim da página", "M12 5v14 M5 12l7 7 7-7");
+  navigation.hidden = true;
+  document.body.append(navigation);
   let scheduled = false;
   const update = () => {
     scheduled = false;
-    button.hidden = (window.scrollY || document.documentElement.scrollTop || 0) < 280;
+    const top = window.scrollY || document.documentElement.scrollTop || 0;
+    const bottom = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - window.innerHeight;
+    navigation.hidden = bottom <= 8;
+    up.disabled = top <= 8;
+    down.disabled = top >= bottom - 8;
   };
   const schedule = () => {
     if (!scheduled) { scheduled = true; requestAnimationFrame(update); }
   };
-  window.addEventListener("scroll", schedule, { passive: true });
-  window.addEventListener("resize", schedule, { passive: true });
-  button.addEventListener("click", () => {
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    window.scrollTo({ top: 0, left: 0, behavior: reduceMotion ? "instant" : "smooth" });
-  });
+  window.addEventListener("scroll", schedule, {passive:true});
+  window.addEventListener("resize", schedule, {passive:true});
+  if (typeof ResizeObserver !== "undefined") new ResizeObserver(schedule).observe(document.body);
   update();
 }
 setupBackToTop();
