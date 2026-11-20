@@ -244,7 +244,7 @@ export async function connectSpark({
   }
   function operationEvent(id, audit) {
     if(audit.entity!=="matches" || !timelineTypes.has(audit.detail?.type))return null;
-    const e=audit.detail,reason=e.type==="ponto"&&e.correctionOf?e.reason:"";
+    const e=audit.detail,reason=e.correctionOf?e.reason:"";
     return {id,entity:"matches",target:audit.target,revision:audit.revision,at:audit.at,
       detail:{type:e.type,side:e.side,value:e.value,player:e.player,stage:e.stage,setIndex:e.setIndex,
         correctionOf:e.correctionOf,from:e.from,to:e.to,text:reason,reason}};
@@ -530,7 +530,7 @@ export async function connectSpark({
       : F.doc(F.collection(database, "audit")).id;
   async function send(action) {
     if (!session || !authorized()) throw Error("Faça login com uma conta autorizada.");
-    if(action.type==="correct" && !canCorrectMatch(action.matchId))throw Error("O administrador precisa autorizar anulações de gols/pontos para esta conta e esta partida.");
+    if(action.type==="correct" && !canCorrectMatch(action.matchId))throw Error("O administrador precisa autorizar anulações de lances para esta conta e esta partida.");
     if (action.type === "notes" && !isOwner()) {
       throw Error("Somente o administrador pode editar as observações da súmula.");
     }
@@ -660,7 +660,7 @@ export async function connectSpark({
         if (originalRef) {
           const o = await tx.get(originalRef),
             c = await tx.get(correctionRef);
-          if (c.exists()) throw Error("Este ponto já foi estornado.");
+          if (c.exists()) throw Error("Este lance já foi anulado.");
           if(!o.exists())throw Error("Lance antigo ainda não disponível para anulação. Peça ao administrador para abrir Ver lances anteriores nesta partida e sincronizar o histórico.");
           original = o.data();
         }
@@ -712,7 +712,7 @@ export async function connectSpark({
           if (!before) throw Error("Partida não encontrada.");
           const result = M.applyMatch(
             before,
-            { ...action, publicId: actionId, championship },
+            { ...action, administrative:isOwner(), publicId: actionId, championship },
             original,
             F.serverTimestamp(),
           );

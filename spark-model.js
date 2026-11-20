@@ -160,7 +160,7 @@
         : "";
     } else {
       need(
-        !locked,
+        !locked || (a.administrative === true && ["correct","notes"].includes(a.type)),
         "Partida encerrada. Reabertura exige administrador e justificativa.",
       );
       if (a.type === "clock") {
@@ -266,33 +266,31 @@
           player: text(a.player, 150),
           text: text(a.text),
         });
+        if(a.kind === "substituição"){
+          const incoming=text(a.playerIn,100);
+          need(a.player && incoming && incoming!==a.player && m.rosterTeams[incoming]===[m.home,m.away][a.side],"Selecione quem sai e quem entra, da mesma equipe.");
+          e.from=a.player;e.to=incoming;
+          const label=id=>{const p=m.roster.find(p=>p.id===id);return (p.number? p.number+" • ":"")+p.name;};
+          e.text="Sai: "+label(e.from)+"; entra: "+label(e.to)+(a.goalkeeper?" (troca de goleiro)":"")+(e.text?" — "+e.text:"");
+        }
         if (a.kind === "ponto") m.score[a.side] += value;
       } else if (a.type === "correct") {
-        need(
-          original &&
-            original.entity === "matches" &&
-            original.target === m.id &&
-            original.detail.type === "ponto" &&
-            original.detail.value > 0 &&
-            !original.detail.correctionOf,
-          "Selecione um ponto original.",
-        );
-        need(
-          original.detail.setIndex === m.sets.length,
-          "Set já fechado. Registre a retificação na súmula.",
-        );
+        const goal=original?.detail;
+        need(original && original.entity === "matches" && original.target === m.id && goal &&
+          ["ponto","cartão amarelo","cartão vermelho","falta","substituição","tempo"].includes(goal.type) &&
+          !goal.correctionOf && (goal.type !== "ponto" || goal.value > 0), "Selecione um lance original anulável.");
         need(text(a.reason), "Justificativa obrigatória.");
-        Object.assign(e, {
-          type: "ponto",
-          side: original.detail.side,
-          value: -original.detail.value,
-          player: original.detail.player,
-          correctionOf: a.eventId,
-          text: text(a.reason),
-          reason: text(a.reason, 300),
-        });
-        m.score[e.side] += e.value;
-        need(m.score[e.side] >= 0, "Placar inválido.");
+        Object.assign(e,{type:goal.type,side:goal.side,value:goal.type==="ponto"?-goal.value:0,
+          player:goal.player,correctionOf:a.eventId,from:goal.from||"",to:goal.to||"",
+          text:text(a.reason),reason:text(a.reason,300)});
+        if(goal.type==="ponto"){
+          if(goal.setIndex === m.sets.length){m.score[e.side]+=e.value;need(m.score[e.side]>=0,"Placar inválido.");}
+          else{
+            need(a.administrative === true,"Somente o administrador pode retificar um set já fechado.");
+            const set=m.sets[goal.setIndex];need(set && goal.setIndex>=0,"Set original não encontrado.");
+            set.score[e.side]+=e.value;need(set.score[e.side]>=0,"Placar do set inválido.");
+          }
+        }
       } else if (a.type === "stage") {
         need(text(a.stage, 40), "Informe a etapa.");
         m.stage = text(a.stage, 40);

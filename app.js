@@ -650,6 +650,7 @@ function refresh() {
           (p) => p.number + " • " + p.name,
         );
       $("[name=player]").value = saved;
+      const incoming=$("#event [name=playerIn]");if(incoming){const value=incoming.value;incoming.innerHTML='<option value="">Selecione quem entra</option>'+options(m.roster.filter(p=>p.team===[m.home,m.away][side]),p=>p.id,p=>p.number+" • "+p.name);incoming.value=value;}
     }
   }
   if (importDraft && $("#preview")) {
@@ -771,6 +772,7 @@ function updateClocks() {
 // Um intervalo apenas na tela: nenhum acesso ao Firestore a cada segundo.
 setInterval(updateClocks, 250);
 function eventLabel(e, m) {
+  if(e.correctionOf && e.type!=="ponto")return "Anulação de "+e.type;
   if (e.type === "status") return `Situação: ${e.from||"—"} → ${e.to||"—"}`;
   if (e.type === "acréscimos") return e.value ? `Acréscimos autorizados: +${e.value} min` : "Aviso de acréscimos retirado";
   if (e.type === "cronômetro") return e.text || ({iniciar:"Cronômetro iniciado",parar:"Cronômetro parado","iniciar-acrescimos":"Acréscimos iniciados",ajustar:"Cronômetro ajustado"}[e.from] || "Alteração do cronômetro");
@@ -895,8 +897,8 @@ function timelineContent(m) {
       const label = e.type === "status" ? `Situação: ${e.from} → ${e.to}` :
         e.type === "etapa" ? `Etapa: ${e.to}` : e.type === "set" ? "Set encerrado" : eventLabel(e,m);
       return `<article class="timeline-event"><strong>${esc(label)}${side ? " · "+esc(side) : ""}</strong>
-        ${e.playerName ? `<p>${esc(e.number ? e.number+" · " : "")}${esc(e.playerName)}</p>` : ""}
-        <small>Etapa ${esc(e.stage)} · ${esc(e.at ? format(e.at?.toDate ? e.at.toDate().toISOString() : e.at) : "Horário não disponível no resumo")}</small>${e.reason?`<p>${esc(e.reason)}</p>`:""}${admin && role==="operator" && (e.operational || (C.demo&&trainingMode)) && ((C.demo&&trainingMode) || cloud?.canCorrect?.(m.id)) && !finalStatuses.includes(m.status) && e.type==="ponto" && e.value>0 && !e.correctionOf && !timelineRows.some(row=>row.correctionOf===e.id)?`<p><button type="button" data-correct="${esc(e.id)}" data-correct-match="${esc(m.id)}">Anular ${m.sport==="Futebol"||m.sport==="Futsal"?"gol":"ponto"} com motivo</button></p>`:""}</article>`;
+        ${e.type==="substituição" && e.from && e.to && m.roster?.length ? `<p>Sai: ${esc((m.roster||[]).find(p=>p.id===e.from)?.name||e.from)} · Entra: ${esc((m.roster||[]).find(p=>p.id===e.to)?.name||e.to)}</p>`:""}${e.playerName ? `<p>${esc(e.number ? e.number+" · " : "")}${esc(e.playerName)}</p>` : ""}
+        <small>Etapa ${esc(e.stage)} · ${esc(e.at ? format(e.at?.toDate ? e.at.toDate().toISOString() : e.at) : "Horário não disponível no resumo")}</small>${e.reason?`<p>${esc(e.reason)}</p>`:""}${admin && (role==="admin" || ((e.operational || (C.demo&&trainingMode)) && ((C.demo&&trainingMode) || cloud?.canCorrect?.(m.id)) && !finalStatuses.includes(m.status))) && ["ponto","cartão amarelo","cartão vermelho","falta","substituição","tempo"].includes(e.type) && (e.type!=="ponto" || e.value>0) && !e.correctionOf && !timelineRows.some(row=>row.correctionOf===e.id)?`<p><button type="button" data-correct="${esc(e.id)}" data-correct-match="${esc(m.id)}">Anular lance com motivo</button></p>`:""}</article>`;
     }).join("") || '<p>Nenhum lance publicado neste histórico.</p>'}</div>
     <p class="muted">Até ${configuredHistoryPageSize()} lances por carregamento.</p>
     <p><button type="button" data-timeline-more ${timelineLoading || !timelineMore ? "disabled" : ""}>Carregar lances mais antigos</button></p>`;
@@ -1124,7 +1126,7 @@ async function dispatch(a) {
               }
             : null;
         const publicId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
-        const r = M.applyMatch(current, { ...a, publicId, championship: a.championshipId ? (latest.championships || []).find((c) => c.id === a.championshipId) : null }, original),
+        const r = M.applyMatch(current, { ...a, administrative:role==="admin", publicId, championship: a.championshipId ? (latest.championships || []).find((c) => c.id === a.championshipId) : null }, original),
           event = {
             ...r.detail,
             id: publicId,
@@ -1510,14 +1512,14 @@ function operate() {
               (x) => x.id,
               (x) => x.number + " • " + x.name,
             ),
-        )}</div><label>Detalhes / jogador que entra e sai<textarea name="text" maxlength="500"></textarea></label><p><button class="primary" ${!live ? "disabled" : ""}>Registrar lance</button></p></form>`
-  }</details></div><div class="card"><h3>Observações operacionais da súmula</h3>${role === "admin" ? `<form id="notes"><label>Ocorrências<textarea name="notes" maxlength="5000" ${locked ? "disabled" : ""}>${esc(m.notes)}</textarea></label><p><button ${locked ? "disabled" : ""}>Salvar observações</button></p></form>` : `<p>${esc(m.notes || "Sem observações.")}</p><p class="muted">Edição exclusiva do administrador.</p>`}</div></div></div><div class="card"><h3>Histórico da partida</h3>${
+        )}<label>Quem entra (somente substituição)<select name="playerIn"><option value="">Selecione quem entra</option>${options(m.roster,p=>p.id,p=>name(p.team)+" · "+p.number+" • "+p.name)}</select></label><label><input type="checkbox" name="goalkeeper"> Substituição de goleiro</label></div><p class="muted">Para substituições, o campo Atleta indica quem sai; selecione também quem entra. Ambos devem pertencer à equipe escolhida. O registro documenta a troca, sem impor regras de retorno ou limites de substituições.</p><label>Detalhes<textarea name="text" maxlength="500"></textarea></label><p><button class="primary" ${!live ? "disabled" : ""}>Registrar lance</button></p></form>`
+  }</details></div><div class="card"><h3>Observações operacionais da súmula</h3>${role === "admin" ? `<form id="notes"><label>Ocorrências<textarea name="notes" maxlength="5000">${esc(m.notes)}</textarea></label><p><button>Salvar observações</button></p></form>` : `<p>${esc(m.notes || "Sem observações.")}</p><p class="muted">Edição exclusiva do administrador.</p>`}</div></div></div><div class="card"><h3>Histórico da partida</h3><details><summary>Correções e retificações</summary><p>Anule o lance incorreto com justificativa: gol/ponto, cartão, falta, substituição ou pedido de tempo. O registro original permanece no histórico. Para substituir um lançamento errado por outro, anule e registre o correto.</p><p>O operador precisa da permissão de anulações e só corrige suas partidas abertas. Após encerramento ou homologação, e para pontos de sets já fechados, a retificação é exclusiva do administrador. A situação da partida e o relógio são preservados.</p><p>Para incluir um lance que faltou após o encerramento, o administrador reabre com motivo, registra o lance e encerra/homologa novamente. Situação, relógio, etapa e vínculo ao campeonato são corrigidos pelos respectivos controles, sem apagar o histórico.</p></details>${
     m.events
       .slice()
       .reverse()
       .map(
         (e) =>
-          `<div class="event"><div><b>${esc(eventLabel(e, m))}</b> ${[0, 1].includes(e.side) ? esc(name([m.home, m.away][e.side])) : ""}</div><p>${esc(eventDescription(e))}</p><small>${esc(format(e.at))} • ${e.gameMs != null ? "Jogo " + prettyTime(e.gameMs) + " • " : ""}Operador ${esc(responsibleLabel(e))} • Etapa ${esc(e.stage || "—")}${e.player ? " • " + esc(m.roster.find((p) => p.id === e.player)?.name || "") : ""}</small>${!locked && role === "admin" && e.type === "ponto" && e.value > 0 && !m.events.some((x) => x.correctionOf === e.id) ? ` <button data-correct="${e.id}">Estornar</button>` : ""}</div>`,
+          `<div class="event"><div><b>${esc(eventLabel(e, m))}</b> ${[0, 1].includes(e.side) ? esc(name([m.home, m.away][e.side])) : ""}</div><p>${esc(eventDescription(e))}</p><small>${esc(format(e.at))} • ${e.gameMs != null ? "Jogo " + prettyTime(e.gameMs) + " • " : ""}Operador ${esc(responsibleLabel(e))} • Etapa ${esc(e.stage || "—")}${e.player ? " • " + esc(m.roster.find((p) => p.id === e.player)?.name || "") : ""}</small>${role === "admin" && ["ponto","cartão amarelo","cartão vermelho","falta","substituição","tempo"].includes(e.type) && (e.type!=="ponto" || e.value > 0) && !e.correctionOf && !m.events.some((x) => x.correctionOf === e.id) ? ` <button data-correct="${e.id}">Anular lance com motivo</button>` : ""}</div>`,
       )
       .join("") || empty("Use Ver lances anteriores no placar para consultar o histórico operacional. A auditoria completa permanece com o administrador.")
   }</div>`;
@@ -2170,7 +2172,7 @@ function operatorAuthorizationGroups(operator,editionOptions) {
  const permissions=operator.permissions||[],checked=id=>permissions.includes(id)?"checked":"";
  const operations=authorizationSection("championships","Operar campeonatos","Libera placar, relógio, cartões e avisos nas categorias autorizadas, inclusive para novas partidas vinculadas.",championshipOperationPicker(operator),(operator.operatedChampionships||[]).length,true);
  const matches=authorizationSection("matches","Operar partidas específicas","Use para jogos avulsos ou exceções. Não precisa marcar novamente as partidas já liberadas por campeonato.",operatorMatchPicker(operator),(operator.matches||[]).length);
- const history=authorizationSection("history","Histórico e anulações","O operador consulta o histórico operacional das partidas autorizadas. Anular gols ou pontos exige esta permissão adicional e justificativa. Não permite apagar lances, alterar registros anteriores ou editar a súmula administrativa.",`<label class="confirmation-check"><input type="checkbox" name="historyCorrectPermission" ${checked("historyCorrections")}><span>Permitir anular gols/pontos com justificativa nas partidas que este operador pode operar.</span></label><p class="muted">A anulação vira um novo registro; o lance original e a auditoria completa permanecem na súmula do administrador. Não concede acesso a outras partidas.</p>`,permissions.includes("historyCorrections")?1:0);
+ const history=authorizationSection("history","Histórico e anulações","O operador consulta o histórico operacional das partidas autorizadas. Pode anular gols/pontos, cartões, faltas, substituições e pedidos de tempo durante jogos abertos. Retificações após o encerramento ou em sets fechados são exclusivas do administrador. Anular gols ou pontos exige esta permissão adicional e justificativa. Não permite apagar lances, alterar registros anteriores ou editar a súmula administrativa.",`<label class="confirmation-check"><input type="checkbox" name="historyCorrectPermission" ${checked("historyCorrections")}><span>Permitir anular lances com justificativa nas partidas que este operador pode operar.</span></label><p class="muted">A anulação vira um novo registro; o lance original e a auditoria completa permanecem na súmula do administrador. Não concede acesso a outras partidas.</p>`,permissions.includes("historyCorrections")?1:0);
  const registrations=authorizationSection("records","Cadastros esportivos","Conceda somente os cadastros necessários. Criar uma partida não concede automaticamente sua operação.",`<label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${checked("rosters")}><span>Equipes e jogadores: cadastrar, editar e importar, inclusive técnicos e elencos.</span></label><label class="confirmation-check"><input type="checkbox" name="championshipPermission" ${checked("championships")}><span>Campeonatos e temporadas: cadastrar e editar.</span></label><label class="confirmation-check"><input type="checkbox" name="matchCreatePermission" ${checked("matchesCreate")}><span>Partidas: cadastrar novos jogos.</span></label>`,permissions.filter(id=>["rosters","championships","matchesCreate"].includes(id)).length);
  const viewing=authorizationSection("view","Acompanhar jogos sem operar","Consulta dos jogos publicados. Esta seção não libera gols, cartões, relógio ou anulações.",`<fieldset><legend>Campeonatos para acompanhar</legend>${editionOptions}<label class="confirmation-check"><input type="checkbox" name="gamesViewPermission" ${checked("gamesView")}><span>Consultar todos os jogos publicados, sem alterar placares.</span></label></fieldset>`,(operator.followedEditions||[]).length+(permissions.includes("gamesView")?1:0));
  return `<div class="toolbar"><button type="button" data-permissions-expand="true">Expandir autorizações</button><button type="button" data-permissions-expand="false">Recolher autorizações</button></div>${operations}${matches}${history}${registrations}${viewing}`;
@@ -2209,7 +2211,7 @@ function usersView() {
     permissions.includes("championships") && "Campeonatos",
     permissions.includes("matchesCreate") && "Novas partidas",
   ].filter(Boolean).join(", ") || "Nenhum";
-  const permissionNames={rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos",historyCorrections:"Anular gols/pontos com justificativa"};
+  const permissionNames={rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos",historyCorrections:"Anular lances com justificativa"};
   const accessAuditRows=(state.accessAudit||[]).slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
   const accessAuditDate=value=>value?.toDate?.().toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})||"Aguardando confirmação do servidor";
   const accessAuditValue=(key,value)=>{
@@ -2359,6 +2361,7 @@ document.addEventListener("submit", async (e) => {
         side: Number(d.side),
         value: Number(d.value),
         player: d.player,
+        playerIn:d.playerIn,goalkeeper:!!d.goalkeeper,
         text: d.text,
       });
     else if (f.id === "stage")
@@ -2700,7 +2703,7 @@ document.addEventListener("click", async (e) => {
       });
     } else if (b.dataset.correct) {
       const correctionMatch=b.dataset.correctMatch||selected;
-      if(role!=="admin" && (!admin || (!(C.demo&&trainingMode) && !cloud?.canCorrect?.(correctionMatch))))throw Error("O administrador precisa autorizar anulações de gols/pontos para esta conta e esta partida.");
+      if(role!=="admin" && (!admin || (!(C.demo&&trainingMode) && !cloud?.canCorrect?.(correctionMatch))))throw Error("O administrador precisa autorizar anulações de lances para esta conta e esta partida.");
       const reason = prompt("Justificativa da anulação (fica registrada no histórico e na súmula):");
       if (reason)
         await dispatch({
@@ -2970,8 +2973,9 @@ document.addEventListener("change", async (e) => {
         }),
       );
     }
-    if (e.target.name === "side") {
+    if (e.target.name === "side" && e.target.closest("#event")) {
       const m = state.matches.find((m) => m.id === selected);
+      const incoming=$("#event [name=playerIn]");if(incoming)incoming.innerHTML='<option value="">Selecione quem entra</option>'+options(m.roster.filter(p=>p.team===[m.home,m.away][Number(e.target.value)]),p=>p.id,p=>p.number+" • "+p.name);
       $("[name=player]").innerHTML =
         '<option value="">Sem atleta</option>' +
         options(
@@ -3173,7 +3177,7 @@ function tutorialSteps() {
   if (role==="admin" || canManageChampionships()) steps.push(step("Campeonatos e fichas", "Cadastre temporada, modalidade e categoria. Use as fichas de inscrição com camisa e posição. Encerrar um campeonato impede novas partidas vinculadas, sem encerrar os jogos existentes.", "#view", "championships"));
   if (role==="admin" || canCreateMatches()) steps.push(step("Cadastrar partida", "Vincule o campeonato, escolha equipes diferentes e informe data e local. O vínculo identifica a competição e ajuda a conceder operação por campeonato.", "#view", "createMatch"));
   if (role==="admin") steps.push(
-    step("Anulação e correção", "Na auditoria privada da partida, Estornar exige justificativa e preserva o lançamento original. Partidas encerradas precisam de reabertura com motivo. O tour não estorna nem reabre.", "#view", "matches", true),
+    step("Anulação e correção", "Anular lance com motivo preserva o original. Operadores autorizados corrigem jogos abertos; o administrador também retifica partidas encerradas e sets fechados. Para acrescentar lances que não foram registrados, o administrador reabre com motivo. O tour não altera registros.", "#view", "matches", true),
     step("Classificação", "Confira a classificação dos campeonatos de futebol disponíveis e a situação das partidas usadas no cálculo.", "#view", "standings"),
     step("Operadores e partidas", "Monitore os operadores e as partidas. Aprovação e atribuição são controles distintos; acompanhar um campeonato não equivale a operar.", "#view", "monitor"),
     step("Usuários e permissões", "Aprove, bloqueie e conceda operação por partida ou campeonato inteiro. A exclusão de acesso preserva auditoria e não apaga automaticamente o login do Firebase Authentication.", "#view", "users"),
@@ -3918,7 +3922,7 @@ function teamAthleteEvents(matches,teamId){
   for(const e of m.events||[]){if(e.side!==side||!["ponto","cartão amarelo","cartão vermelho","falta"].includes(e.type))continue;
    const player=e.player||"",key=m.sport+":"+player;
    if(!rows.has(key))rows.set(key,{sport:m.sport,player:player?(m.roster||[]).find(p=>p.id===player)?.name||state.players.find(p=>p.id===player)?.name||player:"Sem atleta informado",points:0,yellow:0,red:0,fouls:0});
-   const r=rows.get(key);if(e.type==="ponto")r.points+=Number(e.value)||0;if(e.type==="cartão amarelo")r.yellow++;if(e.type==="cartão vermelho")r.red++;if(e.type==="falta")r.fouls++;
+   const r=rows.get(key);if(e.type==="ponto")r.points+=Number(e.value)||0;if(e.type==="cartão amarelo")r.yellow+=e.correctionOf?-1:1;if(e.type==="cartão vermelho")r.red+=e.correctionOf?-1:1;if(e.type==="falta")r.fouls+=e.correctionOf?-1:1;
   }
  }
  return [...rows.values()];
@@ -4033,7 +4037,7 @@ let guidedStartBusy=false;
 function matchStartGuide(m){
  const ended=["Encerrada","Homologada","Cancelada"].includes(m.status),running=!!m.clock?.running,live=m.status==="Ao vivo";
  const label=live?(running?"Jogo ao vivo e relógio em andamento":"Jogo ao vivo • relógio parado"):ended?"Partida finalizada ou bloqueada":["Pausada","Suspensa"].includes(m.status)?"Partida interrompida":"Prepare o início da partida";
- return `<section class="card match-guide"><span class="tag">MESA DE OPERAÇÃO</span><h3 data-clock-guide-label>${label}</h3><p>${ended?"Confira a súmula e o histórico. Reabrir exige administrador e justificativa.":running?"Use os botões de pontuação para registrar os lances. Pausar o jogo também para o cronômetro.":"Confira as equipes e a etapa. Você pode configurar o tempo antes de começar ou usar o relógio atual."}</p>${!ended?`<div class="toolbar">${!running?`<button type="button" class="primary" data-guided-start ${guidedStartBusy?"disabled":""}>${live?"Iniciar cronômetro":["Pausada","Suspensa"].includes(m.status)?"Retomar jogo e cronômetro":"Iniciar jogo e cronômetro"}</button><button type="button" data-open-clock>Configurar tempo</button>`:""}</div><small>Iniciar/retomar preserva o tempo acumulado. Ajustes e mudanças de etapa continuam disponíveis abaixo.</small>`:""}</section>`;
+ return `<section class="card match-guide"><span class="tag">MESA DE OPERAÇÃO</span><h3 data-clock-guide-label>${label}</h3><p>${ended?"Confira a súmula e o histórico. O administrador pode anular lances e retificar observações sem reabrir. Para acrescentar novos lances, reabra com justificativa.":running?"Use os botões de pontuação para registrar os lances. Pausar o jogo também para o cronômetro.":"Confira as equipes e a etapa. Você pode configurar o tempo antes de começar ou usar o relógio atual."}</p>${!ended?`<div class="toolbar">${!running?`<button type="button" class="primary" data-guided-start ${guidedStartBusy?"disabled":""}>${live?"Iniciar cronômetro":["Pausada","Suspensa"].includes(m.status)?"Retomar jogo e cronômetro":"Iniciar jogo e cronômetro"}</button><button type="button" data-open-clock>Configurar tempo</button>`:""}</div><small>Iniciar/retomar preserva o tempo acumulado. Ajustes e mudanças de etapa continuam disponíveis abaixo.</small>`:""}</section>`;
 }
 function updateArenaFavicon(){
  const logo=state.settings.logo||"";
