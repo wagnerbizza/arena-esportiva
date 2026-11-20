@@ -3828,13 +3828,32 @@ document.addEventListener("click",e=>{
 
 // 22 — Painel público: estatísticas dos jogos publicados e diversão apenas local.
 let publicArea="active",sportChallengeIndex=0,sportChallengeAnswer="",quizHits=0,quizAttempts=0;
+let quizTopic="Todos";
 const sportChallenges=[
  {question:"O placar estava 2 × 1 e a equipe visitante marcou. Como fica?",answers:["3 × 1","2 × 2","2 × 1"],correct:1,explanation:"O gol visitante acrescenta um ao segundo número: 2 × 2."},
  {question:"Um time marcou 3 gols e sofreu 1. Qual é o saldo de gols?",answers:["+2","+4","−2"],correct:0,explanation:"Saldo é gols marcados menos sofridos: 3 − 1 = +2."},
  {question:"O relógio marca 12:45. Após 15 segundos, qual será o tempo?",answers:["12:60","13:15","13:00"],correct:2,explanation:"Quinze segundos completam o minuto: 13:00."},
  {question:"Qual jogador tem a função de proteger o gol no futebol?",answers:["Goleiro","Levantador","Pivô"],correct:0,explanation:"O goleiro atua na defesa do gol."},
  {question:"Em qual modalidade a cesta é usada para pontuar?",answers:["Vôlei","Basquete","Futebol"],correct:1,explanation:"A cesta faz parte do basquete."},
- {question:"Qual destas modalidades tem uma rede dividindo a quadra?",answers:["Futebol","Basquete","Vôlei"],correct:2,explanation:"No vôlei, a rede separa os dois lados da quadra."}
+ {question:"Qual destas modalidades tem uma rede dividindo a quadra?",answers:["Futebol","Basquete","Vôlei"],correct:2,explanation:"No vôlei, a rede separa os dois lados da quadra."},
+ {"topic":"Matemática","question":"O jogo começou às 14h20 e durou 40 minutos. A que horas terminou?","answers":["14h40","15h00","15h20"],"correct":1,"explanation":"Somar 40 minutos a 14h20 resulta em 15h00."},
+ {"topic":"Matemática","question":"Uma equipe fez 4 pontos em cada um de 3 períodos. Quantos pontos fez?","answers":["7","9","12"],"correct":2,"explanation":"São três grupos de quatro: 4 × 3 = 12."},
+ {"topic":"Matemática","question":"O placar está 5 × 3. Quantos gols separam as equipes?","answers":["2","3","8"],"correct":0,"explanation":"A diferença é 5 − 3 = 2."},
+ {"topic":"Matemática","question":"Metade de 20 participantes está em cada equipe. Quantos há por equipe?","answers":["5","10","15"],"correct":1,"explanation":"20 dividido por 2 é igual a 10."},
+ {"topic":"Matemática","question":"Restam 2 minutos e 30 segundos. Quantos segundos são?","answers":["120","130","150"],"correct":2,"explanation":"Dois minutos são 120 segundos; mais 30 são 150."},
+ {"topic":"Matemática","question":"Um time marcou 6 gols e sofreu 2. Qual é o saldo?","answers":["+4","+8","−4"],"correct":0,"explanation":"Saldo é a diferença: 6 − 2 = +4."},
+ {"topic":"Matemática","question":"Quatro equipes jogam uma vez contra cada uma das outras. Quantos jogos acontecem?","answers":["4","6","12"],"correct":1,"explanation":"Cada par se enfrenta uma vez: 4 × 3 ÷ 2 = 6."},
+ {"topic":"Matemática","question":"Uma equipe tinha 8 pontos e marcou mais 3. Qual é o novo total?","answers":["5","10","11"],"correct":2,"explanation":"A soma é 8 + 3 = 11."},
+ {"topic":"Convivência","question":"Qual atitude representa respeito ao adversário?","answers":["Cumprimentar e competir com respeito","Provocar após cada erro","Impedir o cumprimento final"],"correct":0,"explanation":"Competir e respeitar o adversário são atitudes compatíveis."},
+ {"topic":"Convivência","question":"Você discorda de uma marcação. Qual é a atitude mais adequada?","answers":["Insultar a arbitragem","Usar o diálogo respeitoso pelos canais do evento","Abandonar a organização do jogo"],"correct":1,"explanation":"O diálogo respeitoso ajuda a resolver divergências sem agressões."},
+ {"topic":"Convivência","question":"Qual conduta ajuda a manter o espaço esportivo organizado?","answers":["Deixar lixo na quadra","Esconder os materiais","Recolher materiais e resíduos após o uso"],"correct":2,"explanation":"Cuidar do espaço compartilhado facilita as próximas atividades."},
+ {"topic":"Convivência","question":"Uma pessoa está sendo excluída da atividade. O que favorece a participação?","answers":["Conversar e buscar formas acessíveis de incluí-la","Ignorar a situação","Criar barreiras sem conversar"],"correct":0,"explanation":"Conversar e adaptar a atividade quando possível favorece a participação."},
+ {"topic":"Convivência","question":"O adversário fez uma boa jogada. Qual atitude combina com espírito esportivo?","answers":["Desmerecer a jogada","Reconhecer o mérito","Incentivar ofensas"],"correct":1,"explanation":"Reconhecer uma boa jogada demonstra respeito."},
+ {"topic":"Vôlei","question":"No vôlei de quadra oficial, quantos jogadores de cada equipe ficam em jogo?","answers":["5","7","6"],"correct":2,"explanation":"O vôlei de quadra tem seis jogadores por equipe em jogo."},
+ {"topic":"Vôlei","question":"Em qual sentido os jogadores rodam ao recuperar o direito de sacar?","answers":["Horário","Anti-horário","Sem ordem"],"correct":0,"explanation":"O rodízio no vôlei de quadra é feito no sentido horário."},
+ {"topic":"Vôlei","question":"Qual ação coloca a bola em jogo no início de uma disputa?","answers":["Bloqueio","Saque","Manchete"],"correct":1,"explanation":"O saque coloca a bola em jogo, enviando-a ao campo adversário."},
+ {"topic":"Futebol","question":"No futebol, qual peça do equipamento identifica a equipe visualmente?","answers":["Rede","Placar","Camisa de jogo"],"correct":2,"explanation":"A camisa faz parte do uniforme e ajuda a identificar os participantes."},
+ {"topic":"Futebol","question":"No futebol de campo, receber a bola diretamente de um lateral causa impedimento?","answers":["Não","Sempre","Apenas no primeiro tempo"],"correct":0,"explanation":"Não há infração de impedimento ao receber a bola diretamente de um arremesso lateral."}
 ];
 function publicStatistics(){
  const games=state.matches.filter(m=>!publicFilter||m.sport===publicFilter),ended=games.filter(m=>["Encerrada","Homologada"].includes(m.status));
@@ -3851,12 +3870,14 @@ function publicStatistics(){
   ${!publicFilter||publicFilter==="Futebol"?`<p class="muted public-goals">Futebol: ${goals} gol(s) em ${football.length} partida(s) encerrada(s) ou homologada(s).</p>`:""}`;
 
 }
+function quizQuestions(){return sportChallenges.filter(q=>quizTopic==="Todos"||(q.topic||"Geral")===quizTopic);}
+function currentSportChallenge(){const questions=quizQuestions();return questions[sportChallengeIndex%questions.length];}
 function publicChallenge(){
- const q=sportChallenges[sportChallengeIndex%sportChallenges.length],answered=sportChallengeAnswer!=="";
- return `<section class="card sport-challenge"><span class="tag">INTERVALO ESPORTIVO</span><h2>Desafio rápido</h2><p>Uma brincadeira para aprender enquanto acompanha as partidas. Suas respostas ficam apenas nesta página.</p><p class="quiz-score">Seu placar: <strong>${quizHits} acerto(s) em ${quizAttempts} resposta(s)</strong></p><h3>${esc(q.question)}</h3><div class="toolbar">${q.answers.map((a,i)=>`<button type="button" data-sport-answer="${i}" ${answered?"disabled":""}>${esc(a)}</button>`).join("")}</div>${answered?`<p role="status"><strong>${Number(sportChallengeAnswer)===q.correct?"Acertou!":"Vamos aprender!"}</strong> ${esc(q.explanation)}</p><button type="button" data-sport-next>Próximo desafio</button>`:""}</section>`;
+ const q=currentSportChallenge(),answered=sportChallengeAnswer!=="";
+ return `<section class="card sport-challenge"><span class="tag">INTERVALO ESPORTIVO</span><h2>Quiz esportivo e convivência</h2><div class="arena-quiz-controls"><label>Tema<select data-quiz-topic>${["Todos","Geral","Matemática","Convivência","Vôlei","Futebol"].map(topic=>`<option ${topic===quizTopic?"selected":""}>${topic}</option>`).join("")}</select></label><button type="button" data-quiz-restart>Recomeçar quiz</button></div><p>Desafio ${sportChallengeIndex%quizQuestions().length+1} de ${quizQuestions().length} · ${esc(q.topic||"Geral")}</p><p>Uma brincadeira para aprender enquanto acompanha as partidas. Suas respostas ficam apenas nesta página.</p><p class="quiz-score">Seu placar: <strong>${quizHits} acerto(s) em ${quizAttempts} resposta(s)</strong></p><h3>${esc(q.question)}</h3><div class="toolbar">${q.answers.map((a,i)=>`<button type="button" data-sport-answer="${i}" ${answered?"disabled":""}>${esc(a)}</button>`).join("")}</div>${answered?`<p role="status"><strong>${Number(sportChallengeAnswer)===q.correct?"Acertou!":"Vamos aprender!"}</strong> ${esc(q.explanation)}</p><button type="button" data-sport-next>Próximo desafio</button>`:""}</section>`;
 }
 function publicHub(){
- const tabs=[["active","Jogos atuais"],["live","Ao vivo"],["schedule","Agenda"],["results","Resultados"],["teams","Equipes"],["standings","Classificação"],["fun","Diversão"]];
+ const tabs=[["active","Jogos atuais"],["live","Ao vivo"],["schedule","Agenda"],["results","Resultados"],["teams","Equipes"],["standings","Classificação"],["fun","Diversão"],["news","Notícias"]];
  return `${publicStatistics()}${publicSportSummary()}<nav class="public-navigation" aria-label="Conteúdo do painel público">${tabs.map(([id,label])=>`<button type="button" data-public-area="${id}" class="${id===publicArea?"active":""}" ${id===publicArea?'aria-current="page"':""}>${label}</button>`).join("")}</nav><div id="publicHubContent">${publicHubContent()}</div>`;
 }
 function publicTeamsPanel() {
@@ -3868,10 +3889,15 @@ function publicTeamsPanel() {
   empty("Nenhuma equipe nas partidas desta seleção.")}</div></section>`;
 }
 function publicHubContent(){
+ if(publicArea==="news")return publicNews();
  if(publicArea==="teams")return publicTeamsPanel();
  if(publicArea==="fun")return fanZone();
  if(publicArea==="standings")return standingsPanel()||empty("A classificação estará disponível quando houver partidas vinculadas a um campeonato de futebol.");
  return `${publicArea==="active"?'<p class="muted">Partidas encerradas, homologadas e canceladas ficam em <strong>Resultados</strong>.</p>':""}<div id="publicMatches" class="grid">${publicMatches(publicFilter)}</div>${publicArea==="active"?'<section class="card public-locations"><h2>Esporte em diferentes locais</h2><p>Veja o local informado em cada partida. Use a modalidade, a agenda e os jogos ao vivo para acompanhar os eventos publicados pela organização.</p></section>':""}`;
+}
+function publicNews(){
+ const sources=[{name:"Agência Brasil · Esportes",url:"https://agenciabrasil.ebc.com.br/esportes",text:"Cobertura jornalística de modalidades, competições e acontecimentos esportivos."},{name:"Ministério do Esporte",url:"https://www.gov.br/esporte/pt-br/assuntos/noticias",text:"Informações oficiais sobre programas, projetos e iniciativas esportivas."}];
+ return `<section class="card"><span class="tag">INFORMAÇÃO ESPORTIVA</span><h2>Notícias nas fontes</h2><p>Escolha uma fonte para ler as notícias atualizadas no próprio portal. Estes são atalhos externos; a Arena não publica manchetes automaticamente.</p></section><div class="arena-news-grid">${sources.map(source=>`<article class="card"><h3>${esc(source.name)}</h3><p>${esc(source.text)}</p><a class="button" href="${source.url}" target="_blank" rel="noopener noreferrer">Ler notícias na fonte</a></article>`).join("")}</div>`;
 }
 function googleSymbol(){return '<svg class="google-symbol" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.32 2.98-7.36Z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.41l-3.24-2.51c-.9.6-2.05.97-3.38.97-2.6 0-4.8-1.76-5.59-4.12H3.07v2.59A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.41 13.93a6 6 0 0 1 0-3.86V7.48H3.07a10 10 0 0 0 0 9.04l3.34-2.59Z"/><path fill="#EA4335" d="M12 5.95c1.47 0 2.78.5 3.82 1.5l2.86-2.87A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.93 5.48l3.34 2.59C7.2 7.7 9.4 5.95 12 5.95Z"/></svg>';}
 document.addEventListener("click",e=>{
@@ -3895,9 +3921,12 @@ document.addEventListener("click",e=>{
   return;
  }
  const answer=e.target.closest("[data-sport-answer]");
- if(answer&&sportChallengeAnswer===""){sportChallengeAnswer=answer.dataset.sportAnswer;quizAttempts++;if(Number(sportChallengeAnswer)===sportChallenges[sportChallengeIndex%sportChallenges.length].correct)quizHits++;const out=$("#publicHubContent");if(out)out.innerHTML=fanZone();return;}
+ if(answer&&sportChallengeAnswer===""&&Number.isInteger(Number(answer.dataset.sportAnswer))&&Number(answer.dataset.sportAnswer)>=0&&Number(answer.dataset.sportAnswer)<currentSportChallenge().answers.length){sportChallengeAnswer=answer.dataset.sportAnswer;quizAttempts++;if(Number(sportChallengeAnswer)===currentSportChallenge().correct)quizHits++;const out=$("#publicHubContent");if(out)out.innerHTML=fanZone();return;}
  if(e.target.closest("[data-sport-next]")){sportChallengeIndex++;sportChallengeAnswer="";const out=$("#publicHubContent");if(out)out.innerHTML=fanZone();}
 });
+
+document.addEventListener("change",event=>{if(admin||!event.target.matches("[data-quiz-topic]"))return;quizTopic=event.target.value;sportChallengeIndex=0;sportChallengeAnswer="";quizHits=0;quizAttempts=0;const out=$("#publicHubContent");if(out)out.innerHTML=fanZone();});
+document.addEventListener("click",event=>{if(admin||!event.target.closest("[data-quiz-restart]"))return;sportChallengeIndex=0;sportChallengeAnswer="";quizHits=0;quizAttempts=0;const out=$("#publicHubContent");if(out)out.innerHTML=fanZone();});
 
 // 24 — Ficha da equipe. Dados atuais, partidas e lances têm escopos separados.
 let teamProfileContext="";
@@ -4072,13 +4101,20 @@ function publicSportSummary(){
  return `<details class="card public-sport-summary"><summary>Estatísticas por modalidade • jogos concluídos</summary><p>Somente partidas encerradas ou homologadas nesta seleção. No vôlei, contamos sets vencidos; as modalidades ficam separadas.</p>${table(["Modalidade","Jogos","Total","Média por jogo"],[...groups].sort(([a],[b])=>a.localeCompare(b,"pt-BR")).map(([sport,r])=>tr([sport,r.games,r.total+" "+(sport.startsWith("Vôlei")?"sets":sport==="Futebol"||sport==="Futsal"||sport==="Handebol"?"gols":"pontos"),(r.total/r.games).toLocaleString("pt-BR",{maximumFractionDigits:1})])))}</details>`;
 }
 // Jogos do público são locais: nenhuma resposta escreve resultados no Firebase.
+let ticState=null;
 let fanActivity="quiz",memoryDeck=[],memoryOpen=[],memoryMatched=[],memoryMoves=0;
 const memorySymbols=["⚽","🏀","🏐","🏆","🥇","🎯"];
 function resetMemory(){memoryDeck=memorySymbols.flatMap((symbol,pair)=>[{symbol,pair},{symbol,pair}]);for(let i=memoryDeck.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[memoryDeck[i],memoryDeck[j]]=[memoryDeck[j],memoryDeck[i]];}memoryOpen=[];memoryMatched=[];memoryMoves=0;}
+function ticTacToePanel(){
+ const game=window.ArenaFun;if(!game)return '<section class="card"><p>Recarregue a página para carregar o jogo da velha.</p></section>';
+ if(!ticState)ticState=game.fresh();
+ const text=ticState.result==="X"?"Você venceu!":ticState.result==="O"?"O computador venceu.":ticState.result==="draw"?"Empate!":"Sua vez: escolha uma casa vazia.";
+ return `<section class="card"><span class="tag">RACIOCÍNIO E ESTRATÉGIA</span><h2>Jogo da velha</h2><p>Você joga com X; o computador joga com O. Complete três símbolos em uma linha, coluna ou diagonal.</p><p role="status">${text}</p><div class="arena-game-grid" role="group" aria-label="Tabuleiro do jogo da velha">${ticState.board.map((cell,i)=>`<button type="button" data-tic-cell="${i}" aria-label="Linha ${Math.floor(i/3)+1}, coluna ${i%3+1}: ${cell||"vazia"}" ${cell||ticState.result?"disabled":""}>${cell||"·"}</button>`).join("")}</div><button type="button" data-tic-reset>Nova partida de jogo da velha</button></section>`;
+}
 function fanZone(){
  if(!memoryDeck.length)resetMemory();
  const memory=`<section class="card"><span class="tag">JOGO DA MEMÓRIA</span><h2>Encontre os pares esportivos</h2><p>Abra duas cartas. Quando forem diferentes, clique em Virar novamente para continuar.</p><p role="status">${memoryMatched.length/2} de 6 pares • ${memoryMoves} tentativa(s)${memoryMatched.length===12?" • Parabéns, você completou!":""}</p><div class="memory-grid">${memoryDeck.map((card,i)=>{const show=memoryOpen.includes(i)||memoryMatched.includes(i);return `<button type="button" data-memory-card="${i}" aria-label="${show?card.symbol:"Carta "+(i+1)+", fechada"}" ${show||memoryOpen.length===2?"disabled":""}>${show?card.symbol:"?"}</button>`;}).join("")}</div><div class="toolbar">${memoryOpen.length===2?'<button type="button" data-memory-turn>Virar novamente</button>':""}<button type="button" data-memory-reset>Reiniciar memória</button></div></section>`;
- return `<section class="card fan-welcome"><span class="tag">ARQUIBANCADA INTERATIVA</span><h2>Torça, acompanhe e divirta-se</h2><p>Os jogos continuam nas abas Ao vivo e Agenda. As brincadeiras são individuais e não alteram placares nem criam rankings públicos.</p><nav class="toolbar" aria-label="Brincadeiras"><button type="button" data-fan-activity="quiz" aria-pressed="${fanActivity==="quiz"}">Quiz esportivo</button><button type="button" data-fan-activity="memory" aria-pressed="${fanActivity==="memory"}">Memória esportiva</button></nav></section>${fanActivity==="memory"?memory:publicChallenge()}`;
+ return `<section class="card fan-welcome"><span class="tag">ARQUIBANCADA INTERATIVA</span><h2>Torça, acompanhe e divirta-se</h2><p>Os jogos continuam nas abas Ao vivo e Agenda. As brincadeiras são individuais e não alteram placares nem criam rankings públicos.</p><nav class="toolbar" aria-label="Brincadeiras"><button type="button" data-fan-activity="quiz" aria-pressed="${fanActivity==="quiz"}">Quiz esportivo</button><button type="button" data-fan-activity="memory" aria-pressed="${fanActivity==="memory"}">Memória esportiva</button><button type="button" data-fan-activity="tic" aria-pressed="${fanActivity==="tic"}">Jogo da velha</button></nav></section>${fanActivity==="memory"?memory:fanActivity==="tic"?ticTacToePanel():publicChallenge()}`;
 }
 document.addEventListener("click",e=>{
  if(admin)return;const b=e.target.closest("[data-fan-activity],[data-memory-card],[data-memory-turn],[data-memory-reset]");if(!b)return;
@@ -4088,6 +4124,8 @@ document.addEventListener("click",e=>{
  if(b.hasAttribute("data-memory-card")){const i=Number(b.dataset.memoryCard);if(!Number.isInteger(i)||!memoryDeck[i]||memoryOpen.length===2||memoryOpen.includes(i)||memoryMatched.includes(i))return;memoryOpen.push(i);if(memoryOpen.length===2){memoryMoves++;if(memoryDeck[memoryOpen[0]].pair===memoryDeck[memoryOpen[1]].pair){memoryMatched.push(...memoryOpen);memoryOpen=[];}}}
  const out=$("#publicHubContent");if(out)out.innerHTML=fanZone();
 });
+
+document.addEventListener("click",event=>{if(admin)return;const button=event.target.closest("[data-tic-cell],[data-tic-reset]");if(!button||!window.ArenaFun)return;if(button.hasAttribute("data-tic-reset"))ticState=window.ArenaFun.fresh();else ticState=window.ArenaFun.play(ticState||window.ArenaFun.fresh(),Number(button.dataset.ticCell));const out=$("#publicHubContent");if(out)out.innerHTML=fanZone();});
 
 // 28 — Visualizações iniciais mostram os jogos atuais. Nunca remove registros do estado.
 let overviewGameScope="active";
