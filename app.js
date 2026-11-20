@@ -21,6 +21,7 @@ const $ = (s) => document.querySelector(s),
         })[c],
     );
 let testRawState = null;
+let systemCheckReport=null,systemCheckBusy=false,systemCheckAbort=null;
 let arenaDrawerOpen=false,arenaOpenGroups=new Map(),arenaInertNodes=[];
 let arenaRailCollapsed=false,arenaRailPeek=false;
 try { arenaRailCollapsed=localStorage.getItem("arena-barra-recolhida-v1")==="1"; } catch {}
@@ -1060,6 +1061,7 @@ async function boot() {
         refresh();
       },
       onSession: (u, r, access = {}) => {
+        if(user?.uid!==u?.uid || r!=="admin"){systemCheckAbort?.abort();systemCheckReport=null;}
         accessStatus = access.status || "loading";
         if(user?.uid!==u?.uid || r!=="admin"){credentialRows=[];credentialLoaded=false;testSelection.clear();testPlan=null;testBackup=false;}
         user = u;
@@ -1278,6 +1280,7 @@ function render() {
     ["auditReports", "Relatório geral"],
     ["certificates", "Certificados"],
     ["cleanup", "Limpeza de testes"],
+    ["systemCheck", "Verificar sistema"],
     ["testData", "Dados de teste"],
     ["credentials", "Credenciais de eventos"],
     ["settings", "Configurações"],
@@ -1322,6 +1325,7 @@ function publicMatches(filter) {
       : empty("Nenhuma partida publicada para esta seleção.");
 }
 function view() {
+  if(section==="systemCheck")return role==="admin"?systemDiagnosticsView():empty("Verificação exclusiva do administrador.");
   if(section==="qrCodes")return qrCodesView();
   if(section==="profiles")return profilesView();
   if(section==="preferences")return personalPreferencesView();
@@ -3521,6 +3525,53 @@ function setupAccountTools(){
 }
 setupAccountTools();
 
+// Monitor administrativo: nunca envia ações de cadastro ou operação ao Firebase.
+function systemDiagnosticResults() {
+ const r=systemCheckReport;
+ if(!r)return '<p>Pronto para iniciar. Nenhuma verificação executada nesta sessão.</p>';
+ const labels={pending:"Aguardando",running:"⏳ Em andamento",passed:"✅ Passou",failed:"❌ Falhou",manual:"⚠️ Conferência pendente"};
+ const count=status=>r.rows.filter(row=>row.status===status).length;
+ const done=r.rows.filter(row=>!["pending","running"].includes(row.status)).length;
+ return `<p role="status">${r.finishedAt?(r.cancelled?"Verificação interrompida":"Verificação concluída"):"Verificação em andamento"} • ${done} de ${r.rows.length}</p><label>Progresso <progress max="${r.rows.length||1}" value="${done}">${done}/${r.rows.length}</progress></label>
+ <p><strong>${count("passed")} passaram • ${count("failed")} falharam • ${count("manual")} precisam de conferência</strong></p><p class="muted">${esc(r.mode)}. Os resultados representam somente os testes listados; não certificam o sistema inteiro.</p>
+ <div class="tablewrap"><table><thead><tr><th>Grupo / verificação</th><th>Resultado</th><th>Detalhes</th></tr></thead><tbody>${r.rows.map(row=>`<tr><td>${esc(row.group)}<small class="cell-sub">${esc(row.title)}</small></td><td>${esc(labels[row.status]||row.status)}</td><td>${esc(row.detail)}${row.durationMs?`<small class="cell-sub">${row.durationMs} ms</small>`:""}</td></tr>`).join("")}</tbody></table></div>`;
+}
+function systemDiagnosticsView() {
+ return `<section class="card"><h2>Verificar sistema</h2><p>Execute simulações locais e consultas pequenas ao servidor. Nenhum cadastro, partida, conta, permissão ou histórico real é criado, alterado ou excluído.</p>
+ <p>Os testes locais usam dados fictícios em memória. As consultas verificam a leitura de uma amostra de até um registro por área usando sua conta administrativa. Não testam a gravação no Firebase nem substituem a validação de permissões com outra identidade.</p>
+ <div class="toolbar"><button type="button" class="primary" data-system-check-start ${systemCheckBusy?"disabled":""}>${systemCheckBusy?"Verificando…":"Iniciar verificação"}</button><button type="button" data-system-check-stop ${!systemCheckBusy?"disabled":""}>Interromper após consulta atual</button><button type="button" data-system-check-json ${!systemCheckReport||systemCheckBusy?"disabled":""}>Baixar relatório (JSON)</button><button type="button" data-system-check-text ${!systemCheckReport||systemCheckBusy?"disabled":""}>Baixar relatório (texto)</button></div>
+ <p class="muted">A verificação pode levar até alguns minutos, conforme a conexão. Você pode sair desta aba e voltar ao monitor. Os resultados ficam nesta sessão e não são enviados para outras pessoas.</p></section><section class="card" id="systemDiagnosticMonitor" aria-label="Monitor de verificação">${systemDiagnosticResults()}</section>`;
+}
+function updateSystemDiagnosticMonitor() {
+ if(role!=="admin"||section!=="systemCheck")return;
+ const out=$("#systemDiagnosticMonitor");if(out)out.innerHTML=systemDiagnosticResults();
+ for(const button of document.querySelectorAll("[data-system-check-start],[data-system-check-stop],[data-system-check-json],[data-system-check-text]"))button.disabled=button.hasAttribute("data-system-check-stop")?!systemCheckBusy:systemCheckBusy||(!button.hasAttribute("data-system-check-start")&&!systemCheckReport);
+}
+document.addEventListener("click",async event=>{
+ const button=event.target.closest("[data-system-check-start],[data-system-check-stop],[data-system-check-json],[data-system-check-text]");
+ if(!button||!admin||role!=="admin")return;
+ if(button.hasAttribute("data-system-check-stop")){systemCheckAbort?.abort();return;}
+ if(button.hasAttribute("data-system-check-json")||button.hasAttribute("data-system-check-text")){
+  if(systemCheckBusy||!systemCheckReport)return;
+  if(button.hasAttribute("data-system-check-json"))download("arena-diagnostico.json",JSON.stringify(systemCheckReport,null,2));
+  else download("arena-diagnostico.txt",["ARENA — VERIFICAÇÃO DO SISTEMA",systemCheckReport.scope,"Início: "+systemCheckReport.startedAt,"Fim: "+systemCheckReport.finishedAt,...systemCheckReport.rows.map(row=>`[${({passed:"PASSOU",failed:"FALHOU",manual:"CONFERIR"})[row.status]||row.status}] ${row.group} / ${row.title}: ${row.detail}`)].join("\n"),"text/plain;charset=utf-8");
+  return;
+ }
+ if(systemCheckBusy)return;
+ const owner=user?.uid,controller=new AbortController();systemCheckAbort=controller;systemCheckBusy=true;systemCheckReport=null;updateSystemDiagnosticMonitor();
+ const valid=()=>role==="admin"&&user?.uid===owner;
+ try{
+  const {runSystemChecks}=await import("./system-check.js");
+  if(!valid()){controller.abort();return;}
+  await runSystemChecks({D,M,training:C.demo,settings:{...state.settings},signal:controller.signal,
+   readServer:!C.demo&&cloud?kind=>cloud.diagnosticRead(kind):null,
+   fetchAsset:async file=>{const url=new URL(file,location.href);if(url.origin!==location.origin)throw Error("Arquivo fora do site.");const response=await fetch(url,{cache:"no-store",signal:controller.signal});if(!response.ok)throw Error("Arquivo não carregou: HTTP "+response.status);return response.text();},
+   onUpdate:report=>{if(!valid()){controller.abort();return;}systemCheckReport=report;updateSystemDiagnosticMonitor();}
+  });
+ }catch(error){if(valid()){systemCheckReport={version:1,startedAt:new Date().toISOString(),finishedAt:new Date().toISOString(),scope:"Diagnóstico não concluído.",mode:"Carregamento do monitor",rows:[{group:"Monitor",title:"Iniciar verificação",status:"failed",detail:"Não foi possível carregar o monitor. Confira se system-check.js foi publicado e recarregue a página.",durationMs:0}]};toast(systemCheckReport.rows[0].detail,true);}}
+ finally{if(systemCheckAbort===controller){systemCheckBusy=false;systemCheckAbort=null;if(valid())updateSystemDiagnosticMonitor();}}
+});
+
 // 21 — Organização da central. Permissões continuam validadas pelo Firebase.
 const workspaceDefinitions=[
  {id:"games",title:"Jogos",intro:"Operação, agenda e resultados",sections:["overview","matches","createMatch","standings"]},
@@ -3531,7 +3582,7 @@ const workspaceDefinitions=[
  {id:"sharing",title:"QR codes e links",intro:"Compartilhar o painel e os eventos",sections:["qrCodes"]},
  {id:"credentials",title:"Credenciais",intro:"Identificação da organização e dos eventos",sections:["credentials"]},
  {id:"administration",title:"Administração",intro:"Operadores e permissões",sections:["monitor","users"]},
- {id:"maintenance",title:"Backups e suporte",intro:"Guias, testes e recuperação",sections:["documentation","testData","cleanup"]}
+ {id:"maintenance",title:"Backups e suporte",intro:"Guias, testes e recuperação",sections:["systemCheck","documentation","testData","cleanup"]}
 ];
 function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
 function publicPanelURL(edition="") {
@@ -4033,6 +4084,7 @@ function getShortcutCatalog(){
   if(role==="admin")for(const [id,label] of [["matches","Acompanhar jogos"],["standings","Classificação"],["imports","Importar"],["matchSheets","Súmulas"],["reports","Relatórios esportivos"],["auditReports","Auditoria geral"],["certificates","Certificados"],["testData","Dados de teste"],["credentials","Credenciais de eventos"],["monitor","Operadores e partidas"],["cleanup","Limpeza de testes"],["documentation","Guias e suporte"],["account","Minha conta"]])if(!actions.some(a=>a.id===id))actions.push({id,label,detail:"Abrir "+label.toLowerCase()});
   for(const [id,label] of [["qrCodes","QR codes e links"],["profiles","Trocar perfil / conta"],["preferences","Configurações pessoais"],["account","Minha conta"]])if(!actions.some(a=>a.id===id))actions.push({id,label,detail:"Abrir "+label.toLowerCase()});
   if(canPrepareRegistrationSheets())actions.push({id:"registrationSheets",label:"Fichas de inscrição",detail:"Imprimir fichas por campeonato"});
+  if(role==="admin")actions.push({id:"systemCheck",label:"Verificar sistema",detail:"Monitor de diagnóstico e simulações seguras"});
   if(role==="admin")actions.push({id:"accessHistory",label:"Histórico de permissões",detail:"Consultar auditoria de acessos"});
   return actions.filter((action) => action.id && (action.id === "overview" || role === "admin" || ["teams","players","championships","createMatch","matches","imports","qrCodes","profiles","preferences","account","registrationSheets"].includes(action.id)));
 }
@@ -4177,6 +4229,7 @@ const navigationDescriptions={
  certificates:{label:"Certificados",description:"Emitir certificados e salvar a visualização em PDF ou os dados em JSON.",keywords:"certificado certificação participação institucional atleta equipe campeonato evento pdf json"},
  monitor:{label:"Operadores e partidas",description:"Consultar operadores e distribuição dos jogos.",keywords:"monitoramento operador atribuicao distribuicao responsavel"},
  users:{label:"Usuários e permissões",description:"Aprovar, bloquear e definir acessos dos operadores.",keywords:"usuario conta acesso permissao convite cadastro link aprovar bloquear autorizar"},
+ systemCheck:{label:"Verificar sistema",description:"Diagnóstico, testes em memória e consultas ao servidor sem alterar dados.",keywords:"verificar sistema diagnostico teste automatico falha erro monitor validacao funcionamento"},
  settings:{label:"Configurações",description:"Alterar título, cor, capa, logo e identidade visual.",keywords:"logotipo logo favicon icone aba titulo nome cor imagem capa configuracao"},
  testData:{label:"Dados de teste",description:"Reservar testes ao administrador sem excluir dados ou contas.",keywords:"teste testes ocultar reservar restaurar preparar proteção"},
  credentials:{label:"Credenciais de eventos",description:"Emitir, imprimir e revogar crachás de identificação por evento.",keywords:"credencial credenciais cracha crachas identificação organização apoio operador validade"},

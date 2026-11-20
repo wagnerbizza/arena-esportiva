@@ -1112,6 +1112,25 @@ export async function connectSpark({
     await F.updateDoc(F.doc(database,"eventCredentials",id),{status:"revogada",updatedAt:F.serverTimestamp()});
   }
   return {
+    diagnosticRead: async kind => {
+      if(!isOwner())throw Error("Diagnóstico exclusivo do administrador.");
+      const epoch=generation;
+      const collections={championships:["name","season","sport"],teams:["name"],players:["name","team"],matches:["home","away","sport","status"],audit:["entity","target","detail"],users:["role"],publicMatches:["home","away","sport","status"]};
+      let rows;
+      if(["settings","publicSettings"].includes(kind)){
+        const snap=await F.getDocFromServer(F.doc(database,kind,"main"));
+        rows=snap.exists()?[snap.data()]:[];
+      }else{
+        if(!Object.hasOwn(collections,kind))throw Error("Consulta de diagnóstico não permitida.");
+        const snap=await F.getDocsFromServer(F.query(F.collection(database,kind),F.limit(1)));
+        rows=snap.docs.map(doc=>doc.data());
+      }
+      if(!isOwner()||epoch!==generation)throw Error("A sessão mudou. Inicie outra verificação.");
+      const fields=collections[kind]||["title","color"];
+      const privateFields=["notes","roster","rosterTeams","referees","_updatedBy","actor","actorName","actorRole"];
+      return {empty:rows.length===0,valid:rows.every(row=>fields.every(field=>Object.hasOwn(row,field)) &&
+        (kind!=="publicMatches" || privateFields.every(field=>!Object.hasOwn(row,field))))};
+    },
     auth,
     authentication,
     database,
