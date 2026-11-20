@@ -3526,6 +3526,25 @@ function setupAccountTools(){
 setupAccountTools();
 
 // Monitor administrativo: nunca envia ações de cadastro ou operação ao Firebase.
+function systemDiagnosticHelp(row) {
+ const assets=["system-check.js","painel.html","index.html","style.css","domain.js","spark-model.js","spark-store.js","report-pdf.js","vendor/arena-qrcode.js","vendor/jspdf.umd.min.js","vendor/jspdf.plugin.autotable.min.js"];
+ const file=row.id?.startsWith("asset-")?row.id.slice(6):(!row.id||row.id==="monitor-load"?"system-check.js":"");
+ if(assets.includes(file)){
+  const path=".\\"+file.replaceAll("/","\\");
+  return `<p>O navegador pode buscar novamente o arquivo, mas não consegue publicar arquivos no GitHub. Se continuar ausente ou incorreto, confira se <strong>${esc(file)}</strong> existe na pasta do projeto. No terminal, inclua e conclua o commit desse arquivo:</p><pre><code>${esc('git add -- '+path+'\ngit commit -m "Publica arquivo do diagnostico" -- '+path)}</code></pre><p>Depois execute SINCRONIZAR-ARENA. Aguarde a publicação e clique em Verificar correção. Se o arquivo não existir, recupere-o do patch correspondente antes de executar esses comandos.</p>`;
+ }
+ if(row.id?.startsWith("server-"))return '<p>Tentar corrigir repetirá apenas a consulta ao servidor. Confira a conexão e a conta administrativa. Se o Firebase recusar a leitura, revise as regras publicadas; este botão não muda permissões. Uma área vazia permanece pendente até existir um cadastro válido.</p>';
+ if(row.id==="branding")return '<p>Confira título e cor em Configurações, salve e volte ao monitor para verificar novamente. O diagnóstico não altera sua identidade visual.</p>';
+ if(row.id==="permissions")return '<p>Confira com uma conta de operador e com um visitante, ou use um emulador separado. Esta verificação não tenta assumir outra identidade nem ampliar acessos.</p>';
+ if(row.id==="visual")return '<p>Abra um PDF, confira os logos, leia um QR code e teste computador e celular. A aparência e a câmera precisam de conferência manual.</p>';
+ if(row.id==="writes")return '<p>A gravação real precisa ser validada com dados fictícios autorizados ou em um emulador. Este monitor usa somente simulações e consultas de leitura.</p>';
+ return '<p>Repita as simulações para confirmar a falha. Se persistir, baixe o relatório e envie para revisão. Os testes usam dados temporários; não corrigem automaticamente regras de negócio ou cadastros reais.</p>';
+}
+function systemDiagnosticActions(row,index) {
+ if(!["failed","manual"].includes(row.status))return "";
+ const disabled=systemCheckBusy?"disabled":"";
+ return `<div class="toolbar">${row.status==="failed"?`<button type="button" data-system-check-retry="${index}" ${disabled}>Tentar corrigir</button><button type="button" data-system-check-retry="${index}" ${disabled}>Verificar correção</button>`:row.id?.startsWith("server-")?`<button type="button" data-system-check-retry="${index}" ${disabled}>Verificar novamente</button>`:""}</div><details><summary>Como corrigir / conferir</summary>${systemDiagnosticHelp(row)}</details>`;
+}
 function systemDiagnosticResults() {
  const r=systemCheckReport;
  if(!r)return '<p>Pronto para iniciar. Nenhuma verificação executada nesta sessão.</p>';
@@ -3534,12 +3553,13 @@ function systemDiagnosticResults() {
  const done=r.rows.filter(row=>!["pending","running"].includes(row.status)).length;
  return `<p role="status">${r.finishedAt?(r.cancelled?"Verificação interrompida":"Verificação concluída"):"Verificação em andamento"} • ${done} de ${r.rows.length}</p><label>Progresso <progress max="${r.rows.length||1}" value="${done}">${done}/${r.rows.length}</progress></label>
  <p><strong>${count("passed")} passaram • ${count("failed")} falharam • ${count("manual")} precisam de conferência</strong></p><p class="muted">${esc(r.mode)}. Os resultados representam somente os testes listados; não certificam o sistema inteiro.</p>
- <div class="tablewrap"><table><thead><tr><th>Grupo / verificação</th><th>Resultado</th><th>Detalhes</th></tr></thead><tbody>${r.rows.map(row=>`<tr><td>${esc(row.group)}<small class="cell-sub">${esc(row.title)}</small></td><td>${esc(labels[row.status]||row.status)}</td><td>${esc(row.detail)}${row.durationMs?`<small class="cell-sub">${row.durationMs} ms</small>`:""}</td></tr>`).join("")}</tbody></table></div>`;
+ <div class="tablewrap"><table><thead><tr><th>Grupo / verificação</th><th>Resultado</th><th>Detalhes</th></tr></thead><tbody>${r.rows.map((row,index)=>`<tr><td>${esc(row.group)}<small class="cell-sub">${esc(row.title)}</small></td><td>${esc(labels[row.status]||row.status)}</td><td>${esc(row.detail)}${row.durationMs?`<small class="cell-sub">${row.durationMs} ms</small>`:""}${row.attempts?`<small class="cell-sub">Tentativas: ${row.attempts}</small>`:""}${systemDiagnosticActions(row,index)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function systemDiagnosticsView() {
  return `<section class="card"><h2>Verificar sistema</h2><p>Execute simulações locais e consultas pequenas ao servidor. Nenhum cadastro, partida, conta, permissão ou histórico real é criado, alterado ou excluído.</p>
  <p>Os testes locais usam dados fictícios em memória. As consultas verificam a leitura de uma amostra de até um registro por área usando sua conta administrativa. Não testam a gravação no Firebase nem substituem a validação de permissões com outra identidade.</p>
  <div class="toolbar"><button type="button" class="primary" data-system-check-start ${systemCheckBusy?"disabled":""}>${systemCheckBusy?"Verificando…":"Iniciar verificação"}</button><button type="button" data-system-check-stop ${!systemCheckBusy?"disabled":""}>Interromper após consulta atual</button><button type="button" data-system-check-json ${!systemCheckReport||systemCheckBusy?"disabled":""}>Baixar relatório (JSON)</button><button type="button" data-system-check-text ${!systemCheckReport||systemCheckBusy?"disabled":""}>Baixar relatório (texto)</button></div>
+ <p class="muted">Tentar corrigir busca arquivos sem usar a cópia em cache ou repete uma consulta. Não publica no GitHub, não altera regras e não apaga dados. Cada falha mostra uma orientação específica.</p>
  <p class="muted">A verificação pode levar até alguns minutos, conforme a conexão. Você pode sair desta aba e voltar ao monitor. Os resultados ficam nesta sessão e não são enviados para outras pessoas.</p></section><section class="card" id="systemDiagnosticMonitor" aria-label="Monitor de verificação">${systemDiagnosticResults()}</section>`;
 }
 function updateSystemDiagnosticMonitor() {
@@ -3548,7 +3568,7 @@ function updateSystemDiagnosticMonitor() {
  for(const button of document.querySelectorAll("[data-system-check-start],[data-system-check-stop],[data-system-check-json],[data-system-check-text]"))button.disabled=button.hasAttribute("data-system-check-stop")?!systemCheckBusy:systemCheckBusy||(!button.hasAttribute("data-system-check-start")&&!systemCheckReport);
 }
 document.addEventListener("click",async event=>{
- const button=event.target.closest("[data-system-check-start],[data-system-check-stop],[data-system-check-json],[data-system-check-text]");
+ const button=event.target.closest("[data-system-check-start],[data-system-check-stop],[data-system-check-json],[data-system-check-text],[data-system-check-retry]");
  if(!button||!admin||role!=="admin")return;
  if(button.hasAttribute("data-system-check-stop")){systemCheckAbort?.abort();return;}
  if(button.hasAttribute("data-system-check-json")||button.hasAttribute("data-system-check-text")){
@@ -3558,17 +3578,26 @@ document.addEventListener("click",async event=>{
   return;
  }
  if(systemCheckBusy)return;
- const owner=user?.uid,controller=new AbortController();systemCheckAbort=controller;systemCheckBusy=true;systemCheckReport=null;updateSystemDiagnosticMonitor();
+ const retry=button.hasAttribute("data-system-check-retry"),row=retry?systemCheckReport?.rows[Number(button.dataset.systemCheckRetry)]:null;
+ if(retry&&!row)return;
+ const onlyIds=row?.id && (row.id.startsWith("asset-")||row.id.startsWith("server-")||row.id==="branding")?[row.id]:null;
+ const previous=onlyIds?JSON.parse(JSON.stringify(systemCheckReport)):null;
+ const owner=user?.uid,controller=new AbortController();systemCheckAbort=controller;systemCheckBusy=true;systemCheckReport=previous;updateSystemDiagnosticMonitor();
  const valid=()=>role==="admin"&&user?.uid===owner;
  try{
-  const {runSystemChecks}=await import("./system-check.js");
+  const moduleURL=new URL("./system-check.js",location.href);
+  if(retry)moduleURL.searchParams.set("verificar",String(Date.now()));
+  const {runSystemChecks}=await import(moduleURL.href);
   if(!valid()){controller.abort();return;}
-  await runSystemChecks({D,M,training:C.demo,settings:{...state.settings},signal:controller.signal,
+  await runSystemChecks({D,M,onlyIds,training:C.demo,settings:{...state.settings},signal:controller.signal,
    readServer:!C.demo&&cloud?kind=>cloud.diagnosticRead(kind):null,
-   fetchAsset:async file=>{const url=new URL(file,location.href);if(url.origin!==location.origin)throw Error("Arquivo fora do site.");const response=await fetch(url,{cache:"no-store",signal:controller.signal});if(!response.ok)throw Error("Arquivo não carregou: HTTP "+response.status);return response.text();},
-   onUpdate:report=>{if(!valid()){controller.abort();return;}systemCheckReport=report;updateSystemDiagnosticMonitor();}
+   fetchAsset:async file=>{const url=new URL(file,location.href);if(retry)url.searchParams.set("verificar",String(Date.now()));if(url.origin!==location.origin)throw Error("Arquivo fora do site.");const response=await fetch(url,{cache:"no-store",signal:controller.signal});if(!response.ok)throw Error("Arquivo não carregou: HTTP "+response.status);return response.text();},
+   onUpdate:report=>{if(!valid()){controller.abort();return;}
+    if(previous){const byId=new Map(report.rows.map(item=>[item.id,item]));systemCheckReport={...previous,finishedAt:report.finishedAt,cancelled:report.cancelled,lastVerifiedAt:new Date().toISOString(),rows:previous.rows.map(old=>byId.has(old.id)?{...byId.get(old.id),attempts:(old.attempts||1)+1}:old)};}
+    else systemCheckReport=report;
+    updateSystemDiagnosticMonitor();}
   });
- }catch(error){if(valid()){systemCheckReport={version:1,startedAt:new Date().toISOString(),finishedAt:new Date().toISOString(),scope:"Diagnóstico não concluído.",mode:"Carregamento do monitor",rows:[{group:"Monitor",title:"Iniciar verificação",status:"failed",detail:"Não foi possível carregar o monitor. Confira se system-check.js foi publicado e recarregue a página.",durationMs:0}]};toast(systemCheckReport.rows[0].detail,true);}}
+ }catch(error){if(valid()){systemCheckReport={version:1,startedAt:new Date().toISOString(),finishedAt:new Date().toISOString(),scope:"Diagnóstico não concluído.",mode:"Carregamento do monitor",rows:[{id:"monitor-load",group:"Monitor",title:"Iniciar verificação",status:"failed",detail:"Não foi possível carregar o monitor. Confira se system-check.js foi publicado e recarregue a página.",durationMs:0}]};toast(systemCheckReport.rows[0].detail,true);}}
  finally{if(systemCheckAbort===controller){systemCheckBusy=false;systemCheckAbort=null;if(valid())updateSystemDiagnosticMonitor();}}
 });
 
