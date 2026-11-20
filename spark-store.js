@@ -24,6 +24,7 @@ export async function connectSpark({
     return Boolean(match?.championshipId &&
       (profile?.operatedChampionships || []).includes(match.championshipId));
   }
+  const canCorrectMatch = id => canOperateMatch(id) && (isOwner() || (profile?.permissions || []).includes("historyCorrections"));
   const canManageRosters = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("rosters"));
   const canCreateMatches = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("matchesCreate"));
   const canManageChampionships = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("championships"));
@@ -241,21 +242,41 @@ export async function connectSpark({
       playerName:athlete?.playerName || "", number:athlete?.number || "",
       at:audit.at, revision:audit.revision};
   }
+  function operationEvent(id, audit) {
+    if(audit.entity!=="matches" || !timelineTypes.has(audit.detail?.type))return null;
+    const e=audit.detail,reason=e.type==="ponto"&&e.correctionOf?e.reason:"";
+    return {id,entity:"matches",target:audit.target,revision:audit.revision,at:audit.at,
+      detail:{type:e.type,side:e.side,value:e.value,player:e.player,stage:e.stage,setIndex:e.setIndex,
+        correctionOf:e.correctionOf,from:e.from,to:e.to,text:reason,reason}};
+  }
+  function operationalHistory(matchId) {
+    return privateView && !isOwner() && authorized() && canOperateMatch(matchId);
+  }
+  function timelineRows(snap,matchId) {
+    const match=state.matches.find(m=>m.id===matchId);
+    return snap.docs.map(doc=>{
+      const row=doc.data();
+      if(!row.detail)return row;
+      const athlete=(match?.roster||[]).find(p=>p.id===row.detail.player);
+      return {...row.detail,id:row.id,revision:row.revision,at:row.at,operational:true,
+        playerName:athlete?.name||"",number:String(athlete?.number||"")};
+    });
+  }
   function historyPageSize() {
     const size = state.settings.historyPageSize ?? 20;
     return Number.isInteger(size) && size >= 1 && size <= 50 ? size : 20;
   }
   function timelineQuery(matchId, cursor = null) {
-    return F.query(F.collection(database, "publicMatches", matchId, "timeline"),
+    return F.query(operationalHistory(matchId) ? F.collection(database,"matches",matchId,"operationEvents") : F.collection(database, "publicMatches", matchId, "timeline"),
       F.orderBy("revision","desc"), ...(cursor ? [F.startAfter(cursor)] : []), F.limit(historyPageSize()));
   }
   async function loadTimeline(matchId, cursor = null) {
     const snap = await F.getDocsFromServer(timelineQuery(matchId,cursor));
-    return { rows:snap.docs.map(doc => doc.data()), cursor:snap.docs.at(-1) || null, more:snap.size === historyPageSize() };
+    return { rows:timelineRows(snap,matchId), cursor:snap.docs.at(-1) || null, more:snap.size === historyPageSize() };
   }
   function watchTimeline(matchId, update, error) {
     return F.onSnapshot(timelineQuery(matchId), snap => update({
-      rows:snap.docs.map(doc => doc.data()), cursor:snap.docs.at(-1) || null, more:snap.size === historyPageSize(),
+      rows:timelineRows(snap,matchId), cursor:snap.docs.at(-1) || null, more:snap.size === historyPageSize(),
     }), error);
   }
   async function publishTimeline(matchId) {
@@ -263,6 +284,16 @@ export async function connectSpark({
     const snap = await F.getDocsFromServer(F.query(F.collection(database,"audit"),F.where("target","==",matchId)));
     const existing = await F.getDocsFromServer(F.collection(database,"publicMatches",matchId,"timeline"));
     const known = new Set(existing.docs.map(doc => doc.id));
+    // O histórico operacional é uma projeção separada da auditoria privada.
+    const operationSnap=await F.getDocsFromServer(F.collection(database,"matches",matchId,"operationEvents"));
+    const operationKnown=new Set(operationSnap.docs.map(doc=>doc.id));
+    const operations=snap.docs.filter(doc=>!operationKnown.has(doc.id))
+      .map(doc=>operationEvent(doc.id,doc.data())).filter(Boolean);
+    for(let offset=0;offset<operations.length;offset+=5){
+      const batch=F.writeBatch(database);
+      for(const entry of operations.slice(offset,offset+5))batch.set(F.doc(database,"matches",matchId,"operationEvents",entry.id),entry);
+      await batch.commit();
+    }
     const entries = snap.docs.filter(doc => !known.has(doc.id))
       .map(doc => timelineEntry(doc.id,doc.data())).filter(Boolean);
     for (let offset=0; offset<entries.length; offset+=5) {
@@ -271,7 +302,7 @@ export async function connectSpark({
         batch.set(F.doc(database,"publicMatches",matchId,"timeline",entry.id),entry);
       await batch.commit();
     }
-    return entries.length;
+    return new Set([...entries,...operations].map(entry=>entry.id)).size;
   }
   async function publishPublicEvents(matchId, history) {
     const publicTypes = new Set([
@@ -499,13 +530,14 @@ export async function connectSpark({
       : F.doc(F.collection(database, "audit")).id;
   async function send(action) {
     if (!session || !authorized()) throw Error("Faça login com uma conta autorizada.");
+    if(action.type==="correct" && !canCorrectMatch(action.matchId))throw Error("O administrador precisa autorizar anulações de gols/pontos para esta conta e esta partida.");
     if (action.type === "notes" && !isOwner()) {
       throw Error("Somente o administrador pode editar as observações da súmula.");
     }
     const rosterAction=canManageRosters()&&(["team","player"].includes(action.type)||(action.type==="import"&&["team","player"].includes(action.kind)));
     const matchCreation = action.type === "match" && !action.data?.id && canCreateMatches();
     const championshipAction = action.type === "championship" && canManageChampionships();
-    if (!isOwner() && !rosterAction && !matchCreation && !championshipAction && (["team", "player", "settings", "match", "import", "correct", "championship", "championshipLink","teamArchive"].includes(action.type) ||
+    if (!isOwner() && !rosterAction && !matchCreation && !championshipAction && (["team", "player", "settings", "match", "import", "championship", "championshipLink","teamArchive"].includes(action.type) ||
       !canOperateMatch(action.matchId))) {
       throw Error("Sua conta não tem permissão para esta ação ou partida.");
     }
@@ -565,6 +597,7 @@ export async function connectSpark({
         prepared.score = [0, 0];
         prepared.clock = M.emptyClock();
         prepared.publicNotice = "";
+        prepared.publicEvents = [];
         prepared.rosterTeams = Object.fromEntries(
           prepared.roster.map((p) => [p.id, p.team]),
         );
@@ -583,7 +616,7 @@ export async function connectSpark({
       auditRef = F.doc(database, "audit", actionId),
       originalRef =
         action.type === "correct"
-          ? F.doc(database, "audit", action.eventId)
+          ? (isOwner() ? F.doc(database, "audit", action.eventId) : F.doc(database,"matches",target,"operationEvents",action.eventId))
           : null,
       correctionRef =
         action.type === "correct"
@@ -602,7 +635,7 @@ export async function connectSpark({
         } catch (validationError) {
           modelCheck = validationError.message;
         }
-        const events = latest.publicEvents;
+        const events = latest.publicEvents ?? [];
         const publicEventsValid = Array.isArray(events) && events.length <= 5 && events.every((event) =>
           event && ["id","type","side","value","player","playerName","number","correctionOf"].every((key) => Object.hasOwn(event, key)));
         const expectedTeam = [latest.home, latest.away][action.side];
@@ -628,6 +661,7 @@ export async function connectSpark({
           const o = await tx.get(originalRef),
             c = await tx.get(correctionRef);
           if (c.exists()) throw Error("Este ponto já foi estornado.");
+          if(!o.exists())throw Error("Lance antigo ainda não disponível para anulação. Peça ao administrador para abrir Ver lances anteriores nesta partida e sincronizar o histórico.");
           original = o.data();
         }
         // Releitura na transação evita usar uma edição desatualizada do campeonato.
@@ -685,7 +719,7 @@ export async function connectSpark({
           next = result.match;
           detail = result.detail;
         }
-        if (["matches","teams","players","championships"].includes(entity)) next.testData = before?.testData === true;
+        if (["matches","teams","players","championships"].includes(entity) && (prepared || Object.hasOwn(before || {},"testData"))) next.testData = before?.testData === true;
         next._revision = (before?._revision || 0) + 1;
         next._audit = actionId;
         next._updatedBy = session.uid;
@@ -724,6 +758,8 @@ export async function connectSpark({
           const entry = timelineEntry(actionId, {entity, detail, after:next,
             at:F.serverTimestamp(),revision:next._revision});
           if (entry) tx.set(F.doc(database,"publicMatches",target,"timeline",actionId),entry);
+          const operational=operationEvent(actionId,{entity,target,detail,after:next,at:F.serverTimestamp(),revision:next._revision});
+          if(operational)tx.set(F.doc(database,"matches",target,"operationEvents",actionId),operational);
         }
         if (correctionRef)
           tx.set(correctionRef, {
@@ -973,7 +1009,7 @@ export async function connectSpark({
       const before = snap.data();
       if (before.deleted === true) throw Error("Este operador foi removido e está disponível apenas para consulta.");
       const granted=access==="active"?[...new Set(permissions===undefined?(before.permissions||[]):permissions)]:[];
-      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView"].includes(p)))throw Error("Permissão específica inválida.");
+      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView","historyCorrections"].includes(p)))throw Error("Permissão específica inválida.");
       const editions = access === "active"
         ? [...new Set(followedEditions ?? before.followedEditions ?? [])] : [];
       const known = new Set(state.championships.map((c) => c.name + " • " + c.season));
@@ -1178,6 +1214,7 @@ export async function connectSpark({
     purgeDeletedMatch,
     classifyTestRecords, testMaintenance, eventCredentials, issueCredential, revokeCredential,
     canOperate: canOperateMatch,
+    canCorrect: canCorrectMatch,
     close: () => {
       stop();
       profileStop();

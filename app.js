@@ -896,7 +896,7 @@ function timelineContent(m) {
         e.type === "etapa" ? `Etapa: ${e.to}` : e.type === "set" ? "Set encerrado" : eventLabel(e,m);
       return `<article class="timeline-event"><strong>${esc(label)}${side ? " · "+esc(side) : ""}</strong>
         ${e.playerName ? `<p>${esc(e.number ? e.number+" · " : "")}${esc(e.playerName)}</p>` : ""}
-        <small>Etapa ${esc(e.stage)} · ${esc(e.at ? format(e.at?.toDate ? e.at.toDate().toISOString() : e.at) : "Horário não disponível no resumo")}</small></article>`;
+        <small>Etapa ${esc(e.stage)} · ${esc(e.at ? format(e.at?.toDate ? e.at.toDate().toISOString() : e.at) : "Horário não disponível no resumo")}</small>${e.reason?`<p>${esc(e.reason)}</p>`:""}${admin && role==="operator" && (e.operational || (C.demo&&trainingMode)) && ((C.demo&&trainingMode) || cloud?.canCorrect?.(m.id)) && !finalStatuses.includes(m.status) && e.type==="ponto" && e.value>0 && !e.correctionOf && !timelineRows.some(row=>row.correctionOf===e.id)?`<p><button type="button" data-correct="${esc(e.id)}" data-correct-match="${esc(m.id)}">Anular ${m.sport==="Futebol"||m.sport==="Futsal"?"gol":"ponto"} com motivo</button></p>`:""}</article>`;
     }).join("") || '<p>Nenhum lance publicado neste histórico.</p>'}</div>
     <p class="muted">Até ${configuredHistoryPageSize()} lances por carregamento.</p>
     <p><button type="button" data-timeline-more ${timelineLoading || !timelineMore ? "disabled" : ""}>Carregar lances mais antigos</button></p>`;
@@ -1098,7 +1098,7 @@ async function dispatch(a) {
   app.querySelectorAll("button").forEach((b) => (b.disabled = true));
   try {
     if (C.demo) {
-      if (trainingMode && role === "operator" && !((canManageRosters()&&(["team","player"].includes(a.type)||(a.type==="import"&&["team","player"].includes(a.kind))))||(canCreateMatches()&&a.type==="match"&&!a.data?.id)||(canManageChampionships()&&a.type==="championship")) && ["team","player","match","settings","import","championship","championshipLink","correct","teamArchive"].includes(a.type)) throw Error("Esta ação é do administrador na simulação. Troque o perfil para treinar essa função.");
+      if (trainingMode && role === "operator" && !((canManageRosters()&&(["team","player"].includes(a.type)||(a.type==="import"&&["team","player"].includes(a.kind))))||(canCreateMatches()&&a.type==="match"&&!a.data?.id)||(canManageChampionships()&&a.type==="championship")) && ["team","player","match","settings","import","championship","championshipLink","teamArchive"].includes(a.type)) throw Error("Esta ação é do administrador na simulação. Troque o perfil para treinar essa função.");
       const latest = JSON.parse(localStorage.getItem(key)) || D.fresh();
       if (!["team", "player", "match", "settings", "import", "championship","teamArchive"].includes(a.type)) {
         const old = latest.matches.find((m) => m.id === a.matchId);
@@ -1519,7 +1519,7 @@ function operate() {
         (e) =>
           `<div class="event"><div><b>${esc(eventLabel(e, m))}</b> ${[0, 1].includes(e.side) ? esc(name([m.home, m.away][e.side])) : ""}</div><p>${esc(eventDescription(e))}</p><small>${esc(format(e.at))} • ${e.gameMs != null ? "Jogo " + prettyTime(e.gameMs) + " • " : ""}Operador ${esc(responsibleLabel(e))} • Etapa ${esc(e.stage || "—")}${e.player ? " • " + esc(m.roster.find((p) => p.id === e.player)?.name || "") : ""}</small>${!locked && role === "admin" && e.type === "ponto" && e.value > 0 && !m.events.some((x) => x.correctionOf === e.id) ? ` <button data-correct="${e.id}">Estornar</button>` : ""}</div>`,
       )
-      .join("") || empty("Histórico disponível somente ao administrador principal, ou aguardando carregamento.")
+      .join("") || empty("Use Ver lances anteriores no placar para consultar o histórico operacional. A auditoria completa permanece com o administrador.")
   }</div>`;
 }
 // 5 — Importação. Excel/CSV com cabeçalhos reconhecidos e prévia obrigatória.
@@ -2076,7 +2076,12 @@ function updateOperationSummary(form) {
   const matches = [...form.querySelectorAll('input[name="assignedMatches"]:checked')].map(input => input.value);
   const championships = [...form.querySelectorAll('input[name="operatedChampionships"]:checked')].map(input => input.value);
   const count = state.matches.filter(m => matches.includes(m.id) || (m.championshipId && championships.includes(m.championshipId))).length;
-  output.textContent = count+" partida(s) atual(is) para operar, mais as novas vinculadas às modalidades/categorias marcadas.";
+  const corrections=form.elements.historyCorrectPermission?.checked;
+  output.textContent = count+" partida(s) atual(is) para operar, mais as novas vinculadas às categorias marcadas. Anulações: "+(corrections?"permitidas com justificativa somente nessas partidas.":"não autorizadas.");
+  for(const group of form.querySelectorAll("[data-permission-section]")){
+    const badge=group.querySelector("[data-permission-count]");
+    if(badge)badge.textContent=group.querySelectorAll('input[type="checkbox"][name]:checked').length+" selecionado(s)";
+  }
 }
 document.addEventListener("change", event => {
   const form = event.target.closest("#access-user");
@@ -2158,6 +2163,22 @@ document.addEventListener("input", (event) => {
 });
 
 let showRemovedOperators = false;
+function authorizationSection(id,title,description,content,count,open=false) {
+ return `<details class="card" data-permission-section="${id}" ${open?"open":""}><summary><strong>${esc(title)}</strong> · <span data-permission-count>${count} selecionado(s)</span></summary><p class="muted">${esc(description)}</p>${content}</details>`;
+}
+function operatorAuthorizationGroups(operator,editionOptions) {
+ const permissions=operator.permissions||[],checked=id=>permissions.includes(id)?"checked":"";
+ const operations=authorizationSection("championships","Operar campeonatos","Libera placar, relógio, cartões e avisos nas categorias autorizadas, inclusive para novas partidas vinculadas.",championshipOperationPicker(operator),(operator.operatedChampionships||[]).length,true);
+ const matches=authorizationSection("matches","Operar partidas específicas","Use para jogos avulsos ou exceções. Não precisa marcar novamente as partidas já liberadas por campeonato.",operatorMatchPicker(operator),(operator.matches||[]).length);
+ const history=authorizationSection("history","Histórico e anulações","O operador consulta o histórico operacional das partidas autorizadas. Anular gols ou pontos exige esta permissão adicional e justificativa. Não permite apagar lances, alterar registros anteriores ou editar a súmula administrativa.",`<label class="confirmation-check"><input type="checkbox" name="historyCorrectPermission" ${checked("historyCorrections")}><span>Permitir anular gols/pontos com justificativa nas partidas que este operador pode operar.</span></label><p class="muted">A anulação vira um novo registro; o lance original e a auditoria completa permanecem na súmula do administrador. Não concede acesso a outras partidas.</p>`,permissions.includes("historyCorrections")?1:0);
+ const registrations=authorizationSection("records","Cadastros esportivos","Conceda somente os cadastros necessários. Criar uma partida não concede automaticamente sua operação.",`<label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${checked("rosters")}><span>Equipes e jogadores: cadastrar, editar e importar, inclusive técnicos e elencos.</span></label><label class="confirmation-check"><input type="checkbox" name="championshipPermission" ${checked("championships")}><span>Campeonatos e temporadas: cadastrar e editar.</span></label><label class="confirmation-check"><input type="checkbox" name="matchCreatePermission" ${checked("matchesCreate")}><span>Partidas: cadastrar novos jogos.</span></label>`,permissions.filter(id=>["rosters","championships","matchesCreate"].includes(id)).length);
+ const viewing=authorizationSection("view","Acompanhar jogos sem operar","Consulta dos jogos publicados. Esta seção não libera gols, cartões, relógio ou anulações.",`<fieldset><legend>Campeonatos para acompanhar</legend>${editionOptions}<label class="confirmation-check"><input type="checkbox" name="gamesViewPermission" ${checked("gamesView")}><span>Consultar todos os jogos publicados, sem alterar placares.</span></label></fieldset>`,(operator.followedEditions||[]).length+(permissions.includes("gamesView")?1:0));
+ return `<div class="toolbar"><button type="button" data-permissions-expand="true">Expandir autorizações</button><button type="button" data-permissions-expand="false">Recolher autorizações</button></div>${operations}${matches}${history}${registrations}${viewing}`;
+}
+document.addEventListener("click",event=>{
+ const button=event.target.closest("[data-permissions-expand]");if(!button||role!=="admin")return;
+ for(const group of button.closest("#access-user").querySelectorAll("[data-permission-section]"))group.open=button.dataset.permissionsExpand==="true";
+});
 function usersView() {
   if (C.demo) return `<div class="card"><h2>Usuários e permissões</h2><p>Esta função utiliza as contas reais do Firebase e não está disponível na demonstração local.</p></div>`;
   const owner = cloud?.mainUID;
@@ -2180,15 +2201,15 @@ function usersView() {
   const editor = editing && editing.deleted !== true ? `<section class="card"><h3>Permissões de ${esc(editing.name || editing.email || "Operador cadastrado")}</h3>
     ${editing.removalRequested ? `<div class="public-notice"><strong>Solicitação de exclusão recebida</strong><p>${esc(editing.removalReason || "")}</p><p>Use Excluir acesso do operador abaixo para concluir. Salvar permissões decide novamente o acesso desta pessoa.</p></div>` : ""}
     <p><strong>Entrada vinculada</strong> · ${esc(methodLabel(editing.id))}</p>
-    <p><strong>Telefone de contato</strong> · ${esc(editing.phone || "Não informado no cadastro antigo")}</p><p>${esc(editing.email || "E-mail não registrado no perfil antigo")}<br><small>UID: ${esc(editing.id)}</small></p><form id="access-user"><input type="hidden" name="userId" value="${esc(editing.id)}"><label>Situação do acesso<select name="access"><option value="pending" ${editing.role === "pending" ? "selected" : ""}>Aguardando aprovação</option><option value="active" ${editing.role === "operator" && editing.enabled !== false ? "selected" : ""}>Aprovar / manter operador ativo</option><option value="blocked" ${editing.role === "operator" && editing.enabled === false ? "selected" : ""}>Bloquear acesso</option></select></label><p class="muted">Mesmo aprovado, o operador precisa confirmar o e-mail. Nenhum operador pode promover usuários ou acessar seus relatórios.</p>${operatorPermissionSummary(editing)}${championshipOperationPicker(editing)}${operatorMatchPicker(editing)}
-    <p class="public-notice" data-permission-preview aria-live="polite">As alterações abaixo entram em vigor ao salvar as permissões.</p>
-    <fieldset><legend>Cadastros esportivos</legend><p class="muted">Conceda apenas os cadastros que este operador precisa administrar.</p><label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${(editing.permissions||[]).includes("rosters")?"checked":""}><span>Equipes e jogadores: cadastrar, editar e importar dados, inclusive técnicos e elencos.</span></label><label class="confirmation-check"><input type="checkbox" name="championshipPermission" ${(editing.permissions||[]).includes("championships")?"checked":""}><span>Campeonatos e temporadas: cadastrar e editar competições.</span></label><label class="confirmation-check"><input type="checkbox" name="matchCreatePermission" ${(editing.permissions||[]).includes("matchesCreate")?"checked":""}><span>Partidas: cadastrar novos jogos. Isso não concede operação dos jogos.</span></label></fieldset><fieldset><legend>Acompanhar campeonatos</legend><p>Consulta dos jogos publicados. Para liberar gols, cartões e relógio, use Operar campeonato inteiro ou Operar partidas específicas.</p>${editionOptions}<label class="confirmation-check"><input type="checkbox" name="gamesViewPermission" ${(editing.permissions||[]).includes("gamesView")?"checked":""}><span>Consultar todos os jogos publicados — próximos, ao vivo e encerrados — sem alterar placares. Para operar, autorize o campeonato ou selecione partidas específicas acima.</span></label></fieldset><label>Motivo da alteração<textarea name="reason" required maxlength="500" placeholder="Ex.: responsável pelos jogos da quadra 1"></textarea></label><p><button class="primary">Salvar permissões</button> <button type="button" data-access-cancel>Fechar edição</button></p></form><hr><h3>Excluir acesso do operador</h3><p>Remove da lista ativa e revoga partidas, campeonatos e cadastros autorizados. A auditoria é preservada. O login do Firebase Authentication pode ser excluído pelo console do Firebase.</p><form id="remove-operator"><input type="hidden" name="userId" value="${esc(editing.id)}"><label>Motivo da exclusão<textarea name="reason" required minlength="5" maxlength="500"></textarea></label><label>Digite EXCLUIR para confirmar<input name="confirmation" required autocomplete="off"></label><p><button type="submit">Excluir acesso do operador</button></p></form></section>` : "";
+    <p><strong>Telefone de contato</strong> · ${esc(editing.phone || "Não informado no cadastro antigo")}</p><p>${esc(editing.email || "E-mail não registrado no perfil antigo")}<br><small>UID: ${esc(editing.id)}</small></p><form id="access-user"><input type="hidden" name="userId" value="${esc(editing.id)}"><label>Situação do acesso<select name="access"><option value="pending" ${editing.role === "pending" ? "selected" : ""}>Aguardando aprovação</option><option value="active" ${editing.role === "operator" && editing.enabled !== false ? "selected" : ""}>Aprovar / manter operador ativo</option><option value="blocked" ${editing.role === "operator" && editing.enabled === false ? "selected" : ""}>Bloquear acesso</option></select></label><p class="muted">Mesmo aprovado, o operador precisa confirmar o e-mail. Nenhum operador pode promover usuários ou acessar seus relatórios.</p>${operatorPermissionSummary(editing)}${operatorAuthorizationGroups(editing,editionOptions)}
+    <p class="public-notice" data-permission-preview aria-live="polite">Estas alterações entram em vigor ao salvar as permissões.</p>
+<label>Motivo da alteração<textarea name="reason" required maxlength="500" placeholder="Ex.: responsável pelos jogos da quadra 1"></textarea></label><p><button class="primary">Salvar permissões</button> <button type="button" data-access-cancel>Fechar edição</button></p></form><hr><details><summary><strong>Excluir acesso do operador</strong></summary><h3>Excluir acesso do operador</h3><p>Remove da lista ativa e revoga partidas, campeonatos e cadastros autorizados. A auditoria é preservada. O login do Firebase Authentication pode ser excluído pelo console do Firebase.</p><form id="remove-operator"><input type="hidden" name="userId" value="${esc(editing.id)}"><label>Motivo da exclusão<textarea name="reason" required minlength="5" maxlength="500"></textarea></label><label>Digite EXCLUIR para confirmar<input name="confirmation" required autocomplete="off"></label><p><button type="submit">Excluir acesso do operador</button></p></form></details></section>` : "";
   const registrationPermissions = (permissions) => [
     permissions.includes("rosters") && "Equipes e jogadores",
     permissions.includes("championships") && "Campeonatos",
     permissions.includes("matchesCreate") && "Novas partidas",
   ].filter(Boolean).join(", ") || "Nenhum";
-  const permissionNames={rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos"};
+  const permissionNames={rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos",historyCorrections:"Anular gols/pontos com justificativa"};
   const accessAuditRows=(state.accessAudit||[]).slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
   const accessAuditDate=value=>value?.toDate?.().toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})||"Aguardando confirmação do servidor";
   const accessAuditValue=(key,value)=>{
@@ -2274,7 +2295,7 @@ document.addEventListener("submit", async (e) => {
           toast(user?.emailVerified ? "Solicitação registrada. Aguarde a aprovação do administrador principal." : "Solicitação registrada. Confira a confirmação enviada ao seu e-mail.");
         } else {
           await cloud.manageUser({userId:d.userId, access:d.access,
-            matches: new FormData(f).getAll("assignedMatches"), followedEditions: new FormData(f).getAll("followedEditions"), operatedChampionships: new FormData(f).getAll("operatedChampionships"), permissions:[...(f.elements.rosterPermission.checked?["rosters"]:[]),...(f.elements.matchCreatePermission.checked?["matchesCreate"]:[]),...(f.elements.championshipPermission.checked?["championships"]:[]),...(f.elements.gamesViewPermission.checked?["gamesView"]:[])], reason:d.reason});
+            matches: new FormData(f).getAll("assignedMatches"), followedEditions: new FormData(f).getAll("followedEditions"), operatedChampionships: new FormData(f).getAll("operatedChampionships"), permissions:[...(f.elements.rosterPermission.checked?["rosters"]:[]),...(f.elements.matchCreatePermission.checked?["matchesCreate"]:[]),...(f.elements.championshipPermission.checked?["championships"]:[]),...(f.elements.gamesViewPermission.checked?["gamesView"]:[]),...(f.elements.historyCorrectPermission.checked?["historyCorrections"]:[])], reason:d.reason});
           managedUserId = "";
           toast("Permissões salvas e registradas no histórico.");
         }
@@ -2678,11 +2699,13 @@ document.addEventListener("click", async (e) => {
         reason,
       });
     } else if (b.dataset.correct) {
-      const reason = prompt("Justificativa do estorno:");
+      const correctionMatch=b.dataset.correctMatch||selected;
+      if(role!=="admin" && (!admin || (!(C.demo&&trainingMode) && !cloud?.canCorrect?.(correctionMatch))))throw Error("O administrador precisa autorizar anulações de gols/pontos para esta conta e esta partida.");
+      const reason = prompt("Justificativa da anulação (fica registrada no histórico e na súmula):");
       if (reason)
         await dispatch({
           type: "correct",
-          matchId: selected,
+          matchId: correctionMatch,
           eventId: b.dataset.correct,
           reason,
         });
@@ -3045,7 +3068,7 @@ function savePreferences() {
 }
 function helpFor(el) {
   if(el.matches("[data-quick]"))return "Acrescenta a pontuação indicada à equipe. Confira a equipe e o atleta antes de registrar.";
-  if(el.matches("[data-correct]"))return "Retira este lançamento por estorno, com justificativa, preservando a auditoria. Exclusivo do administrador principal.";
+  if(el.matches("[data-correct]"))return "Anula este lançamento com justificativa, preservando a auditoria. Disponível ao administrador e ao operador da partida autorizada.";
   if(el.matches("[data-status]"))return "Altera a situação do jogo. Interrupções e reaberturas podem exigir justificativa.";
   if(el.matches("[data-clock-command]"))return "Inicia ou para apenas o cronômetro. Os segundos na tela não geram gravações a cada segundo.";
   if(el.matches("[data-open]"))return "Abre os controles desta partida. O acesso depende das permissões da sua conta.";
