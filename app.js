@@ -890,6 +890,7 @@ function timelineContent(m) {
   return `<div class="toolbar"><button type="button" data-timeline-scroll="recent">↑ Recentes</button>
     <button type="button" data-timeline-scroll="older">↓ Anteriores</button>
     ${role === "admin" && !C.demo ? '<button type="button" data-timeline-publish>Publicar lances antigos</button>' : ""}</div>
+    ${admin && role==="operator" ? `<p class="public-notice">${finalStatuses.includes(m.status)?"Partida encerrada: anulações exclusivas do administrador.":!(C.demo&&trainingMode)&&!cloud?.canCorrect?.(m.id)?"Anulações indisponíveis: peça ao administrador para conferir a permissão Histórico e anulações e a operação desta partida. Depois, feche e abra novamente Ver lances anteriores.":"Para anular, use Anular lance com motivo abaixo do registro. Se o lance já foi anulado, não poderá ser anulado novamente."}</p>`:""}
     <p role="status">${timelineError ? esc(timelineError) : timelineLoading ? "Carregando lances…" : rows.length + (summaryOnly ? " lance(s) do resumo recente. O histórico completo ainda precisa ser publicado pelo administrador." : " lance(s) carregado(s)")}</p>
     <div class="timeline-scroll" data-timeline-list tabindex="0" aria-label="Lista de lances, do mais recente para o mais antigo">
     ${rows.map(e => {
@@ -1063,6 +1064,7 @@ async function boot() {
         refresh();
       },
       onSession: (u, r, access = {}) => {
+        closeTimeline();
         if(user?.uid!==u?.uid || r!=="admin"){systemCheckAbort?.abort();systemCheckReport=null;}
         accessStatus = access.status || "loading";
         if(user?.uid!==u?.uid || r!=="admin"){credentialRows=[];credentialLoaded=false;testSelection.clear();testPlan=null;testBackup=false;}
@@ -1368,7 +1370,7 @@ function view() {
         ${filterSelect("matches", "edition", "Campeonato", operatorEditions, "Todos os jogos disponíveis")}
         ${filterSelect("matches", "team", "Equipe", teams.map((id) => [id,name(id)]), "Todas as equipes")}
       </div></div>` : "";
-    return `${choices}<div class="card"><h2>${canViewAllGames() || operatorEditions.length ? "Acompanhar jogos" : "Partidas atribuídas"}</h2><p>${canViewAllGames()?"Consulte todas as partidas publicadas — próximas, ao vivo e encerradas. Para alterar placar e relógio, o administrador precisa liberar a partida individualmente ou autorizar a operação do campeonato.":"Você pode operar as partidas liberadas individualmente ou por campeonato. Os lances públicos estão em Ver lances anteriores. A auditoria administrativa e os relatórios são exclusivos do administrador."}</p></div>${listPanel("matches")}`;
+    return `${choices}<div class="card"><h2>${canViewAllGames() || operatorEditions.length ? "Acompanhar jogos" : "Partidas atribuídas"}</h2><p>${canViewAllGames()?"Consulte todas as partidas publicadas — próximas, ao vivo e encerradas. Para alterar placar e relógio, o administrador precisa liberar a partida individualmente ou autorizar a operação do campeonato.":"Para anular: abra Ver lances anteriores no cartão da partida ou na mesa de operação e clique em Anular lance com motivo. É necessário que o administrador tenha salvo a autorização de Histórico e anulações e liberado a operação desta partida. Após o encerramento, somente o administrador retifica. A auditoria administrativa e os relatórios continuam exclusivos do administrador."}</p></div>${listPanel("matches")}`;
   }
   if (section === "matches")
     return selected ? operate() : listPanel("matches");

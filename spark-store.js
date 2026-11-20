@@ -107,6 +107,7 @@ export async function connectSpark({
           publish();
         },
         error => {
+          if(epoch !== dataEpoch)return;
           if((path.startsWith("matches/") || path.startsWith("championships/")) && !isOwner() && error.code === "permission-denied") {
             assign(null); publish(); return;
           }
@@ -125,7 +126,7 @@ export async function connectSpark({
           assign(snap.docs.map((d) => ({ ...d.data(), id: d.id })));
           publish();
         },
-        message,
+        error => {if(epoch === dataEpoch)message(error);},
       ),
     );
   }
