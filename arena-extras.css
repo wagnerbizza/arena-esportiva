@@ -1,0 +1,15 @@
+/* Clima e diversão: componentes independentes da navegação e dos placares. */
+.arena-weather{margin:0 0 16px;padding:12px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:14px;min-width:0}
+.arena-weather>summary{cursor:pointer;display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;list-style:revert;min-height:30px}
+.arena-weather>summary strong{font-size:14px}.arena-weather>summary span{color:var(--muted);font-size:13px}
+.arena-weather-body{margin-top:14px;display:grid;gap:12px}.arena-weather-body p{margin:0;line-height:1.5}
+.arena-weather-days{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.arena-weather-days article{padding:10px;border:1px solid var(--line);border-radius:8px;display:grid;gap:6px;font-size:13px}
+.arena-weather form{display:flex;align-items:end;flex-wrap:wrap;gap:8px}.arena-weather label{flex:1;min-width:min(180px,100%);font-size:14px}.arena-weather input{width:100%;min-width:0}.arena-weather button{min-height:42px}.arena-weather small{font-size:12px;color:var(--muted)}
+.arena-weather-results{display:grid;gap:6px}.arena-weather-results button{text-align:left;white-space:normal}
+.arena-weather[aria-busy="true"] [data-weather-refresh]{opacity:.65}
+.arena-weather a{color:var(--accent);text-decoration:underline}.arena-weather [data-weather-status]{font-size:13px;color:var(--muted)}
+.arena-game-grid{display:grid;grid-template-columns:repeat(3,minmax(0,100px));gap:8px;margin:18px 0}.arena-game-grid button{aspect-ratio:1;min-height:64px;font-size:30px;font-weight:700}.arena-game-grid button:disabled{opacity:1;color:var(--text,#eef3f6)}
+.arena-quiz-controls{display:flex;align-items:end;flex-wrap:wrap;gap:12px}.arena-quiz-controls label{max-width:300px;flex:1;min-width:150px}.arena-quiz-controls select{width:100%}
+.arena-news-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:16px}.arena-news-grid article{min-width:0}.arena-news-grid p{line-height:1.6}.arena-news-grid a{display:inline-flex;align-items:center;min-height:44px}
+@media(max-width:480px){.arena-weather-days{grid-template-columns:1fr}.arena-weather-days article{grid-template-columns:1fr 1fr}.arena-weather-days article strong{grid-column:1/-1}}
+@media print{.arena-weather{display:none!important}}
