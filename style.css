@@ -337,15 +337,29 @@ th {
 }
 #notice {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
-  max-width: 90vw;
+  top: max(16px, env(safe-area-inset-top));
+  bottom: auto;
+  right: max(16px, env(safe-area-inset-right));
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(600px, calc(100vw - 32px));
+  max-height: 50vh;
+  max-height: 50dvh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.5;
   background: #e5fac3;
   color: #18220d;
   padding: 15px 22px;
   border-radius: 8px;
-  z-index: 10;
+  z-index: 11000;
   box-shadow: 0 5px 30px #0008;
+}
+@media screen and (min-width: 768px) {
+  body.arena-central-ready #notice {
+    max-width: min(600px, calc(100vw - var(--arena-sidebar-width, 240px) - 32px));
+  }
 }
 #notice.error {
   background: #ffd7d7;
