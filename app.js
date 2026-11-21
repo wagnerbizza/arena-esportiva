@@ -303,7 +303,12 @@ document.addEventListener("submit",async event=>{
     if(C.demo){state.partners=partners;localStorage.setItem(key,JSON.stringify(state));render();}
     else await cloud.savePartners(partners);
     toast(C.demo?"Prévia salva apenas na demonstração.":"Logos e locais de exibição publicados.");
-  }catch(error){toast(error.code==="permission-denied"?"Não foi possível publicar. Confira se as novas regras do Firestore foram publicadas e se você está na conta administrativa.":error.message,true);}
+  }catch(error){
+    const code=error?.code || "sem código";
+    const account=!cloud?.mainUID || !user?.uid ? "não confirmada" : user.uid===cloud.mainUID ? "principal" : "diferente da principal";
+    const detail=String(error?.message || "Sem detalhes retornados.").replace(/https?:\/\/\S+|[A-Za-z0-9+/_=-]{32,}/gi,"[omitido]").slice(0,240);
+    toast(`Identidade dos documentos: ${code}. Conta no painel: ${account}. ${detail}`,true);
+  }
   finally{button.disabled=false;}
 });
 document.addEventListener("click",async event=>{
