@@ -24,7 +24,6 @@ $ArquivosPermitidos = @(
     "apresentacao.html"
     "apresentacao-arena.js"
     "app.js"
-    "arena-documentos.js"
     "arena-weather.js"
     "arena-diversao.js"
     "arena-extras.css"
