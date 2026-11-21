@@ -278,6 +278,16 @@ function partnerMarkup(surface) {
   return groups.length ? `<aside class="arena-partners" aria-label="Organização e apoio">${groups.map(g=>`<section><strong>${esc(g.label)}</strong><div>${g.logos.map(url=>`<img src="${esc(url)}" alt="${esc(g.label)}" referrerpolicy="no-referrer">`).join("")}</div></section>`).join("")}</aside>` : "";
 }
 const partnerPrintCSS = `.arena-partners{margin-top:16px;padding-top:10px;border-top:1px solid #bac5cc;display:flex;flex-wrap:wrap;gap:12px;font:10px Arial,sans-serif;text-align:left}.arena-partners section{break-inside:avoid;max-width:100%}.arena-partners strong{display:block;margin-bottom:5px}.arena-partners section>div{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.arena-partners img{display:block;width:58px;height:38px;object-fit:contain;background:#fff;border-radius:4px;padding:3px}.badge .arena-partners img{width:44px;height:30px}.frame .arena-partners{width:100%;margin-top:5mm;gap:8px}.frame .arena-partners img{width:40px;height:26px}.frame:has(.arena-partners) .bottom{margin-top:6mm}.frame:has(.arena-partners) .title{margin-bottom:4mm}.frame:has(.arena-partners) .recipient{margin:3mm 0;padding-bottom:2mm}.frame:has(.arena-partners) .mark{margin:1mm 0}`+(window.ArenaDocuments?.css||"");
+// Keep the saved-logo display styled even on installations with older CSS.
+const savedPartnerLogoStyles = document.createElement("style");
+savedPartnerLogoStyles.textContent = `
+  .arena-partners { display:flex; flex-wrap:wrap; justify-content:center; align-items:flex-start; gap:20px; }
+  .arena-partners > section { text-align:center; max-width:100%; }
+  .arena-partners > section > div { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
+  .arena-partners img { display:block; width:80px; height:56px; object-fit:contain; }
+`;
+document.head.append(savedPartnerLogoStyles);
+
 function partnerPublicationForm() {
   const published=state.partners;
   if(window.ArenaDocuments)return `<section class="card"><h2>Logotipos e marcas d’água por documento</h2><p>Salve os arquivos e logos na área Identidade da ficha acima. Aqui, escolha os documentos e a posição de cada grupo. O logo do sistema vem de Aparência; o da escola vem das preferências da ficha.</p><p>As escolhas são compartilhadas com a organização. Os logos, a marca d’água e suas configurações ficam públicos; o conteúdo de relatórios privados não é publicado. PDF e impressão usam esta identidade; JSON e Excel mantêm seus dados estruturados.</p><form id="partner-publication">${window.ArenaDocuments.fields(published)}<p>Desmarcar um documento conserva sua identidade básica e desativa a personalização. Arquivos já emitidos não mudam.</p><button type="submit" class="primary">Salvar identidade dos documentos</button></form><div id="document-brand-preview" aria-live="polite"></div><h3>Logos de apoio salvos</h3>${partnerMarkup("preview")||"<p>Nenhum logo de apoio salvo.</p>"}</section>`;
@@ -548,7 +558,10 @@ function registrationSheetHTML(championship,count,branding=state.partners,previe
       .watermark{position:fixed;inset:42% 8% auto;text-align:center;transform:rotate(-25deg);
         font-size:32pt;font-weight:bold;color:rgba(20,20,20,.12);pointer-events:none;overflow-wrap:anywhere}
       .partner-logos{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:5px 0 12px}
-      .partners{margin-top:18px;break-inside:avoid}
+      .partners{margin-top:18px;break-inside:avoid;display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:12px 22px}
+      .partners>section{text-align:center;max-width:100%;break-inside:avoid}
+      .partners .partner-logos{justify-content:center}
+      .partners img{width:80px;height:56px;object-fit:contain}
       @media print{button{display:none}body{margin:0}}
     ${partnerPrintCSS}</style>
     ${!custom&&style.watermark ? `<div class="watermark" aria-hidden="true">${esc(style.watermark)}</div>` : ""}
