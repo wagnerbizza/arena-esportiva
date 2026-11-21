@@ -137,6 +137,46 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
     }
     return y;
   }
+  function footerBrandGroups(groups, y, size) {
+    const gap = 5;
+    const imageSize = size * .65;
+    const rowHeight = imageSize + 10;
+    const perRow = Math.max(1, Math.floor((width + gap) / (size + gap)));
+    let rowY = y + 5;
+    let row = [];
+    let rowWidth = 0;
+    doc.setFontSize(8);
+    function drawRow() {
+      if (!row.length) return;
+      rowY = ensure(rowY, rowHeight);
+      let x = left + (width - rowWidth) / 2;
+      for (const { label, batch, boxWidth, logosWidth } of row) {
+        if (label) doc.text(label, x + boxWidth / 2, rowY, { align: "center" });
+        const logosX = x + (boxWidth - logosWidth) / 2;
+        batch.forEach((logo, index) => {
+          const imageX = logosX + index * (size + gap) + (size - imageSize) / 2;
+          try { doc.addImage(logo, "PNG", imageX, rowY + 4, imageSize, imageSize, undefined, "FAST"); } catch {}
+        });
+        x += boxWidth + gap;
+      }
+      rowY += rowHeight;
+      row = [];
+      rowWidth = 0;
+    }
+    for (const group of groups) {
+      const logos = group.logos || [];
+      const label = ["system", "school"].includes(group.key) ? "" : clean(group.label);
+      for (let offset = 0; offset < logos.length; offset += perRow) {
+        const batch = logos.slice(offset, offset + perRow);
+        const logosWidth = batch.length * (size + gap) - gap;
+        const boxWidth = Math.max(logosWidth, doc.getTextWidth(label));
+        if (row.length && rowWidth + gap + boxWidth > width) drawRow();
+        rowWidth += (row.length ? gap : 0) + boxWidth;
+        row.push({ label, batch, boxWidth, logosWidth });
+      }
+    }
+    drawRow();
+  }
   games.forEach((g, index) => {
     if (index) doc.addPage();
     const firstPage=doc.getNumberOfPages();
@@ -277,7 +317,7 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
     doc.setFontSize(7);
     doc.text("Sumula do sistema. Campos para assinatura em papel.", left, y);
     if(g.documentBranding){
-      brandGroups(g.documentBranding.groups.filter(group=>group.position==='footer'),y,g.documentBranding.config.size);
+      footerBrandGroups(g.documentBranding.groups.filter(group=>group.position==='footer'),y,g.documentBranding.config.size);
       for(let page=firstPage;page<=doc.getNumberOfPages();page++)pageBranding.set(page,g.documentBranding);
     }
   });
