@@ -253,6 +253,28 @@ function registrationStyle() {
   }
 }
 
+// A logo draft belongs to the published images that were visible when it was saved.
+function publishedLogoVersion(branding) {
+  if (!branding) return null;
+  const images = [branding.schoolLogo || "", ...registrationLogoGroups.map((_, index) => branding.groups?.[index] || [])];
+  const text = JSON.stringify(images);
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index++) {
+    hash = Math.imul(hash ^ text.charCodeAt(index), 16777619);
+  }
+  return text.length + ":" + (hash >>> 0);
+}
+function registrationStyleWithCurrentLogos() {
+  const local = registrationStyle();
+  const published = state.partners;
+  if (!published || local.logoBaseVersion === publishedLogoVersion(published)) return local;
+  const schoolLogo = safePartnerLogo(published.schoolLogo) ? published.schoolLogo : "";
+  const logos = registrationLogoGroups.map((_, index) => {
+    const group = published.groups?.[index];
+    return Array.isArray(group) ? group.filter(safePartnerLogo).slice(0, 6) : [];
+  });
+  return { ...local, schoolLogo, logos };
+}
 function registrationLogoPreview(urls, group) {
   return urls.map((url,index) => `<div class="registration-logo-item"><img src="${esc(url)}" alt="${group === "school" ? "Logo da escola" : registrationLogoGroups[Number(group)]}">
     <button type="button" data-registration-logo-remove="${group}" data-logo-index="${index}">Remover imagem</button></div>`).join("");
@@ -263,13 +285,13 @@ function safePartnerLogo(url) {
     (url.length <= 40000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(url)));
 }
 function documentBrandingActive(surface){return window.ArenaDocuments?.active(state.partners,surface)||false;}
-function documentBrandingMarkup(surface,position){return window.ArenaDocuments?.render(state.partners,surface,position,state.settings.logo||"",registrationStyle().schoolLogo||"")||"";}
+function documentBrandingMarkup(surface,position){return window.ArenaDocuments?.render(state.partners,surface,position,state.settings.logo||"",registrationStyleWithCurrentLogos().schoolLogo||"")||"";}
 function partnerGroups(surface) {
   if(surface !== "preview") return [];
   const published=state.partners;
   // Sem publicação, a ficha conserva as imagens locais já utilizadas anteriormente.
   const groups=published ? ((surface === "preview" || published.surfaces?.includes(surface)) ? published.groups : []) :
-    (surface === "registration" ? registrationStyle().logos : []);
+    (surface === "registration" ? registrationStyleWithCurrentLogos().logos : []);
   return registrationLogoGroups.map((label,i)=>({label,logos:(Array.isArray(groups?.[i]) ? groups[i] : []).filter(safePartnerLogo).slice(0,6)})).filter(g=>g.logos.length);
 }
 function partnerMarkup(surface) {
@@ -305,11 +327,11 @@ document.addEventListener("submit",async event=>{
   if(button.disabled)return;
   try {
     if(registrationImageBusy)throw Error("Aguarde as imagens e salve as preferências da ficha antes de publicar.");
-    const groups=registrationLogoGroups.map((_,i)=>registrationStyle().logos?.[i] ?? state.partners?.groups?.[String(i)] ?? []);
+    const groups=registrationLogoGroups.map((_,i)=>registrationStyleWithCurrentLogos().logos?.[i] ?? state.partners?.groups?.[String(i)] ?? []);
     if(groups.some(g=>!Array.isArray(g)||g.length>6||g.some(url=>!safePartnerLogo(url))))throw Error("Confira os logos salvos na ficha: até seis imagens PNG, JPG, WebP ou HTTPS por grupo.");
     const surfaces=new FormData(event.target).getAll("surface").filter(id=>Object.hasOwn(partnerSurfaces,id));
     button.disabled=true;
-    const partners={groups:Object.fromEntries(groups.map((g,i)=>[String(i),g])),surfaces,...(window.ArenaDocuments?{schoolLogo:registrationStyle().schoolLogo??state.partners?.schoolLogo??"",layouts:window.ArenaDocuments.fromForm(event.target)}:{})};
+    const partners={groups:Object.fromEntries(groups.map((g,i)=>[String(i),g])),surfaces,...(window.ArenaDocuments?{schoolLogo:registrationStyleWithCurrentLogos().schoolLogo??state.partners?.schoolLogo??"",layouts:window.ArenaDocuments.fromForm(event.target)}:{})};
     if(C.demo){state.partners=partners;localStorage.setItem(key,JSON.stringify(state));render();}
     else await cloud.savePartners(partners);
     toast(C.demo?"Prévia salva apenas na demonstração.":"Logos e locais de exibição publicados.");
@@ -325,8 +347,8 @@ document.addEventListener("click",async event=>{
   const button=event.target.closest("[data-brand-preview]");
   if(!button||role!=="admin"||!window.ArenaDocuments)return;
   const form=button.closest("form"), surface=button.dataset.brandPreview;
-  const groups=Object.fromEntries(registrationLogoGroups.map((_,i)=>[String(i),registrationStyle().logos?.[i]??state.partners?.groups?.[String(i)]??[]]));
-  const branding={groups,surfaces:new FormData(form).getAll("surface"),schoolLogo:registrationStyle().schoolLogo??state.partners?.schoolLogo??"",layouts:window.ArenaDocuments.fromForm(form)};
+  const groups=Object.fromEntries(registrationLogoGroups.map((_,i)=>[String(i),registrationStyleWithCurrentLogos().logos?.[i]??state.partners?.groups?.[String(i)]??[]]));
+  const branding={groups,surfaces:new FormData(form).getAll("surface"),schoolLogo:registrationStyleWithCurrentLogos().schoolLogo??state.partners?.schoolLogo??"",layouts:window.ArenaDocuments.fromForm(form)};
   const out=$("#document-brand-preview");
   const heading=document.createElement("h3");
   heading.textContent="Prévia • "+partnerSurfaces[surface];
@@ -356,7 +378,7 @@ document.addEventListener("click",async event=>{
         title:"Partida de exemplo",sport:"Futebol",home:"Equipe A",away:"Equipe B",score:"2 x 1",
         date:"Data do evento",place:"Local do evento",status:"Encerrada",stage:"Final",
         roster:[],events:[],badges:[],organizationLogo:state.settings.logo,
-        documentBranding:window.ArenaDocuments.model(branding,surface,state.settings.logo||"",registrationStyle().schoolLogo||"")
+        documentBranding:window.ArenaDocuments.model(branding,surface,state.settings.logo||"",registrationStyleWithCurrentLogos().schoolLogo||"")
       }];
       const pdf=await createReportPDF(games);
       if(!preview.isConnected)return;
@@ -387,7 +409,7 @@ document.addEventListener("click",async event=>{
   }catch(error){if(preview.isConnected){preview.remove();message.textContent=error.message||"Não foi possível montar a prévia.";}}
 });
 function registrationStyleForm() {
-  const local = registrationStyle();
+  const local = registrationStyleWithCurrentLogos();
   const published = state.partners;
   const publishedSchool = published?.schoolLogo;
   const style = {
@@ -404,7 +426,7 @@ function registrationStyleForm() {
     <p>O logo da escola aparece no cabeçalho da ficha, ao lado do logo principal da Arena.
     Organizadores, patrocinadores e colaboradores aparecem após a lista de participantes.
     A marca d’água fica ao fundo das páginas.</p>
-    <p>Os logos publicados aparecem aqui quando este navegador ainda não tem uma preferência local para eles. As preferências da ficha ficam salvas neste navegador.
+    <p>Se os logos forem publicados em outro aparelho, esta tela carrega a nova versão. Para sincronizar uma remoção, salve as preferências e depois salve a identidade dos documentos. As preferências da ficha ficam salvas neste navegador.
     O logo principal do sistema é configurado acima e também é usado nos painéis, documentos e QR codes que o incluem.</p>
     <form id="registration-style"><div class="formgrid">
       ${field("Nome da escola", "school", "text", `maxlength="150" value="${esc(style.school || "")}"`)}
@@ -505,7 +527,8 @@ document.addEventListener("submit", event => {
     if ((schoolLogo && !validLogo(schoolLogo)) || logos.some(group=>group.length>6 || group.some(url=>!validLogo(url))))
       throw Error("Use arquivos PNG, JPG ou WebP ou links HTTPS válidos, até seis logos por grupo.");
     localStorage.setItem(registrationStyleKey,JSON.stringify({
-      school:get("school"),schoolLogo,font:get("font"),size:Number(get("size")),watermark:get("watermark"),logos
+      school:get("school"),schoolLogo,font:get("font"),size:Number(get("size")),watermark:get("watermark"),logos,
+      logoBaseVersion:publishedLogoVersion(state.partners)
     }));
     toast("Preferências da ficha salvas neste navegador.");
   } catch (error) {toast(error.message || "Não foi possível salvar as preferências.",true);}
@@ -532,7 +555,7 @@ function printRegistrationSheet(championship) {
 }
 
 function registrationSheetHTML(championship,count,branding=state.partners,preview=false) {
-  const style = registrationStyle();
+  const style = registrationStyleWithCurrentLogos();
   const custom=window.ArenaDocuments?.active(branding,"registration");
   const brand=position=>window.ArenaDocuments?.render(branding,"registration",position,state.settings.logo||"",style.schoolLogo||"")||"";
   const font = Object.hasOwn(registrationFonts, style.font) ? registrationFonts[style.font] : registrationFonts["Sem serifa"];
@@ -1837,7 +1860,7 @@ function reportPDFData(m,branding=state.partners) {
   return {
           title: m.competition || "Partida avulsa",
           organizationLogo: state.settings?.logo || "",
-          documentBranding:window.ArenaDocuments?.model(branding,"matchSheets",state.settings.logo||"",registrationStyle().schoolLogo||"")||null,
+          documentBranding:window.ArenaDocuments?.model(branding,"matchSheets",state.settings.logo||"",registrationStyleWithCurrentLogos().schoolLogo||"")||null,
           sport: m.sport,
           home: name(m.home),
           away: name(m.away),
@@ -1925,7 +1948,7 @@ function certificateHTML({name:person, role:participation, event, sport, place, 
   const description = institutional
     ? "Por idealizar e desenvolver a plataforma ARENA ESPORTIVA, um projeto independente dedicado à organização, gestão e acompanhamento de eventos e competições esportivas, reunindo tecnologia, informação e incentivo ao esporte."
     : `Certificamos que ${recipient} participou como ${participation} do evento ${event}${sport ? `, na modalidade ${sport}` : ""}${place ? `, realizado em ${place}` : ""}, recebendo este reconhecimento pela sua participação.`;
-  const brand=position=>window.ArenaDocuments?.render(branding,"certificates",position,organizationLogo,registrationStyle().schoolLogo||"")||"";
+  const brand=position=>window.ArenaDocuments?.render(branding,"certificates",position,organizationLogo,registrationStyleWithCurrentLogos().schoolLogo||"")||"";
   const safe = v => esc(v);
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} • Arena Esportiva</title><style>@page{size:A4 landscape;margin:0}*{box-sizing:border-box}body{margin:0;background:#eef1f4;color:#18232e;font-family:Arial,Helvetica,sans-serif}.sheet{width:297mm;height:210mm;margin:0 auto;padding:13mm;background:#fff;position:relative;overflow:hidden}.frame{height:100%;border:2px solid #183b52;padding:12mm 17mm;position:relative;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center}.frame:before{content:"";position:absolute;inset:3mm;border:1px solid #b58b45;pointer-events:none}.certificate-logo{position:absolute;top:9mm;right:12mm;display:block;max-width:30mm;max-height:24mm;object-fit:contain}.brand{font-size:13px;font-weight:800;letter-spacing:5px;color:#183b52}.mark{font-size:34px;color:#b58b45;margin:3mm 0}.eyebrow{font-size:13px;letter-spacing:4px;color:#536879;margin:2mm 0}.title{font-family:Georgia,serif;font-size:31px;letter-spacing:2px;color:#183b52;margin:4mm 0 8mm}.intro{font-size:15px;color:#53616c}.recipient{font-family:Georgia,serif;font-size:31px;font-weight:bold;color:#142f42;margin:5mm 0 7mm;border-bottom:1px solid #b58b45;padding:0 15mm 4mm}.description{font-family:Georgia,serif;font-size:17px;line-height:1.65;max-width:220mm;margin:0 auto}.bottom{width:100%;display:flex;justify-content:space-between;align-items:end;margin-top:13mm;font-size:12px;color:#465663}.signature{min-width:65mm;border-top:1px solid #536879;padding-top:3mm}.code{position:absolute;bottom:5mm;right:8mm;font-size:9px;color:#65737d}.seal{position:absolute;top:10mm;right:12mm;border:1px solid #b58b45;border-radius:50%;width:24mm;height:24mm;display:grid;place-content:center;color:#183b52;font-size:9px;font-weight:bold;transform:rotate(12deg)}@media print{body{background:white}.sheet{margin:0;box-shadow:none}}@media screen{.sheet{margin:18px auto;box-shadow:0 8px 35px #0002}}@media(max-width:800px){.sheet{transform-origin:top left;}}${partnerPrintCSS}.frame>.arena-doc-header{justify-content:flex-end;text-align:right}.frame>.arena-doc-header:has(>[data-brand-resource="system"]:only-child){position:absolute;top:9mm;right:12mm;width:auto;margin:0}.frame>.arena-doc-header:has(>[data-brand-resource="system"]:only-child) img{height:auto;max-height:24mm;max-width:30mm}</style></head><body><main class="sheet"><div class="frame">${window.ArenaDocuments?.active(branding,"certificates")?brand("header"):organizationLogoMarkup || '<div class="seal">ARENA<br>ESPORTIVA</div>'}<div class="brand">WAGNERBIZZA • ARENA ESPORTIVA</div><div class="mark">◇</div><div class="eyebrow">RECONHECIMENTO OFICIAL DO PROJETO</div><h1 class="title">${title}</h1><p class="intro">Certificamos para os devidos fins que</p><div class="recipient">${safe(recipient)}</div><p class="description">${safe(description)}</p><div class="bottom"><div class="signature">${safe(issuer || "WagnerBIZZA")}<br>Responsável pela emissão</div><div>${safe(date)}${place ? `<br>${safe(place)}` : ""}</div><div class="signature">Arena Esportiva<br>Gestão esportiva</div></div>${brand("footer")+brand("background")}<div class="code">Código do documento: ${code}</div></div></main>${preview ? "" : `<script>window.addEventListener('load',()=>{const logo=document.querySelector('.certificate-logo');let printed=false;const print=()=>{if(printed)return;printed=true;setTimeout(()=>window.print(),180)};if(logo&&!logo.complete){logo.addEventListener('load',print,{once:true});logo.addEventListener('error',print,{once:true});setTimeout(print,3000)}else print()});</script>`}</body></html>`;
 }
@@ -4873,7 +4896,7 @@ function printEventCredential(record) {
 }
 function credentialHTML(record,event,branding=state.partners,preview=false) {
   const custom=window.ArenaDocuments?.active(branding,"credentials");
-  const brand=position=>window.ArenaDocuments?.render(branding,"credentials",position,state.settings.logo||"",registrationStyle().schoolLogo||"")||"";
+  const brand=position=>window.ArenaDocuments?.render(branding,"credentials",position,state.settings.logo||"",registrationStyleWithCurrentLogos().schoolLogo||"")||"";
   const logo=state.settings.logo||"",safe=/^https:\/\//i.test(logo)||/^data:image\/(png|jpeg|webp);base64,/i.test(logo);
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Credencial • ${esc(record.name)}</title><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font:14px Arial,sans-serif;color:#142832;background:#fff}.badge{width:90mm;min-height:130mm;border:2px solid #183e52;border-radius:5mm;padding:7mm;margin:10mm auto;text-align:center;overflow-wrap:anywhere}.logo{height:18mm;max-width:65mm;object-fit:contain}.function{padding:4mm;background:#163f55;color:#fff;font-size:22px;font-weight:bold}.name{font-size:24px;font-weight:bold;margin:9mm 0}.code{font-size:10px;margin-top:7mm}.status{font-weight:bold;color:${record.status==="revogada"?"#9b1c1c":"#174f30"}}.tools{text-align:center}@media print{.tools{display:none}}${partnerPrintCSS}</style></head><body>${preview ? "" : '<div class="tools"><button onclick="window.print()">Imprimir / salvar em PDF</button></div>'}<article class="badge">${brand("header")}${!custom&&safe?`<img class="logo" src="${esc(logo)}" alt="Logo da organização">`:""}<p>${esc(state.settings.title)}</p><h2>${esc(championshipTitle(event))}</h2><p>${esc(event.sport+(event.category?" • "+event.category:""))}</p><div class="function">${esc(record.function)}</div><div class="name">${esc(record.name)}</div><p>${esc(record.organization||"Organização do evento")}</p><p>Válida até ${esc(record.validUntil||"Não informada")}</p><p class="status">${record.status!=="ativa"?"CREDENCIAL REVOGADA":credentialIsExpired(record)?"CREDENCIAL VENCIDA":"CREDENCIAL ATIVA"}</p><p class="code">Código ${esc(record.id)}<br>Conferência pela organização na lista de credenciais.<br>Identificação de evento sem concessão de acesso ao sistema.</p>${brand("footer")+brand("background")}<p class="code">WagnerBIZZA • Arena</p></article></body></html>`;
 }
