@@ -535,6 +535,7 @@ export async function connectSpark({
     if (action.type === "notes" && !isOwner()) {
       throw Error("Somente o administrador pode editar as observações da súmula.");
     }
+    if(action.type==="matchRosterAdd"&&!canManageRosters())throw Error("A organização precisa incluir o novo jogador no elenco desta partida.");
     const rosterAction=canManageRosters()&&(["team","player"].includes(action.type)||(action.type==="import"&&["team","player"].includes(action.kind)));
     const matchCreation = action.type === "match" && !action.data?.id && canCreateMatches();
     const championshipAction = action.type === "championship" && canManageChampionships();
@@ -665,6 +666,15 @@ export async function connectSpark({
           if(!o.exists())throw Error("Lance antigo ainda não disponível para anulação. Peça ao administrador para abrir Ver lances anteriores nesta partida e sincronizar o histórico.");
           original = o.data();
         }
+        let rosterPlayer=null;
+        if(action.type==="matchRosterAdd"){
+          if(typeof action.playerId!=="string"||!action.playerId||action.playerId.includes("/"))throw Error("Selecione um jogador cadastrado.");
+          const snap=await tx.get(F.doc(database,"players",action.playerId));
+          if(!snap.exists()||snap.data().testData===true)throw Error("Jogador indisponível.");
+          rosterPlayer={...snap.data(),id:snap.id};
+          const team=await tx.get(F.doc(database,"teams",rosterPlayer.team));
+          if(!team.exists()||team.data().archived===true||team.data().testData===true)throw Error("Equipe indisponível para novas inclusões.");
+        }
         // Releitura na transação evita usar uma edição desatualizada do campeonato.
         const championshipId = prepared?.championshipId || (action.type === "championshipLink" ? action.championshipId : "");
         let championship = null;
@@ -713,7 +723,7 @@ export async function connectSpark({
           if (!before) throw Error("Partida não encontrada.");
           const result = M.applyMatch(
             before,
-            { ...action, administrative:isOwner(), publicId: actionId, championship },
+            { ...action, rosterPlayer, administrative:isOwner(), publicId: actionId, championship },
             original,
             F.serverTimestamp(),
           );
@@ -771,7 +781,7 @@ export async function connectSpark({
             at: F.serverTimestamp(),
           });
         if (action.type === "clock" && action.command === "ajustar") {
-          return { clock: next.clock, revision: next._revision };
+          return { clock: next.clock, addedTime:next.addedTime||null, revision: next._revision };
         }
       });
     // Uma regra pode rejeitar uma revisão antiga durante uma disputa entre dispositivos.

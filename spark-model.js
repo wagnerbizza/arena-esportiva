@@ -219,20 +219,32 @@
             mode: a.mode,
             durationMs: a.durationMs,
           };
+          const leavingAdded=m.addedTime?.phase==="started" || Object.hasOwn(c.segments||{},"acrescimos") || (m.addedTime?.stage===m.stage && m.addedTime.minutes>0);
+          if(leavingAdded)m.addedTime={stage:m.stage,minutes:0,phase:"announced"};
           e.value = a.baseMs;
-          e.text = "Ajuste do cronômetro: " + clockText(m);
+          e.text = "Ajuste do cronômetro: " + clockText(m)+(leavingAdded?"; retorno ao tempo normal, acréscimos retirados":"");
         } else throw Error("Comando do cronômetro inválido.");
       } else if (a.type === "addedTime") {
         need(m.sport === "Futebol" && m.status === "Ao vivo", "Acréscimos disponíveis para futebol ao vivo.");
         need(Number.isInteger(a.minutes) && a.minutes >= 0 && a.minutes <= 30, "Informe de 0 a 30 minutos.");
         const started = m.addedTime?.stage === m.stage &&
           (m.addedTime.phase === "started" || Object.hasOwn(m.clock?.segments || {},"acrescimos"));
+        need(!(started && a.minutes===0),"Para sair dos acréscimos iniciados, pare o relógio e salve o ajuste do tempo normal.");
         m.addedTime = {stage:m.stage,minutes:a.minutes,phase:started ? "started" : "announced"};
         Object.assign(e, {type:"acréscimos", value:a.minutes, text:"Acréscimos: +" + a.minutes + " min"});
       } else if (a.type === "notice") {
         m.publicNotice = text(a.notice, 300);
         e.type = "aviso";
         e.text = m.publicNotice;
+      } else if(a.type === "matchRosterAdd") {
+        const p=a.rosterPlayer;
+        need(p && [m.home,m.away].includes(p.team),"Jogador não pertence às equipes desta partida.");
+        need(text(a.reason),"Informe o motivo da inclusão no elenco.");
+        need(!m.roster.some(row=>row.id===p.id) && !Object.hasOwn(m.rosterTeams,p.id),"Este jogador já está no elenco da partida.");
+        need(m.roster.length<80,"O elenco da partida já atingiu a capacidade existente de 80 jogadores.");
+        const player={id:p.id,name:p.name,team:p.team,number:p.number||"",position:p.position||"",reserve:p.reserve===true};
+        m.roster.push(player);m.rosterTeams[p.id]=p.team;
+        Object.assign(e,{type:"elenco",side:p.team===m.home?0:1,player:p.id,from:p.id,to:p.team,reason:text(a.reason,500),text:"Inclusão no elenco da partida: "+p.name});
       } else if (a.type === "event") {
         need(m.status === "Ao vivo", "Inicie ou retome a partida.");
         need(
