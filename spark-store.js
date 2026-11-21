@@ -134,6 +134,7 @@ export async function connectSpark({
     state = D.fresh();
     if (publicBranding) state.settings = publicBranding;
     const ownerView = full && isOwner();
+    watchDoc("publicBranding/partners", data => { state.partners = data; });
     watchDoc(ownerView ? "settings/main" : "publicSettings/main",
       (d) => (state.settings = d || D.fresh().settings));
     watchCollection(ownerView || (full && canManageRosters()) ? "teams" : "publicTeams", (d) => (state.teams = d), !ownerView && full && canManageRosters() ? [F.where("testData","==",false)] : []);
@@ -1183,6 +1184,11 @@ export async function connectSpark({
     database,
     F,
     send,
+    savePartners: async data => {
+      if(!isOwner())throw Error("Publicação exclusiva do administrador.");
+      if(!window.ArenaDocuments?.validate(data))throw Error("Confira os logos, posições e marcas d’água dos documentos.");
+      await F.setDoc(F.doc(database,"publicBranding","partners"),data);
+    },
     mainUID,
     isAdministratorUID: uid => administratorUIDs.has(uid),
     register,

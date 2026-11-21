@@ -120,12 +120,29 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
     }
     return y;
   }
+  const pageBranding = new Map();
+  function brandGroups(groups,y,size) {
+    for(const group of groups) {
+      if(!group.logos?.length)continue;
+      y=ensure(y+5,size+9);doc.setFontSize(8);
+      if(!['system','school'].includes(group.key)){doc.text(clean(group.label),left,y);y+=4;}
+      let x=left;
+      for(const logo of group.logos){
+        if(x+size>198){x=left;y=ensure(y+size*.7+3,size*.7+3);}
+        try{doc.addImage(logo,'PNG',x,y,size,size*.65,undefined,'FAST');}catch{}
+        x+=size+5;
+      }
+      y+=size*.7+3;
+    }
+    return y;
+  }
   games.forEach((g, index) => {
     if (index) doc.addPage();
+    const firstPage=doc.getNumberOfPages();
     doc.setTextColor(...ink);
     doc.setFont("helvetica", "bold");
     // Logo institucional configurado no sistema, independente dos escudos das equipes.
-    if (g.organizationLogo) {
+    if (g.organizationLogo && !g.documentBranding) {
       try {
         doc.addImage(g.organizationLogo, "PNG", left, 5, 11, 11, undefined, "FAST");
       } catch {
@@ -133,14 +150,15 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
       }
     }
     doc.setFontSize(10);
-    doc.text("SÚMULA DA PARTIDA", g.organizationLogo ? 26 : left, 15);
+    doc.text("SÚMULA DA PARTIDA", g.organizationLogo && !g.documentBranding ? 26 : left, 15);
     doc.setFontSize(10);
     doc.text("WagnerBIZZA", 198, 15, { align: "right" });
     doc.setDrawColor(...accent);
     doc.setLineWidth(0.6);
     doc.line(left, 19, 198, 19);
     doc.setFontSize(15);
-    let y = 25;
+    let y = g.documentBranding ? brandGroups(g.documentBranding.groups.filter(group=>["header","beside"].includes(group.position)),25,g.documentBranding.config.size)+4 : 25;
+    doc.setFontSize(15);
     const title = doc.splitTextToSize(clean(g.title + " - " + g.sport), width);
     doc.text(title, left, y);
     y += title.length * 6 + 3;
@@ -257,16 +275,27 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
     y += 8;
     doc.setFontSize(7);
     doc.text("Sumula do sistema. Campos para assinatura em papel.", left, y);
+    if(g.documentBranding){
+      brandGroups(g.documentBranding.groups.filter(group=>group.position==='footer'),y,g.documentBranding.config.size);
+      for(let page=firstPage;page<=doc.getNumberOfPages();page++)pageBranding.set(page,g.documentBranding);
+    }
   });
   for (let i = 1; i <= doc.getNumberOfPages(); i++) {
     doc.setPage(i);
     if (doc.GState) {
       doc.saveGraphicsState();
-      doc.setGState(new doc.GState({ opacity: 0.045 }));
+      const branding=pageBranding.get(i);
+      doc.setGState(new doc.GState({ opacity: branding ? branding.config.opacity/100 : 0.045 }));
       doc.setTextColor(50);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(48);
-      doc.text("WagnerBIZZA", 45, 165, { angle: 28 });
+      if(branding){
+        if(branding.config.watermarkText){
+          doc.setFontSize(30);doc.text(doc.splitTextToSize(clean(branding.config.watermarkText),155),30,155,{angle:branding.config.angle});
+        }
+        const images=branding.groups.filter(group=>group.position==='background').flatMap(group=>group.logos);
+        images.forEach((logo,index)=>{try{doc.addImage(logo,'PNG',30+(index%4)*39,65+Math.floor(index/4)*29,32,22,undefined,'FAST',branding.config.angle);}catch{}});
+      }else doc.text("WagnerBIZZA", 45, 165, { angle: 28 });
       doc.restoreGraphicsState();
     }
     doc.setFont("helvetica", "normal");
@@ -285,6 +314,7 @@ export async function downloadReportPDF(games) {
     games.map(async (g) => ({
       ...g,
       organizationLogo: await logoPNG(g.organizationLogo),
+      documentBranding: g.documentBranding ? {...g.documentBranding,groups:await Promise.all(g.documentBranding.groups.map(async group=>({...group,logos:(await Promise.all(group.logos.map(logoPNG))).filter(Boolean)})))} : null,
       logos: await Promise.all(g.badges.map(logoPNG)),
     })),
   );
