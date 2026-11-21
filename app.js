@@ -387,12 +387,24 @@ document.addEventListener("click",async event=>{
   }catch(error){if(preview.isConnected){preview.remove();message.textContent=error.message||"Não foi possível montar a prévia.";}}
 });
 function registrationStyleForm() {
-  const style = registrationStyle();
+  const local = registrationStyle();
+  const published = state.partners;
+  const publishedSchool = published?.schoolLogo;
+  const style = {
+    ...local,
+    schoolLogo: local.schoolLogo ?? (safePartnerLogo(publishedSchool) ? publishedSchool : ""),
+    logos: registrationLogoGroups.map((_, index) => {
+      const draft = local.logos?.[index];
+      if (Array.isArray(draft)) return draft;
+      const saved = published?.groups?.[index];
+      return Array.isArray(saved) ? saved.filter(safePartnerLogo).slice(0, 6) : [];
+    }),
+  };
   return `<section class="card"><h2>Identidade da ficha de inscrição</h2>
     <p>O logo da escola aparece no cabeçalho da ficha, ao lado do logo principal da Arena.
     Organizadores, patrocinadores e colaboradores aparecem após a lista de participantes.
     A marca d’água fica ao fundo das páginas.</p>
-    <p>Estas preferências são usadas na ficha de inscrição e ficam salvas neste navegador.
+    <p>Os logos publicados aparecem aqui quando este navegador ainda não tem uma preferência local para eles. As preferências da ficha ficam salvas neste navegador.
     O logo principal do sistema é configurado acima e também é usado nos painéis, documentos e QR codes que o incluem.</p>
     <form id="registration-style"><div class="formgrid">
       ${field("Nome da escola", "school", "text", `maxlength="150" value="${esc(style.school || "")}"`)}
