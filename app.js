@@ -257,6 +257,120 @@ function registrationLogoPreview(urls, group) {
   return urls.map((url,index) => `<div class="registration-logo-item"><img src="${esc(url)}" alt="${group === "school" ? "Logo da escola" : registrationLogoGroups[Number(group)]}">
     <button type="button" data-registration-logo-remove="${group}" data-logo-index="${index}">Remover imagem</button></div>`).join("");
 }
+const partnerSurfaces = {registration:"Ficha de inscrição",credentials:"Credenciais",certificates:"Certificados",matchSheets:"Súmulas (impressão e PDF)",reports:"Relatórios esportivos",auditReports:"Relatório geral de alterações",publicPanel:"Painel público"};
+function safePartnerLogo(url) {
+  return typeof url === "string" && ((url.length <= 1500 && /^https:\/\/[^\s]+$/i.test(url)) ||
+    (url.length <= 40000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(url)));
+}
+function documentBrandingActive(surface){return window.ArenaDocuments?.active(state.partners,surface)||false;}
+function documentBrandingMarkup(surface,position){return window.ArenaDocuments?.render(state.partners,surface,position,state.settings.logo||"",registrationStyle().schoolLogo||"")||"";}
+function partnerGroups(surface) {
+  if(surface !== "preview") return [];
+  const published=state.partners;
+  // Sem publicação, a ficha conserva as imagens locais já utilizadas anteriormente.
+  const groups=published ? ((surface === "preview" || published.surfaces?.includes(surface)) ? published.groups : []) :
+    (surface === "registration" ? registrationStyle().logos : []);
+  return registrationLogoGroups.map((label,i)=>({label,logos:(Array.isArray(groups?.[i]) ? groups[i] : []).filter(safePartnerLogo).slice(0,6)})).filter(g=>g.logos.length);
+}
+function partnerMarkup(surface) {
+  if(documentBrandingActive(surface))return documentBrandingMarkup(surface,"footer")+documentBrandingMarkup(surface,"background");
+  const groups=partnerGroups(surface);
+  return groups.length ? `<aside class="arena-partners" aria-label="Organização e apoio">${groups.map(g=>`<section><strong>${esc(g.label)}</strong><div>${g.logos.map(url=>`<img src="${esc(url)}" alt="${esc(g.label)}" referrerpolicy="no-referrer">`).join("")}</div></section>`).join("")}</aside>` : "";
+}
+const partnerPrintCSS = `.arena-partners{margin-top:16px;padding-top:10px;border-top:1px solid #bac5cc;display:flex;flex-wrap:wrap;gap:12px;font:10px Arial,sans-serif;text-align:left}.arena-partners section{break-inside:avoid;max-width:100%}.arena-partners strong{display:block;margin-bottom:5px}.arena-partners section>div{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.arena-partners img{display:block;width:58px;height:38px;object-fit:contain;background:#fff;border-radius:4px;padding:3px}.badge .arena-partners img{width:44px;height:30px}.frame .arena-partners{width:100%;margin-top:5mm;gap:8px}.frame .arena-partners img{width:40px;height:26px}.frame:has(.arena-partners) .bottom{margin-top:6mm}.frame:has(.arena-partners) .title{margin-bottom:4mm}.frame:has(.arena-partners) .recipient{margin:3mm 0;padding-bottom:2mm}.frame:has(.arena-partners) .mark{margin:1mm 0}`+(window.ArenaDocuments?.css||"");
+function partnerPublicationForm() {
+  const published=state.partners;
+  if(window.ArenaDocuments)return `<section class="card"><h2>Logotipos e marcas d’água por documento</h2><p>Salve os arquivos e logos na área Identidade da ficha acima. Aqui, escolha os documentos e a posição de cada grupo. O logo do sistema vem de Aparência; o da escola vem das preferências da ficha.</p><p>As escolhas são compartilhadas com a organização. Os logos, a marca d’água e suas configurações ficam públicos; o conteúdo de relatórios privados não é publicado. PDF e impressão usam esta identidade; JSON e Excel mantêm seus dados estruturados.</p><form id="partner-publication">${window.ArenaDocuments.fields(published)}<p>Desmarcar um documento conserva sua identidade básica e desativa a personalização. Arquivos já emitidos não mudam.</p><button type="submit" class="primary">Salvar identidade dos documentos</button></form><div id="document-brand-preview" aria-live="polite"></div><h3>Logos de apoio salvos</h3>${partnerMarkup("preview")||"<p>Nenhum logo de apoio salvo.</p>"}</section>`;
+  return `<section class="card"><h2>Organização e apoio nos materiais públicos</h2><p>Use os logos de organizadores, patrocinadores e colaboradores salvos na ficha acima. Esta publicação é compartilhada com todos os navegadores e vale para todos os eventos. O logo principal e o logo da escola permanecem separados.</p>
+  <p>Marque onde os logos devem aparecer. Desmarcar um material remove os logos das próximas visualizações e emissões; arquivos já baixados ou impressos permanecem como estavam. Não inclui relatórios administrativos privados, JSON ou planilhas.</p>
+  <form id="partner-publication"><fieldset><legend>Onde exibir</legend>${Object.entries(partnerSurfaces).map(([id,label])=>`<label class="partner-option"><input type="checkbox" name="surface" value="${id}" ${published?.surfaces?.includes(id)?"checked":""}> ${esc(label)}</label>`).join("")}</fieldset>
+  <p class="muted">Primeiro salve as preferências da ficha acima. Depois publique para copiar esses logos e as opções marcadas. As imagens publicadas ficam acessíveis ao público.</p><button type="submit" class="primary">Publicar logos e locais de exibição</button></form><h3>Logos publicados atualmente</h3>${partnerMarkup("preview") || '<p>Nenhum logo de apoio publicado.</p>'}
+  ${published ? `<p>${esc(published.surfaces.map(id=>partnerSurfaces[id]).filter(Boolean).join(" • ") || "Exibição desativada em todos os materiais.")}</p>` : ""}</section>`;
+}
+document.addEventListener("submit",async event=>{
+  if(event.target.id!=="partner-publication")return;
+  event.preventDefault();
+  if(!admin || role!=="admin")return;
+  const button=event.target.querySelector('button[type="submit"]');
+  if(button.disabled)return;
+  try {
+    if(registrationImageBusy)throw Error("Aguarde as imagens e salve as preferências da ficha antes de publicar.");
+    const groups=registrationLogoGroups.map((_,i)=>registrationStyle().logos?.[i] ?? state.partners?.groups?.[String(i)] ?? []);
+    if(groups.some(g=>!Array.isArray(g)||g.length>6||g.some(url=>!safePartnerLogo(url))))throw Error("Confira os logos salvos na ficha: até seis imagens PNG, JPG, WebP ou HTTPS por grupo.");
+    const surfaces=new FormData(event.target).getAll("surface").filter(id=>Object.hasOwn(partnerSurfaces,id));
+    button.disabled=true;
+    const partners={groups:Object.fromEntries(groups.map((g,i)=>[String(i),g])),surfaces,...(window.ArenaDocuments?{schoolLogo:registrationStyle().schoolLogo??state.partners?.schoolLogo??"",layouts:window.ArenaDocuments.fromForm(event.target)}:{})};
+    if(C.demo){state.partners=partners;localStorage.setItem(key,JSON.stringify(state));render();}
+    else await cloud.savePartners(partners);
+    toast(C.demo?"Prévia salva apenas na demonstração.":"Logos e locais de exibição publicados.");
+  }catch(error){toast(error.code==="permission-denied"?"Não foi possível publicar. Confira se as novas regras do Firestore foram publicadas e se você está na conta administrativa.":error.message,true);}
+  finally{button.disabled=false;}
+});
+document.addEventListener("click",async event=>{
+  const button=event.target.closest("[data-brand-preview]");
+  if(!button||role!=="admin"||!window.ArenaDocuments)return;
+  const form=button.closest("form"), surface=button.dataset.brandPreview;
+  const groups=Object.fromEntries(registrationLogoGroups.map((_,i)=>[String(i),registrationStyle().logos?.[i]??state.partners?.groups?.[String(i)]??[]]));
+  const branding={groups,surfaces:new FormData(form).getAll("surface"),schoolLogo:registrationStyle().schoolLogo??state.partners?.schoolLogo??"",layouts:window.ArenaDocuments.fromForm(form)};
+  const out=$("#document-brand-preview");
+  const heading=document.createElement("h3");
+  heading.textContent="Prévia • "+partnerSurfaces[surface];
+  if(out.dataset.pdfPreview){URL.revokeObjectURL(out.dataset.pdfPreview);delete out.dataset.pdfPreview;}
+  out.replaceChildren(heading);
+  const message=document.createElement("p");
+  message.textContent="A prévia usa as opções atuais do formulário. Salve para usá-las na emissão.";
+  out.append(message);
+  const preview=document.createElement("iframe");
+  preview.title=heading.textContent;
+  preview.style.cssText="width:100%;height:720px;border:1px solid #bac5cc;background:white";
+  preview.setAttribute("sandbox","");
+  out.append(preview);
+  out.scrollIntoView({block:"start"});
+  const championship=state.championships[0] || {name:"Campeonato de exemplo",season:"2026",sport:"Futebol",category:"Livre"};
+  try {
+    if(surface==="registration"){
+      preview.srcdoc=registrationSheetHTML(championship,20,branding,true);
+    }else if(surface==="credentials"){
+      preview.srcdoc=credentialHTML({name:"Nome de exemplo",function:"Organização",organization:"Organização do evento",validUntil:"",status:"ativa",id:"EXEMPLO"},championship,branding,true);
+    }else if(surface==="certificates"){
+      preview.srcdoc=certificateHTML({name:"Nome de exemplo",role:"Atleta",event:championship.name,sport:championship.sport},branding,true);
+    }else if(surface==="matchSheets"){
+      const { createReportPDF }=await import("./report-pdf.js?v=previas-4");
+      const match=documentMatches(false)[0];
+      const games=match?[reportPDFData(match,branding)]:[{
+        title:"Partida de exemplo",sport:"Futebol",home:"Equipe A",away:"Equipe B",score:"2 x 1",
+        date:"Data do evento",place:"Local do evento",status:"Encerrada",stage:"Final",
+        roster:[],events:[],badges:[],organizationLogo:state.settings.logo,
+        documentBranding:window.ArenaDocuments.model(branding,surface,state.settings.logo||"",registrationStyle().schoolLogo||"")
+      }];
+      const pdf=await createReportPDF(games);
+      if(!preview.isConnected)return;
+      const url=URL.createObjectURL(pdf.output("blob"));
+      out.dataset.pdfPreview=url;
+      const link=document.createElement("a");
+      link.className="button";
+      link.href=url;
+      link.download="previa-sumula.pdf";
+      link.textContent="Baixar prévia da súmula em PDF";
+      message.textContent="Confira o PDF abaixo ou baixe o arquivo se o navegador não mostrar a prévia.";
+      preview.before(link);
+      // O visualizador nativo de PDF precisa de um iframe sem sandbox.
+      // O endereço aponta apenas para o PDF gerado nesta página.
+      preview.removeAttribute("sandbox");
+      preview.src=url;
+    }else{
+      const previous=state;
+      let content;
+      try{
+        state={...state,partners:branding};
+        if(surface==="reports")content='<div id="reportOutput">'+sportsReportPreview()+'</div>';
+        if(surface==="auditReports")content='<div id="generalAuditOutput">'+auditReportPreview(generalAuditLoaded?undefined:[{entity:"teams",target:"Exemplo",detail:{type:"Atualização"},before:{name:"Equipe A"},after:{name:"Equipe Azul"}}])+'</div>';
+        if(surface==="publicPanel")content='<main id="app">'+publicPageHTML()+'</main>';
+      }finally{state=previous;}
+      preview.srcdoc=`<!doctype html><html lang="pt-BR"><meta charset="utf-8"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="arena-extras.css"><style>${partnerPrintCSS}${surface==="publicPanel"?"":"body{background:#fff;color:#111;padding:12px}.card{background:white;color:#111}.audit-screen-only{display:none}.audit-print-only{display:block}"}</style><body>${content||""}</body></html>`;
+    }
+  }catch(error){if(preview.isConnected){preview.remove();message.textContent=error.message||"Não foi possível montar a prévia.";}}
+});
 function registrationStyleForm() {
   const style = registrationStyle();
   return `<section class="card"><h2>Identidade da ficha de inscrição</h2>
@@ -378,7 +492,22 @@ function printRegistrationSheet(championship) {
     throw Error("Informe um número inteiro de 1 a 60.");
   }
 
+  const sheet = window.open("", "_blank");
+  if (!sheet) throw Error("Permita que o Arena abra a ficha em uma nova aba.");
+  sheet.opener = null;
+  sheet.document.open();
+  sheet.document.write(registrationSheetHTML(championship,count));
+  sheet.document.close();
+  sheet.document.getElementById("print").onclick = async () => {
+    await Promise.all([...sheet.document.images].map(img => img.decode().catch(() => {})));
+    sheet.print();
+  };
+}
+
+function registrationSheetHTML(championship,count,branding=state.partners,preview=false) {
   const style = registrationStyle();
+  const custom=window.ArenaDocuments?.active(branding,"registration");
+  const brand=position=>window.ArenaDocuments?.render(branding,"registration",position,state.settings.logo||"",style.schoolLogo||"")||"";
   const font = Object.hasOwn(registrationFonts, style.font) ? registrationFonts[style.font] : registrationFonts["Sem serifa"];
   const size = Number.isInteger(style.size) && style.size >= 9 && style.size <= 16 ? style.size : 11;
   const partners = registrationLogoGroups.map((group, i) => {
@@ -387,18 +516,15 @@ function printRegistrationSheet(championship) {
     return `<section><strong>${group}</strong><div class="partner-logos">${urls.map((url) =>
       `<img src="${esc(url)}" alt="${group}">`).join("")}</div></section>`;
   }).join("");
-  const sheet = window.open("", "_blank");
-  if (!sheet) throw Error("Permita que o Arena abra a ficha em uma nova aba.");
-  sheet.opener = null;
   const logo = state.settings.logo || "";
   const hasLogo = /^https:\/\//i.test(logo) || /^data:image\/(png|jpeg|webp);base64,/i.test(logo);
   const participants = Array.from({length:count}, (_, i) =>
     `<tr><td>${i + 1}</td><td></td><td></td><td></td><td></td><td></td></tr>`).join("");
-  sheet.document.open();
-  sheet.document.write(`<!doctype html><html lang="pt-BR"><meta charset="utf-8">
+  return `<!doctype html><html lang="pt-BR"><meta charset="utf-8">
     <title>Ficha de inscrição — ${esc(championship.name)}</title>
     <style>
       @page{size:A4;margin:15mm} body{font:${size}pt ${font};color:#111;margin:24px}
+      header>.arena-doc-header{width:auto;margin:0;flex-shrink:0;max-width:55%} body{background:white}
       header{display:flex;align-items:center;gap:16px} img{max-width:96px;max-height:64px}
       table{border-collapse:collapse;width:100%;margin-top:16px}
       th,td{border:1px solid #777;padding:6px;text-align:left;height:22px}
@@ -419,9 +545,9 @@ function printRegistrationSheet(championship) {
       .partner-logos{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:5px 0 12px}
       .partners{margin-top:18px;break-inside:avoid}
       @media print{button{display:none}body{margin:0}}
-    </style>
-    ${style.watermark ? `<div class="watermark" aria-hidden="true">${esc(style.watermark)}</div>` : ""}
-    <header>${style.schoolLogo ? `<img src="${esc(style.schoolLogo)}" alt="Logo da escola">` : ""}${hasLogo ? `<img src="${esc(logo)}" alt="Logo da organização">` : ""}
+    ${partnerPrintCSS}</style>
+    ${!custom&&style.watermark ? `<div class="watermark" aria-hidden="true">${esc(style.watermark)}</div>` : ""}
+    <header>${brand("header")}${!custom&&style.schoolLogo ? `<img src="${esc(style.schoolLogo)}" alt="Logo da escola">` : ""}${!custom&&hasLogo ? `<img src="${esc(logo)}" alt="Logo da organização">` : ""}
       <div><strong>${esc(style.school || systemDisplayName())}</strong><h1>Ficha de inscrição</h1></div>
     </header>
     <h2>${esc(championshipTitle(championship))}</h2>
@@ -429,12 +555,7 @@ function printRegistrationSheet(championship) {
     <p>Equipe: ____________________________________________</p>
     <p>Responsável: _______________________________________</p>
     <table class="registration-players"><colgroup><col style="width:7%"><col style="width:30%"><col style="width:10%"><col style="width:11%"><col style="width:17%"><col style="width:25%"></colgroup><thead><tr><th>Nº</th><th>Nome do participante</th><th>Turma</th><th>Nº da camisa</th><th>Posição</th><th>Assinatura</th></tr></thead>
-    <tbody>${participants}</tbody></table>${partners ? `<aside class="partners">${partners}</aside>` : ""}<button type="button" id="print">Imprimir / Salvar PDF</button></html>`);
-  sheet.document.close();
-  sheet.document.getElementById("print").onclick = async () => {
-    await Promise.all([...sheet.document.images].map(img => img.decode().catch(() => {})));
-    sheet.print();
-  };
+    <tbody>${participants}</tbody></table>${custom?brand("footer")+brand("background"):partners ? `<aside class="partners">${partners}</aside>` : ""}${preview ? "" : '<button type="button" id="print">Imprimir / Salvar PDF</button>'}</html>`;
 }
 
 async function qrLogoData(source) {
@@ -1055,7 +1176,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js");
+    const { connectSpark } = await import("./spark-store.js?v=identidade-3");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -1256,11 +1377,7 @@ function render() {
     return;
   }
   if (!admin) {
-    app.innerHTML = `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(publicEdition || systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section>${C.demo ? "" : shareEditionControls(publicEdition)}${liveStatusPanel("public")}${personalTopShortcuts()}<div class="sectionhead"><h2>Acompanhe os jogos</h2><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
-      D.SPORTS,
-      (x) => x,
-      (x) => x,
-    )}</select></div>${publicHub()}`;
+    app.innerHTML = publicPageHTML();
     $("#filter").value = publicFilter;
     if (state.settings.banner)
       $("#hero").style.backgroundImage =
@@ -1302,7 +1419,7 @@ function render() {
     ["monitor", "Operadores e partidas"],
     ["imports", "Importar"],
   ];
-  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">${esc(panelDisplayName())}</span><h1>${esc(selected && section==="matches" ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${accountPendingBanner()}${liveStatusPanel("admin")}${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>`;
+  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">${esc(panelDisplayName())}</span><h1>${esc(selected && section==="matches" ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>`;
   stopInvisibleTimeline();
   applyArenaDrawer();
   if(section==="qrCodes")renderQRPreviews();
@@ -1313,6 +1430,13 @@ function render() {
       ? documentMatches().map(reportMatch).join("")
       : sportsReportPreview();
   }
+}
+function publicPageHTML() {
+  return `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(publicEdition || systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section>${C.demo ? "" : shareEditionControls(publicEdition)}${liveStatusPanel("public")}${personalTopShortcuts()}<div class="sectionhead"><h2>Acompanhe os jogos</h2><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
+      D.SPORTS,
+      (x) => x,
+      (x) => x,
+    )}</select></div>${documentBrandingMarkup("publicPanel","header")}${publicHub()}${partnerMarkup("publicPanel")}`;
 }
 function publicMatches(filter) {
   const list = state.matches.filter(m=>(!filter||m.sport===filter)&&
@@ -1380,7 +1504,7 @@ function view() {
   if (section === "imports") return importView();
   if (section === "matchSheets") return role==="admin"?matchSheetsView():empty("Súmulas disponíveis somente para o administrador principal.");
   if (section === "reports") return role==="admin"?reports():empty("Relatórios disponíveis somente para o administrador principal.");
-  if (section === "settings") return settingsView() + registrationStyleForm();
+  if (section === "settings") return settingsView() + registrationStyleForm() + (role==="admin"?partnerPublicationForm():"");
   return "";
 }
 // 3 — O Firestore valida permissões, auditoria e transições em firestore.rules.
@@ -1679,6 +1803,47 @@ function prepare(rows) {
     )}<p><button data-confirm-import class="primary" ${valid.length ? "" : "disabled"}>Confirmar ${valid.length} cadastros válidos</button></p><small>Linhas com problemas serão ignoradas. No Firebase, cada linha válida tem gravação e auditoria próprias; se houver interrupção, prepare outra prévia.</small>`;
 }
 // 6 — Relatórios. PDF usa a impressão do navegador; Excel contém várias abas.
+function reportPDFData(m,branding=state.partners) {
+  return {
+          title: m.competition || "Partida avulsa",
+          organizationLogo: state.settings?.logo || "",
+          documentBranding:window.ArenaDocuments?.model(branding,"matchSheets",state.settings.logo||"",registrationStyle().schoolLogo||"")||null,
+          sport: m.sport,
+          home: name(m.home),
+          away: name(m.away),
+          badges: [team(m.home).badge || "", team(m.away).badge || ""],
+          score: gameResult(m).join(" x "),
+          date: format(m.date),
+          place: m.place || "Não informado",
+          referees: m.referees || "Não informada",
+          status: m.status,
+          stage: m.stage,
+          clock: m.clock ? M.clockText(m) : "Não utilizado",
+          notice: m.publicNotice || "",
+          sets: m.sets.map((s) => s.score.join(" x ")).join(" / "),
+          coaches: m.coaches?.join(" / ") || "Não informados",
+          roster: m.roster.map((p) => [
+            name(p.team),
+            p.name,
+            p.number,
+            p.position,
+            p.reserve ? "Reserva" : "Titular",
+          ]),
+          events: m.events.map((e) => [
+            format(e.at) +
+              (e.gameMs != null ? "\nJogo " + prettyTime(e.gameMs) : ""),
+            e.stage || "—",
+            eventLabel(e, m),
+            ([0, 1].includes(e.side) ? name([m.home, m.away][e.side]) : "") +
+              (e.player
+                ? "\n" + (m.roster.find((p) => p.id === e.player)?.name || "")
+                : ""),
+            eventDescription(e),
+            responsibleLabel(e),
+          ]),
+          notes: m.notes,
+        };
+}
 function reportMatch(m) {
   const sc = gameResult(m);
   const roster = [m.home, m.away]
@@ -1708,12 +1873,12 @@ function reportMatch(m) {
   const organizationLogo = state.settings?.logo || "";
   const logoIsSafe = /^https:\/\//i.test(organizationLogo) || /^data:image\/(png|jpeg|webp);base64,/i.test(organizationLogo);
   const organizationLogoMarkup = logoIsSafe ? `<img src="${esc(organizationLogo)}" alt="Logo da organização" style="display:block;max-width:46px;max-height:46px;object-fit:contain;margin-right:12px">` : "";
-  return `<article class="card report-sheet"><div class="report-header" style="display:flex;align-items:center;gap:10px"><div style="display:flex;align-items:center;min-width:0">${organizationLogoMarkup}<div><span class="tag">SÚMULA DA PARTIDA</span><h2>${esc(m.competition || "Partida avulsa")} • ${esc(m.sport)}</h2></div></div><span class="report-brand">WagnerBIZZA</span></div><div class="report-score"><div>${badge(team(m.home))}<strong>${esc(name(m.home))}</strong></div><b>${sc.join(" × ")}</b><div>${badge(team(m.away))}<strong>${esc(name(m.away))}</strong></div></div><div class="report-meta"><p><b>Data:</b> ${esc(format(m.date))}<br><b>Local:</b> ${esc(m.place || "Não informado")}</p><p><b>Arbitragem / mesa:</b> ${esc(m.referees || "Não informada")}<br><b>Situação:</b> ${esc(m.status)} • <b>Etapa:</b> ${esc(m.stage)} • <b>Relógio:</b> ${m.clock ? M.clockText(m) : "Não utilizado"}</p></div>${m.publicNotice ? '<p class="report-alert"><b>Aviso:</b> ' + esc(m.publicNotice) + "</p>" : ""}${m.sets.length ? "<p><b>Parciais:</b> " + m.sets.map((s) => esc(s.score.join(" × "))).join(" / ") + "</p>" : ""}<div class="roster-grid">${roster}</div><h3>Histórico e ocorrências</h3><div class="tablewrap report-events"><table><thead><tr><th>Horário / jogo</th><th>Etapa</th><th>Acontecimento</th><th>Equipe / atleta</th><th>Descrição / motivo</th><th>Responsável</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Nenhum lançamento carregado.</td></tr>'}</tbody></table></div><small>Nomes antigos são recuperados do cadastro disponível; quando ausentes, o UID é preservado.</small><section class="report-notes"><h3>Observações da súmula</h3><p>${esc(m.notes || "Sem observações.")}</p></section><section class="signatures"><div>Árbitro(a): __________________________</div><div>Mesa: __________________________</div><div>Responsável da equipe da casa: __________________________</div><div>Responsável da equipe visitante: __________________________</div><small>Súmula do sistema. Campos para assinatura em papel.</small></section></article>`;
+  return `<article class="card report-sheet"><div class="report-header" style="display:flex;align-items:center;gap:10px"><div style="display:flex;align-items:center;min-width:0">${documentBrandingActive("matchSheets")?documentBrandingMarkup("matchSheets","header"):organizationLogoMarkup}<div><span class="tag">SÚMULA DA PARTIDA</span><h2>${esc(m.competition || "Partida avulsa")} • ${esc(m.sport)}</h2></div></div><span class="report-brand">WagnerBIZZA</span></div><div class="report-score"><div>${badge(team(m.home))}<strong>${esc(name(m.home))}</strong></div><b>${sc.join(" × ")}</b><div>${badge(team(m.away))}<strong>${esc(name(m.away))}</strong></div></div><div class="report-meta"><p><b>Data:</b> ${esc(format(m.date))}<br><b>Local:</b> ${esc(m.place || "Não informado")}</p><p><b>Arbitragem / mesa:</b> ${esc(m.referees || "Não informada")}<br><b>Situação:</b> ${esc(m.status)} • <b>Etapa:</b> ${esc(m.stage)} • <b>Relógio:</b> ${m.clock ? M.clockText(m) : "Não utilizado"}</p></div>${m.publicNotice ? '<p class="report-alert"><b>Aviso:</b> ' + esc(m.publicNotice) + "</p>" : ""}${m.sets.length ? "<p><b>Parciais:</b> " + m.sets.map((s) => esc(s.score.join(" × "))).join(" / ") + "</p>" : ""}<div class="roster-grid">${roster}</div><h3>Histórico e ocorrências</h3><div class="tablewrap report-events"><table><thead><tr><th>Horário / jogo</th><th>Etapa</th><th>Acontecimento</th><th>Equipe / atleta</th><th>Descrição / motivo</th><th>Responsável</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Nenhum lançamento carregado.</td></tr>'}</tbody></table></div><small>Nomes antigos são recuperados do cadastro disponível; quando ausentes, o UID é preservado.</small><section class="report-notes"><h3>Observações da súmula</h3><p>${esc(m.notes || "Sem observações.")}</p></section><section class="signatures"><div>Árbitro(a): __________________________</div><div>Mesa: __________________________</div><div>Responsável da equipe da casa: __________________________</div><div>Responsável da equipe visitante: __________________________</div><small>Súmula do sistema. Campos para assinatura em papel.</small></section>${partnerMarkup("matchSheets")}</article>`;
 }
 function certificatePanel() {
   return `<section class="card certificate-panel noprint"><span class="tag">EMISSÃO DE DOCUMENTOS</span><h2>Certificados</h2><p class="muted">Preencha os dados e abra a visualização de impressão para imprimir ou salvar o certificado em PDF. Também é possível baixar os dados preenchidos em JSON; o sistema não mantém um arquivo permanente de certificados emitidos.</p><datalist id="certificateChampionships">${(state.championships||[]).map(c=>`<option value="${esc(championshipTitle(c))}">${esc(c.sport)}</option>`).join("")}</datalist><form id="arenaCertificateForm"><div class="formgrid">${field("Nome completo do participante", "certificateName", "text", 'required maxlength="120" placeholder="Nome que aparecerá no certificado"')}${field("Participação / reconhecimento", "certificateRole", "text", 'required maxlength="120" value="Participação"')}${field("Evento / campeonato", "certificateEvent", "text", 'required maxlength="150" list="certificateChampionships" placeholder="Nome do evento ou campeonato"')}${field("Modalidade", "certificateSport", "text", 'maxlength="80" placeholder="Ex.: Futebol, Basquete, Vôlei"')}${field("Local", "certificatePlace", "text", 'maxlength="120" placeholder="Cidade ou local do evento"')}${field("Data de emissão", "certificateDate", "date", `required value="${new Date().toISOString().slice(0,10)}"`)}${field("Responsável pela emissão", "certificateIssuer", "text", 'required maxlength="100" value="WagnerBIZZA"')}</div><div class="toolbar"><button class="primary" type="submit">Visualizar / imprimir ou salvar em PDF</button><button type="button" data-certificate-json>Baixar dados do certificado (JSON)</button></div></form><div class="certificate-institutional"><h3>Certificado institucional do projeto</h3><p>Documento de reconhecimento da idealização e do desenvolvimento da plataforma Arena Esportiva.</p><div class="toolbar"><button type="button" data-institutional-certificate>Visualizar / imprimir em PDF</button><button type="button" data-institutional-certificate-json>Baixar dados institucionais (JSON)</button></div></div><p class="muted">Cada emissão recebe um código identificador. Nesta etapa, o código identifica o documento, mas ainda não representa uma validação pública online nem um registro permanente no Firebase.</p></section>`;
 }
-function certificateDocument({name:person, role:participation, event, sport, place, date, issuer, institutional=false}) {
+function certificateHTML({name:person, role:participation, event, sport, place, date, issuer, institutional=false},branding=state.partners,preview=false) {
   const code = "ARENA-" + new Date().getFullYear() + "-" + (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2,10)).replace(/-/g,"").slice(0,12).toUpperCase();
   // Reutiliza o logo já salvo em Configurações, sem criar outro cadastro de imagem.
   const organizationLogo = state.settings?.logo || "";
@@ -1726,8 +1891,12 @@ function certificateDocument({name:person, role:participation, event, sport, pla
   const description = institutional
     ? "Por idealizar e desenvolver a plataforma ARENA ESPORTIVA, um projeto independente dedicado à organização, gestão e acompanhamento de eventos e competições esportivas, reunindo tecnologia, informação e incentivo ao esporte."
     : `Certificamos que ${recipient} participou como ${participation} do evento ${event}${sport ? `, na modalidade ${sport}` : ""}${place ? `, realizado em ${place}` : ""}, recebendo este reconhecimento pela sua participação.`;
+  const brand=position=>window.ArenaDocuments?.render(branding,"certificates",position,organizationLogo,registrationStyle().schoolLogo||"")||"";
   const safe = v => esc(v);
-  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} • Arena Esportiva</title><style>@page{size:A4 landscape;margin:0}*{box-sizing:border-box}body{margin:0;background:#eef1f4;color:#18232e;font-family:Arial,Helvetica,sans-serif}.sheet{width:297mm;height:210mm;margin:0 auto;padding:13mm;background:#fff;position:relative;overflow:hidden}.frame{height:100%;border:2px solid #183b52;padding:12mm 17mm;position:relative;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center}.frame:before{content:"";position:absolute;inset:3mm;border:1px solid #b58b45;pointer-events:none}.certificate-logo{position:absolute;top:9mm;right:12mm;display:block;max-width:30mm;max-height:24mm;object-fit:contain}.brand{font-size:13px;font-weight:800;letter-spacing:5px;color:#183b52}.mark{font-size:34px;color:#b58b45;margin:3mm 0}.eyebrow{font-size:13px;letter-spacing:4px;color:#536879;margin:2mm 0}.title{font-family:Georgia,serif;font-size:31px;letter-spacing:2px;color:#183b52;margin:4mm 0 8mm}.intro{font-size:15px;color:#53616c}.recipient{font-family:Georgia,serif;font-size:31px;font-weight:bold;color:#142f42;margin:5mm 0 7mm;border-bottom:1px solid #b58b45;padding:0 15mm 4mm}.description{font-family:Georgia,serif;font-size:17px;line-height:1.65;max-width:220mm;margin:0 auto}.bottom{width:100%;display:flex;justify-content:space-between;align-items:end;margin-top:13mm;font-size:12px;color:#465663}.signature{min-width:65mm;border-top:1px solid #536879;padding-top:3mm}.code{position:absolute;bottom:5mm;right:8mm;font-size:9px;color:#65737d}.seal{position:absolute;top:10mm;right:12mm;border:1px solid #b58b45;border-radius:50%;width:24mm;height:24mm;display:grid;place-content:center;color:#183b52;font-size:9px;font-weight:bold;transform:rotate(12deg)}@media print{body{background:white}.sheet{margin:0;box-shadow:none}}@media screen{.sheet{margin:18px auto;box-shadow:0 8px 35px #0002}}@media(max-width:800px){.sheet{transform-origin:top left;}}</style></head><body><main class="sheet"><div class="frame">${organizationLogoMarkup || '<div class="seal">ARENA<br>ESPORTIVA</div>'}<div class="brand">WAGNERBIZZA • ARENA ESPORTIVA</div><div class="mark">◇</div><div class="eyebrow">RECONHECIMENTO OFICIAL DO PROJETO</div><h1 class="title">${title}</h1><p class="intro">Certificamos para os devidos fins que</p><div class="recipient">${safe(recipient)}</div><p class="description">${safe(description)}</p><div class="bottom"><div class="signature">${safe(issuer || "WagnerBIZZA")}<br>Responsável pela emissão</div><div>${safe(date)}${place ? `<br>${safe(place)}` : ""}</div><div class="signature">Arena Esportiva<br>Gestão esportiva</div></div><div class="code">Código do documento: ${code}</div></div></main><script>window.addEventListener('load',()=>{const logo=document.querySelector('.certificate-logo');let printed=false;const print=()=>{if(printed)return;printed=true;setTimeout(()=>window.print(),180)};if(logo&&!logo.complete){logo.addEventListener('load',print,{once:true});logo.addEventListener('error',print,{once:true});setTimeout(print,3000)}else print()});</script></body></html>`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} • Arena Esportiva</title><style>@page{size:A4 landscape;margin:0}*{box-sizing:border-box}body{margin:0;background:#eef1f4;color:#18232e;font-family:Arial,Helvetica,sans-serif}.sheet{width:297mm;height:210mm;margin:0 auto;padding:13mm;background:#fff;position:relative;overflow:hidden}.frame{height:100%;border:2px solid #183b52;padding:12mm 17mm;position:relative;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center}.frame:before{content:"";position:absolute;inset:3mm;border:1px solid #b58b45;pointer-events:none}.certificate-logo{position:absolute;top:9mm;right:12mm;display:block;max-width:30mm;max-height:24mm;object-fit:contain}.brand{font-size:13px;font-weight:800;letter-spacing:5px;color:#183b52}.mark{font-size:34px;color:#b58b45;margin:3mm 0}.eyebrow{font-size:13px;letter-spacing:4px;color:#536879;margin:2mm 0}.title{font-family:Georgia,serif;font-size:31px;letter-spacing:2px;color:#183b52;margin:4mm 0 8mm}.intro{font-size:15px;color:#53616c}.recipient{font-family:Georgia,serif;font-size:31px;font-weight:bold;color:#142f42;margin:5mm 0 7mm;border-bottom:1px solid #b58b45;padding:0 15mm 4mm}.description{font-family:Georgia,serif;font-size:17px;line-height:1.65;max-width:220mm;margin:0 auto}.bottom{width:100%;display:flex;justify-content:space-between;align-items:end;margin-top:13mm;font-size:12px;color:#465663}.signature{min-width:65mm;border-top:1px solid #536879;padding-top:3mm}.code{position:absolute;bottom:5mm;right:8mm;font-size:9px;color:#65737d}.seal{position:absolute;top:10mm;right:12mm;border:1px solid #b58b45;border-radius:50%;width:24mm;height:24mm;display:grid;place-content:center;color:#183b52;font-size:9px;font-weight:bold;transform:rotate(12deg)}@media print{body{background:white}.sheet{margin:0;box-shadow:none}}@media screen{.sheet{margin:18px auto;box-shadow:0 8px 35px #0002}}@media(max-width:800px){.sheet{transform-origin:top left;}}${partnerPrintCSS}.frame>.arena-doc-header{justify-content:flex-end;text-align:right}.frame>.arena-doc-header:has(>[data-brand-resource="system"]:only-child){position:absolute;top:9mm;right:12mm;width:auto;margin:0}.frame>.arena-doc-header:has(>[data-brand-resource="system"]:only-child) img{height:auto;max-height:24mm;max-width:30mm}</style></head><body><main class="sheet"><div class="frame">${window.ArenaDocuments?.active(branding,"certificates")?brand("header"):organizationLogoMarkup || '<div class="seal">ARENA<br>ESPORTIVA</div>'}<div class="brand">WAGNERBIZZA • ARENA ESPORTIVA</div><div class="mark">◇</div><div class="eyebrow">RECONHECIMENTO OFICIAL DO PROJETO</div><h1 class="title">${title}</h1><p class="intro">Certificamos para os devidos fins que</p><div class="recipient">${safe(recipient)}</div><p class="description">${safe(description)}</p><div class="bottom"><div class="signature">${safe(issuer || "WagnerBIZZA")}<br>Responsável pela emissão</div><div>${safe(date)}${place ? `<br>${safe(place)}` : ""}</div><div class="signature">Arena Esportiva<br>Gestão esportiva</div></div>${brand("footer")+brand("background")}<div class="code">Código do documento: ${code}</div></div></main>${preview ? "" : `<script>window.addEventListener('load',()=>{const logo=document.querySelector('.certificate-logo');let printed=false;const print=()=>{if(printed)return;printed=true;setTimeout(()=>window.print(),180)};if(logo&&!logo.complete){logo.addEventListener('load',print,{once:true});logo.addEventListener('error',print,{once:true});setTimeout(print,3000)}else print()});</script>`}</body></html>`;
+}
+function certificateDocument(data) {
+  const html=certificateHTML(data);
   const win = window.open("", "_blank");
   if (!win) { toast("Permita janelas pop-up para gerar o certificado.", true); return; }
   win.document.open(); win.document.write(html); win.document.close();
@@ -1750,10 +1919,10 @@ function auditReportValue(value){
  const text=typeof value==="object"?JSON.stringify(value):String(value);
  return text.length>180?text.slice(0,177)+"…":text;
 }
-function auditReportPreview(){
- if(!generalAuditLoaded)return '<p class="muted">Clique em Consultar alterações para ver os registros do Firebase. A consulta inclui cadastros, partidas, configurações, permissões e exclusões.</p>';
- const rows=filteredAuditRows().slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
- if(!rows.length)return documentReportHeader("Relatório geral de alterações")+empty("Nenhuma alteração registrada.");
+function auditReportPreview(sample){
+ if(!generalAuditLoaded&&!sample)return '<p class="muted">Clique em Consultar alterações para ver os registros do Firebase. A consulta inclui cadastros, partidas, configurações, permissões e exclusões.</p>';
+ const rows=(sample||filteredAuditRows()).slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
+ if(!rows.length)return documentReportHeader("Relatório geral de alterações","auditReports")+empty("Nenhuma alteração registrada.");
  const visible=rows.slice(0,100),entityNames={settings:"Configurações",teams:"Equipe",players:"Jogador",matches:"Partida",championships:"Campeonato",users:"Acesso de usuário"};
  const details=(items,open=false)=>items.map(r=>{
   const before=r.before||{},after=r.after||{},keys=[...new Set([...Object.keys(before),...Object.keys(after)])].filter(k=>!["_audit","_updatedAt","updatedAt","createdAt","revision","auditId"].includes(k)&&JSON.stringify(before[k]??null)!==JSON.stringify(after[k]??null));
@@ -1762,7 +1931,7 @@ function auditReportPreview(){
   const target=after.name||before.name||r.target||"—";
   return `<details class="event" ${open?"open":""}><summary>${esc(auditReportDate(r.at))} • ${esc(entityNames[r.entity]||r.entity||"Registro")} • ${esc(r.detail?.type||"Alteração")} • ${esc(target)}</summary><p>Responsável (UID): ${esc(responsibleLabel(r))}<br>ID do registro: ${esc(r.target||"—")}${description?`<br>${esc(description)}`:""}</p>${changes.length?table(["Campo","Antes","Depois"],changes):'<p class="muted">Sem diferenças de campos disponíveis.</p>'}${keys.length>changes.length?`<small>Exibindo ${changes.length} de ${keys.length} campos alterados.</small>`:""}</details>`;
  }).join("");
- return `${documentReportHeader("Relatório geral de alterações")}<p class="muted" role="status">${rows.length} alteração(ões) encontradas. ${rows.length>visible.length?"Na tela, exibindo as 100 mais recentes; a impressão e as exportações incluem todas.":""} Os horários são de Brasília.</p><div class="audit-screen-only">${details(visible)}</div><div class="audit-print-only">${details(rows,true)}</div>`;
+ return `${documentReportHeader("Relatório geral de alterações","auditReports")}<p class="muted" role="status">${rows.length} alteração(ões) encontradas. ${rows.length>visible.length?"Na tela, exibindo as 100 mais recentes; a impressão e as exportações incluem todas.":""} Os horários são de Brasília.</p><div class="audit-screen-only">${details(visible)}</div><div class="audit-print-only">${details(rows,true)}</div>${partnerMarkup("auditReports")}`;
 }
 function generalAuditPanel(){
  return `<section class="card noprint"><h2>Relatório geral de alterações</h2><p>Consulte as alterações registradas no Firebase: equipes, jogadores, campeonatos, partidas, configurações, permissões de operadores e exclusões de partidas de teste. A visualização mostra as 100 alterações mais recentes; as exportações incluem todos os registros que correspondem à pesquisa.</p>${field("Pesquisar nome, UID, campeonato, equipe ou acontecimento","audit-search","search",`value="${esc(generalAuditSearch)}"`)}<p>Deixe a pesquisa vazia para incluir todos os registros.</p><div class="toolbar"><button type="button" data-audit-view ${generalAuditBusy?"disabled":""}>${generalAuditBusy?"Consultando…":generalAuditLoaded?"Atualizar e visualizar alterações":"Consultar alterações"}</button><button type="button" data-audit-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-audit-json>Baixar relatório completo (JSON)</button><button type="button" data-audit-excel>Baixar relatório completo (Excel)</button></div></section><div id="generalAuditOutput">${auditReportPreview()}</div>`;
@@ -1796,10 +1965,12 @@ function reportMatchSelector() {
 function matchSheetsView() {
  return `<section class="card noprint"><h2>Súmulas</h2><p>Escolha uma partida para visualizar sua súmula, imprimir ou salvar em PDF. A exportação JSON contém os dados das partidas selecionadas.</p>${reportMatchSelector()}<div class="toolbar"><button type="button" data-report-pdf>Visualizar / salvar súmula em PDF</button><button type="button" data-report-print>Imprimir visualização</button><button type="button" data-match-json>Baixar súmula (JSON)</button></div></section><div id="reportOutput">${documentMatches().map(reportMatch).join("") || empty("Cadastre uma partida para gerar a súmula.")}</div>`;
 }
-function documentReportHeader(title) {
+function documentReportHeader(title,surface="") {
  const logo=state.settings.logo||"";
  const safe=/^https:\/\//i.test(logo)||/^data:image\/(png|jpeg|webp);base64,/i.test(logo);
- return `<div class="document-report-header">${safe?`<img class="document-report-logo" src="${esc(logo)}" alt="Logo da organização">`:""}<div class="document-report-titles"><p>${esc(systemDisplayName())}</p><h2>${esc(title)}</h2></div><span class="report-brand">WagnerBIZZA</span></div>`;
+ const logoHeader=documentBrandingMarkup(surface,"header");
+ const headerBrand=logoHeader ? `<div style="flex:0 1 auto;min-width:0;max-width:42%">${logoHeader}</div>` : "";
+ return `<div class="document-report-header">${documentBrandingActive(surface)?headerBrand:safe?`<img class="document-report-logo" src="${esc(logo)}" alt="Logo da organização">`:""}<div class="document-report-titles"><p>${esc(systemDisplayName())}</p><h2>${esc(title)}</h2></div><span class="report-brand">WagnerBIZZA</span></div>`;
 }
 async function prepareReportImages(selector) {
  const images=[...document.querySelectorAll(selector+" img")].filter(image=>!image.complete);
@@ -1812,8 +1983,8 @@ async function prepareReportImages(selector) {
 }
 function sportsReportPreview(){
  const matches=documentMatches();
- if(!matches.length)return `<section class="card">${documentReportHeader("Relatório esportivo")}${empty("Nenhuma partida corresponde à seleção.")}</section>`;
- return `<section class="card">${documentReportHeader("Relatório esportivo")}<h3>Resultados das partidas • ${matches.length}</h3>${table(["Modalidade","Campeonato","Partida","Placar","Data","Local","Situação"],matches.map(m=>tr([m.sport,m.competition||"Partida avulsa",name(m.home)+" × "+name(m.away),gameResult(m).join(" × "),format(m.date),m.place||"Não informado",m.status])))}</section>`;
+ if(!matches.length)return `<section class="card">${documentReportHeader("Relatório esportivo","reports")}${empty("Nenhuma partida corresponde à seleção.")}${partnerMarkup("reports")}</section>`;
+ return `<section class="card">${documentReportHeader("Relatório esportivo","reports")}<h3>Resultados das partidas • ${matches.length}</h3>${table(["Modalidade","Campeonato","Partida","Placar","Data","Local","Situação"],matches.map(m=>tr([m.sport,m.competition||"Partida avulsa",name(m.home)+" × "+name(m.away),gameResult(m).join(" × "),format(m.date),m.place||"Não informado",m.status])))}${partnerMarkup("reports")}</section>`;
 }
 function reports() {
  return `<section class="card noprint"><h2>Relatórios esportivos</h2><p>Visualize resultados das partidas e exporte os dados selecionados. O Excel detalhado contém resultados, elencos, eventos e parciais.</p>${reportMatchSelector()}<div class="toolbar"><button type="button" data-sports-report-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-report-excel class="primary">Baixar relatório (Excel)</button><button type="button" data-sports-report-json>Baixar relatório (JSON)</button></div></section><div id="reportOutput">${sportsReportPreview()}</div>`;
@@ -2791,47 +2962,10 @@ document.addEventListener("click", async (e) => {
         );
       }
       toast("Preparando súmula PDF…");
-      const { downloadReportPDF } = await import("./report-pdf.js");
+      const { downloadReportPDF } = await import("./report-pdf.js?v=previas-4");
       const ms = documentMatches();
       await downloadReportPDF(
-        ms.map((m) => ({
-          title: m.competition || "Partida avulsa",
-          organizationLogo: state.settings?.logo || "",
-          sport: m.sport,
-          home: name(m.home),
-          away: name(m.away),
-          badges: [team(m.home).badge || "", team(m.away).badge || ""],
-          score: gameResult(m).join(" x "),
-          date: format(m.date),
-          place: m.place || "Não informado",
-          referees: m.referees || "Não informada",
-          status: m.status,
-          stage: m.stage,
-          clock: m.clock ? M.clockText(m) : "Não utilizado",
-          notice: m.publicNotice || "",
-          sets: m.sets.map((s) => s.score.join(" x ")).join(" / "),
-          coaches: m.coaches?.join(" / ") || "Não informados",
-          roster: m.roster.map((p) => [
-            name(p.team),
-            p.name,
-            p.number,
-            p.position,
-            p.reserve ? "Reserva" : "Titular",
-          ]),
-          events: m.events.map((e) => [
-            format(e.at) +
-              (e.gameMs != null ? "\nJogo " + prettyTime(e.gameMs) : ""),
-            e.stage || "—",
-            eventLabel(e, m),
-            ([0, 1].includes(e.side) ? name([m.home, m.away][e.side]) : "") +
-              (e.player
-                ? "\n" + (m.roster.find((p) => p.id === e.player)?.name || "")
-                : ""),
-            eventDescription(e),
-            responsibleLabel(e),
-          ]),
-          notes: m.notes,
-        })),
+        ms.map(m=>reportPDFData(m)),
       );
       toast("PDF gerado.");
     } else if (b.hasAttribute("data-report-print")||b.hasAttribute("data-sports-report-pdf")) {
@@ -4701,10 +4835,15 @@ function credentialsPanel() {
 function printEventCredential(record) {
   const event=state.championships.find(c=>c.id===record.eventId);if(!event)throw Error("Evento indisponível nesta área.");
   const win=window.open("","_blank");if(!win)throw Error("Permita abrir a visualização de impressão neste navegador.");
-  const logo=state.settings.logo||"",safe=/^https:\/\//i.test(logo)||/^data:image\/(png|jpeg|webp);base64,/i.test(logo);
-  const html=`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Credencial • ${esc(record.name)}</title><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font:14px Arial,sans-serif;color:#142832;background:#fff}.badge{width:90mm;min-height:130mm;border:2px solid #183e52;border-radius:5mm;padding:7mm;margin:10mm auto;text-align:center;overflow-wrap:anywhere}.logo{height:18mm;max-width:65mm;object-fit:contain}.function{padding:4mm;background:#163f55;color:#fff;font-size:22px;font-weight:bold}.name{font-size:24px;font-weight:bold;margin:9mm 0}.code{font-size:10px;margin-top:7mm}.status{font-weight:bold;color:${record.status==="revogada"?"#9b1c1c":"#174f30"}}.tools{text-align:center}@media print{.tools{display:none}}</style></head><body><div class="tools"><button onclick="window.print()">Imprimir / salvar em PDF</button></div><article class="badge">${safe?`<img class="logo" src="${esc(logo)}" alt="Logo da organização">`:""}<p>${esc(state.settings.title)}</p><h2>${esc(championshipTitle(event))}</h2><p>${esc(event.sport+(event.category?" • "+event.category:""))}</p><div class="function">${esc(record.function)}</div><div class="name">${esc(record.name)}</div><p>${esc(record.organization||"Organização do evento")}</p><p>Válida até ${esc(record.validUntil||"Não informada")}</p><p class="status">${record.status!=="ativa"?"CREDENCIAL REVOGADA":credentialIsExpired(record)?"CREDENCIAL VENCIDA":"CREDENCIAL ATIVA"}</p><p class="code">Código ${esc(record.id)}<br>Conferência pela organização na lista de credenciais.<br>Identificação de evento sem concessão de acesso ao sistema.</p><p class="code">WagnerBIZZA • Arena</p></article></body></html>`;
-  win.opener=null;win.document.open();win.document.write(html);win.document.close();
+  win.opener=null;win.document.open();win.document.write(credentialHTML(record,event));win.document.close();
 }
+function credentialHTML(record,event,branding=state.partners,preview=false) {
+  const custom=window.ArenaDocuments?.active(branding,"credentials");
+  const brand=position=>window.ArenaDocuments?.render(branding,"credentials",position,state.settings.logo||"",registrationStyle().schoolLogo||"")||"";
+  const logo=state.settings.logo||"",safe=/^https:\/\//i.test(logo)||/^data:image\/(png|jpeg|webp);base64,/i.test(logo);
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Credencial • ${esc(record.name)}</title><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font:14px Arial,sans-serif;color:#142832;background:#fff}.badge{width:90mm;min-height:130mm;border:2px solid #183e52;border-radius:5mm;padding:7mm;margin:10mm auto;text-align:center;overflow-wrap:anywhere}.logo{height:18mm;max-width:65mm;object-fit:contain}.function{padding:4mm;background:#163f55;color:#fff;font-size:22px;font-weight:bold}.name{font-size:24px;font-weight:bold;margin:9mm 0}.code{font-size:10px;margin-top:7mm}.status{font-weight:bold;color:${record.status==="revogada"?"#9b1c1c":"#174f30"}}.tools{text-align:center}@media print{.tools{display:none}}${partnerPrintCSS}</style></head><body>${preview ? "" : '<div class="tools"><button onclick="window.print()">Imprimir / salvar em PDF</button></div>'}<article class="badge">${brand("header")}${!custom&&safe?`<img class="logo" src="${esc(logo)}" alt="Logo da organização">`:""}<p>${esc(state.settings.title)}</p><h2>${esc(championshipTitle(event))}</h2><p>${esc(event.sport+(event.category?" • "+event.category:""))}</p><div class="function">${esc(record.function)}</div><div class="name">${esc(record.name)}</div><p>${esc(record.organization||"Organização do evento")}</p><p>Válida até ${esc(record.validUntil||"Não informada")}</p><p class="status">${record.status!=="ativa"?"CREDENCIAL REVOGADA":credentialIsExpired(record)?"CREDENCIAL VENCIDA":"CREDENCIAL ATIVA"}</p><p class="code">Código ${esc(record.id)}<br>Conferência pela organização na lista de credenciais.<br>Identificação de evento sem concessão de acesso ao sistema.</p>${brand("footer")+brand("background")}<p class="code">WagnerBIZZA • Arena</p></article></body></html>`;
+}
+
 document.addEventListener("change",e=>{
  if(role!=="admin")return;
  if(e.target.name==="credentialUser"){const person=(state.users||[]).find(u=>u.id===e.target.value);if(person)e.target.form.elements.name.value=person.name||"";}
