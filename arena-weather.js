@@ -19,11 +19,19 @@
 
  const styles = document.createElement('style');
  styles.textContent = `
-  .arena-weather-card { position:relative; margin-bottom:16px; }
-  .arena-weather-card > #arenaWeather { margin-bottom:0; }
-  .arena-weather-card > #arenaWeather > summary { min-height:44px; }
+  .arena-weather-card {
+    position:relative; margin-bottom:16px; border:1px solid var(--line,#344757);
+    border-radius:12px; background:var(--panel,#151c23); min-width:0;
+  }
+  .arena-weather-card > #arenaWeather { margin:0; border:0; background:transparent; }
+  .arena-weather-card > #arenaWeather > summary {
+    min-height:56px; padding-inline-end:60px; flex-wrap:wrap; overflow-wrap:anywhere;
+  }
+  .arena-weather-card > .arena-weather-pin {
+    position:absolute; inset-block-start:5px; inset-inline-end:5px;
+  }
   .arena-weather-card > #arenaWeather[open] .arena-weather-body { max-height:38dvh; overflow:auto; }
-  .arena-weather-card.is-pinned { position:sticky; top:0; z-index:12; background:var(--bg,#0d141b); }
+  .arena-weather-card.is-pinned { position:sticky; top:0; z-index:12; }
   html:has(.arena-weather-card.is-pinned), body:has(.arena-weather-card.is-pinned),
   html:has(.arena-live-pinnable.is-pinned), body:has(.arena-live-pinnable.is-pinned) { overflow-x:clip !important; }
   .arena-live-pinnable { position:relative; flex-wrap:wrap; }
