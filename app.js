@@ -2892,6 +2892,7 @@ document.addEventListener("click", async (e) => {
       selected = "";
       pendingImport = null;
       render();
+      if (section === "overview") window.scrollTo({top:0, behavior:"instant"});
       if (["matchSheets","reports"].includes(section) && !C.demo) {
         toast("Carregando históricos para as súmulas…");
         await cloud.loadHistory(state.matches.map((m) => m.id));
@@ -4003,7 +4004,7 @@ document.addEventListener("click",event=>{
  const button=event.target.closest("[data-layout-menu],[data-layout-close]");
  if(button){arenaDrawerOpen=button.hasAttribute("data-layout-menu")?!arenaDrawerOpen:false;applyArenaDrawer();if(!arenaDrawerOpen)$("#arenaMenuToggle")?.focus({preventScroll:true});return;}
  const action=event.target.closest("[data-section],[data-games-shortcut],[data-account-guide],[data-workspace]");
- if(action){const id=action.dataset.section;const group=id&&workspaceDefinitions.find(g=>g.sections.includes(id));if(id||action.dataset.gamesShortcut){for(const g of workspaceDefinitions)arenaOpenGroups.set(g.id,g.id===(group?.id||(action.dataset.gamesShortcut?"games":"")));}arenaDrawerOpen=false;applyArenaDrawer();}
+ if(action){const id=action.dataset.section;const group=id&&workspaceDefinitions.find(g=>g.sections.includes(id));if(id||action.dataset.gamesShortcut){for(const g of workspaceDefinitions)arenaOpenGroups.set(g.id,id!=="overview"&&g.id===(group?.id||(action.dataset.gamesShortcut?"games":"")));}arenaDrawerOpen=false;applyArenaDrawer();}
 },true);
 document.addEventListener("toggle",event=>{
  const group=event.target;if(!group.matches?.("[data-layout-group]")||!group.isConnected)return;
