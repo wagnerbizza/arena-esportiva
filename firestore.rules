@@ -6,7 +6,13 @@ service cloud.firestore {
   // Administrador principal fixado pelo UID: nenhum perfil pode assumir sua autoridade.
   // Trocar o e-mail da mesma conta não muda o UID. Não exclua essa conta no Authentication.
   function owner() { return request.auth != null && request.auth.uid == 'mwYVHBGiEJSYfKimTiBUMzcWHhn1'; }
-  function operator() { return request.auth != null && request.auth.token.get('email_verified',false) == true && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'operator' && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('enabled',true) == true; }
+  function activeOperatorProfile() {
+   let p = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+   return p.role == 'operator' && p.get('enabled',true) == true && p.get('deleted',false) == false;
+  }
+  function operator() {
+   return request.auth != null && request.auth.token.get('email_verified',false) == true && activeOperatorProfile();
+  }
   function staff() { return owner() || operator(); }
   function admin() { return owner(); }
   // 23 — Delegação explícita, revogável, sem promover o operador a titular.
@@ -15,7 +21,49 @@ service cloud.firestore {
   function matchCreator() { return owner() || (operator() && 'matchesCreate' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions',[])); }
   // Gestão de campeonatos é independente dos demais cadastros administrativos.
   function championshipManager() { return owner() || (operator() && 'championships' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions',[])); }
-  function operatorFor(id) { return owner() || (operator() && id in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('matches',[])); }
+  function championshipOperator(championshipId) {
+   return operator() && championshipId is string && championshipId != ''
+    && championshipId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('operatedChampionships',[]);
+  }
+  function assignedActiveMatch(id) {
+   let m = get(/databases/$(database)/documents/matches/$(id)).data;
+   let p = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+   let championship = m.get('championshipId','');
+   return p.role == 'operator' && p.get('enabled',true) == true && p.get('deleted',false) == false
+    && m.get('testData',false) == false
+    && (id in p.get('matches',[]) || (championship is string && championship != ''
+      && championship in p.get('operatedChampionships',[])));
+  }
+  function operatorFor(id) {
+   return owner() || (request.auth != null && request.auth.token.get('email_verified',false) == true && assignedActiveMatch(id));
+  }
+  // Classificação reversível; somente o titular vê os dados reservados.
+  function sportsAvailable() {
+   return !exists(/databases/$(database)/documents/testControl/main)
+    || get(/databases/$(database)/documents/testControl/main).data.active == false;
+  }
+  function activeSports(d) { return d.get('testData',false) == false; }
+  function stableSports(d,b) { return activeSports(d) && activeSports(b) && d.get('testData',false) == b.get('testData',false); }
+  function activeRef(collection,id) {
+   return exists(/databases/$(database)/documents/$(collection)/$(id))
+    && get(/databases/$(database)/documents/$(collection)/$(id)).data.get('testData',false) == false;
+  }
+  function testClassify(d,b,id,entity) {
+   return owner() && !sportsAvailable() && meta(d,id) && d.testData is bool
+    && d._revision == b._revision+1 && pair(d,entity,id,b)
+    && d.diff(b).affectedKeys().hasOnly(['testData','_revision','_audit','_updatedAt','_updatedBy'])
+    && logData(d).detail.type == 'classificação de teste'
+    && nonempty(logData(d).detail.reason,300) && logData(d).detail.reason.size() >= 5
+    && (d.testData || entity != 'players' || activeRef('teams',d.team))
+    && (d.testData || entity != 'matches' || (activeRef('teams',d.home) && activeRef('teams',d.away) && (d.get('championshipId','') == '' || activeRef('championships',d.championshipId))))
+    && (entity != 'matches' || (!(b.status in ['Ao vivo','Pausada','Suspensa']) && b.get('clock',emptyClock()).running == false));
+  }
+  match /testControl/main {
+   allow read: if owner();
+   allow create,update: if owner() && request.resource.data.keys().hasOnly(['active','actor','at'])
+    && request.resource.data.active is bool && request.resource.data.actor == request.auth.uid && request.resource.data.at == request.time;
+   allow delete: if false;
+  }
   function bounded(s,n) { return s is string && s.size() <= n; }
   function nonempty(s,n) { return bounded(s,n) && s.size() > 0; }
   function image(s) { return s is string && ((s.size() <= 1500 && (s == '' || s.matches('https://.*'))) || (s.size() <= 40000 && s.matches('data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+'))); }
@@ -30,31 +78,47 @@ service cloud.firestore {
     && a.revision == d._revision;
   }
   function publicTeam(t) { return { 'id':t.id,'name':t.name,'short':t.short,'badge':t.badge,'category':t.category,'_revision':t._revision,'_updatedAt':t._updatedAt }; }
-  function publicSettings(t) { return t.keys().hasAny(['logo']) ? {'logo':t.logo,'id':t.id,'title':t.title,'subtitle':t.subtitle,'color':t.color,'banner':t.banner,'_revision':t._revision,'_updatedAt':t._updatedAt} : {'id':t.id,'title':t.title,'subtitle':t.subtitle,'color':t.color,'banner':t.banner,'_revision':t._revision,'_updatedAt':t._updatedAt}; }
+  function publicSettingsBase(t) { return t.keys().hasAny(['logo']) ? {'logo':t.logo,'id':t.id,'title':t.title,'subtitle':t.subtitle,'color':t.color,'banner':t.banner,'_revision':t._revision,'_updatedAt':t._updatedAt} : {'id':t.id,'title':t.title,'subtitle':t.subtitle,'color':t.color,'banner':t.banner,'_revision':t._revision,'_updatedAt':t._updatedAt}; }
+  function publicSettingsWithLimit(t) { return t.keys().hasAny(['logo']) ? {'logo':t.logo,'summaryLimit':t.summaryLimit,'id':t.id,'title':t.title,'subtitle':t.subtitle,'color':t.color,'banner':t.banner,'_revision':t._revision,'_updatedAt':t._updatedAt} : {'summaryLimit':t.summaryLimit,'id':t.id,'title':t.title,'subtitle':t.subtitle,'color':t.color,'banner':t.banner,'_revision':t._revision,'_updatedAt':t._updatedAt}; }
+  function publicSettingsWithHistory(t) { return t.keys().hasAny(['logo']) ? {'logo':t.logo,'summaryLimit':t.get('summaryLimit',5),'historyPageSize':t.historyPageSize,'id':t.id,'title':t.title,'subtitle':t.subtitle,'color':t.color,'banner':t.banner,'_revision':t._revision,'_updatedAt':t._updatedAt} : {'summaryLimit':t.get('summaryLimit',5),'historyPageSize':t.historyPageSize,'id':t.id,'title':t.title,'subtitle':t.subtitle,'color':t.color,'banner':t.banner,'_revision':t._revision,'_updatedAt':t._updatedAt}; }
+  function publicSettings(t) {
+   return t.keys().hasAny(['historyPageSize']) ? publicSettingsWithHistory(t)
+    : t.keys().hasAny(['summaryLimit']) ? publicSettingsWithLimit(t) : publicSettingsBase(t);
+  }
   function emptyClock() { return {'baseMs':0,'mode':'up','durationMs':0,'segments':{},'current':'','running':false}; }
   function publicMatch(m) { return m.keys().hasAny(['championshipId']) ? {'championshipId':m.championshipId,'clock':m.get('clock',emptyClock()),'publicNotice':m.get('publicNotice',''),'id':m.id,'home':m.home,'away':m.away,'sport':m.sport,'date':m.date,'place':m.place,'competition':m.competition,'stage':m.stage,'status':m.status,'sets':m.sets,'score':m.score,'publicEvents':m.get('publicEvents',[]),'_revision':m._revision,'_updatedAt':m._updatedAt} : {'clock':m.get('clock',emptyClock()),'publicNotice':m.get('publicNotice',''),'id':m.id,'home':m.home,'away':m.away,'sport':m.sport,'date':m.date,'place':m.place,'competition':m.competition,'stage':m.stage,'status':m.status,'sets':m.sets,'score':m.score,'publicEvents':m.get('publicEvents',[]),'_revision':m._revision,'_updatedAt':m._updatedAt}; }
-  function publishedTeam(d,id) { return getAfter(/databases/$(database)/documents/publicTeams/$(id)).data == publicTeam(d); }
+  function publishedTeam(d,id) { return d.get('testData',false) ? !existsAfter(/databases/$(database)/documents/publicTeams/$(id)) : getAfter(/databases/$(database)/documents/publicTeams/$(id)).data == publicTeam(d); }
   function publishedSettings(d) { return getAfter(/databases/$(database)/documents/publicSettings/main).data == publicSettings(d); }
-  function publishedMatch(d,id) { return getAfter(/databases/$(database)/documents/publicMatches/$(id)).data == publicMatch(d); }
+  function validPublicMatch(p,m) {
+   return m.keys().hasAny(['addedTime'])
+    ? p.diff(publicMatch(m)).affectedKeys().hasOnly(['addedTime']) && p.addedTime == m.addedTime
+    : p == publicMatch(m);
+  }
+  function publishedMatch(d,id) {
+   let path = /databases/$(database)/documents/publicMatches/$(id);
+   return d.get('publicHidden',false) == true || d.get('testData',false) == true ? !existsAfter(path) : getAfter(path).data._updatedAt == request.time && getAfter(path).data._revision == d._revision;
+  }
   function teamSchema(d,id) {
-   return meta(d,id) && d.keys().hasOnly(['id','name','short','coach','category','badge','sports','archived','_revision','_audit','_updatedAt','_updatedBy'])
+   return meta(d,id) && d.get('testData',false) is bool && d.keys().hasOnly(['testData','id','name','short','coach','category','badge','sports','archived','_revision','_audit','_updatedAt','_updatedBy'])
     && d.get('sports',[]) is list && d.get('sports',[]).size() <= 6 && d.get('sports',[]).toSet().size() == d.get('sports',[]).size() && d.get('sports',[]).hasOnly(['Futebol','Futsal','Basquete','Vôlei','Vôlei de praia','Handebol'])
     && d.get('archived',false) is bool
     && nonempty(d.name,150) && bounded(d.short,12) && bounded(d.coach,150) && bounded(d.category,150) && image(d.badge);
   }
   function playerSchema(d,id) {
-   return meta(d,id) && d.keys().hasOnly(['id','name','team','number','position','reserve','_revision','_audit','_updatedAt','_updatedBy'])
+   return meta(d,id) && d.get('testData',false) is bool && d.keys().hasOnly(['testData','id','name','team','number','position','reserve','_revision','_audit','_updatedAt','_updatedBy'])
     && nonempty(d.name,150) && nonempty(d.team,100) && exists(/databases/$(database)/documents/teams/$(d.team))
     && get(/databases/$(database)/documents/teams/$(d.team)).data.get('archived',false) == false
     && bounded(d.number,8) && bounded(d.position,50) && d.reserve is bool;
   }
   function settingsSchema(d) {
-   return meta(d,'main') && d.keys().hasOnly(['id','title','subtitle','color','banner','logo','_revision','_audit','_updatedAt','_updatedBy'])
+   return meta(d,'main') && d.keys().hasOnly(['id','title','subtitle','color','banner','logo','summaryLimit','historyPageSize','_revision','_audit','_updatedAt','_updatedBy'])
+    && d.get('historyPageSize',20) is int && d.get('historyPageSize',20) >= 1 && d.get('historyPageSize',20) <= 50
+    && d.get('summaryLimit',5) is int && d.get('summaryLimit',5) >= 1 && d.get('summaryLimit',5) <= 5
     && nonempty(d.title,100) && bounded(d.subtitle,200) && d.color.matches('#[0-9a-fA-F]{6}') && image(d.banner) && image(d.get('logo',''));
   }
   // 5 — Campeonatos: cadastro privado, delegável sem acesso às demais áreas administrativas.
   function championshipSchema(d,id) {
-   return meta(d,id) && d.keys().hasOnly(['id','name','season','sport','category','status','_revision','_audit','_updatedAt','_updatedBy'])
+   return meta(d,id) && d.get('testData',false) is bool && d.keys().hasOnly(['testData','id','name','season','sport','category','status','_revision','_audit','_updatedAt','_updatedBy'])
     && nonempty(d.name,100) && nonempty(d.season,40) && bounded(d.category,150)
     && d.sport in ['Futebol','Futsal','Basquete','Vôlei','Vôlei de praia','Handebol']
     && d.status in ['Planejado','Em andamento','Encerrado'];
@@ -81,7 +145,10 @@ service cloud.firestore {
    let item = nextEvents[nextEvents.size()-1];
    return oldEvents is list && oldEvents.size() <= 5
     && nextEvents is list && nextEvents.size() > 0 && nextEvents.size() <= 5
-    && publicEventSchema(item)
+    // Os campos comparados a e já são tipados pela auditoria da mesma transação.
+    && item is map && item.keys().hasOnly(['id','type','side','value','player','playerName','number','correctionOf'])
+    && bounded(item.playerName,150) && bounded(item.number,8)
+    && (item.player == '' ? (item.playerName == '' && item.number == '') : item.playerName.size() > 0)
     && ((oldEvents.size() < 5 && nextEvents == oldEvents.concat([item]))
      || (oldEvents.size() == 5 && nextEvents == [oldEvents[1],oldEvents[2],oldEvents[3],oldEvents[4],item]))
     && item.id == d._audit && item.type == e.type && item.side == e.side && item.value == e.value
@@ -101,7 +168,7 @@ service cloud.firestore {
     && (d.get('championshipId','') != '' || d.competition == b.competition);
   }
   function matchSchema(d,id) {
-    return meta(d,id) && d.keys().hasOnly(['id','home','away','sport','date','place','competition','championshipId','referees','stage','status','sets','notes','roster','rosterTeams','coaches','score','clock','publicNotice','publicEvents','_revision','_audit','_updatedAt','_updatedBy'])
+    return meta(d,id) && d.get('testData',false) is bool && d.keys().hasOnly(['testData','id','home','away','sport','date','place','competition','championshipId','referees','stage','status','sets','notes','roster','rosterTeams','coaches','score','clock','publicNotice','publicEvents','_revision','_audit','_updatedAt','_updatedBy'])
     && championshipLink(d,true)
     && nonempty(d.home,100) && nonempty(d.away,100) && d.home != d.away
     && d.sport in ['Futebol','Futsal','Basquete','Vôlei','Vôlei de praia','Handebol'] && nonempty(d.date,150)
@@ -148,15 +215,41 @@ service cloud.firestore {
    return e.type == 'ponto' && e.correctionOf == '' && athlete(e,b) && e.value in (b.sport == 'Basquete' ? [1,2,3] : [1])
     && b.status == 'Ao vivo' && changedOnly(d,b,['score','publicEvents']) && scoreDelta(d,b,e) && publicEventFlow(d,b,e);
   }
+  function historyCorrectionPermission() {
+   return owner() || 'historyCorrections' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions',[]);
+  }
+  function correctedClosedSet(d,b,e,i) {
+   let before=b.sets;
+   let after=d.sets;
+   let n=before.size();
+   let old=before[i];
+   let scores=e.side == 0 ? [old.score[0]+e.value,old.score[1]] : [old.score[0],old.score[1]+e.value];
+   let replacement={'score':scores,'stage':old.stage};
+   return owner() && i is int && i >= 0 && i < n && n <= 20
+    && d.score == b.score && after.size() == n && scores[0] >= 0 && scores[1] >= 0 && after[i] == replacement
+    && ((before.removeAll([old]) == [] && after.removeAll([old]) == [replacement])
+     || after.removeAll([replacement]) == before.removeAll([old]) || (
+     (n <= 0 || ((n <= 0 || after[0] == (i == 0 ? replacement : before[0])) && (n <= 1 || after[1] == (i == 1 ? replacement : before[1])) && (n <= 2 || after[2] == (i == 2 ? replacement : before[2])) && (n <= 3 || after[3] == (i == 3 ? replacement : before[3])) && (n <= 4 || after[4] == (i == 4 ? replacement : before[4]))))
+     && (n <= 5 || ((n <= 5 || after[5] == (i == 5 ? replacement : before[5])) && (n <= 6 || after[6] == (i == 6 ? replacement : before[6])) && (n <= 7 || after[7] == (i == 7 ? replacement : before[7])) && (n <= 8 || after[8] == (i == 8 ? replacement : before[8])) && (n <= 9 || after[9] == (i == 9 ? replacement : before[9]))))
+     && (n <= 10 || ((n <= 10 || after[10] == (i == 10 ? replacement : before[10])) && (n <= 11 || after[11] == (i == 11 ? replacement : before[11])) && (n <= 12 || after[12] == (i == 12 ? replacement : before[12])) && (n <= 13 || after[13] == (i == 13 ? replacement : before[13])) && (n <= 14 || after[14] == (i == 14 ? replacement : before[14]))))
+     && (n <= 15 || ((n <= 15 || after[15] == (i == 15 ? replacement : before[15])) && (n <= 16 || after[16] == (i == 16 ? replacement : before[16])) && (n <= 17 || after[17] == (i == 17 ? replacement : before[17])) && (n <= 18 || after[18] == (i == 18 ? replacement : before[18])) && (n <= 19 || after[19] == (i == 19 ? replacement : before[19]))))));
+  }
   function reversal(d,b,e) {
    let original = get(/databases/$(database)/documents/audit/$(e.correctionOf)).data;
+   let goal = original.detail;
    let marker = getAfter(/databases/$(database)/documents/corrections/$(e.correctionOf)).data;
-   return admin() && unlocked(b) && e.type == 'ponto' && nonempty(e.correctionOf,100) && nonempty(e.reason,500)
-    && original.entity == 'matches' && original.target == b.id && original.detail.type == 'ponto' && original.detail.value > 0
-    && original.detail.correctionOf == '' && original.detail.setIndex == b.sets.size()
-    && e.side == original.detail.side && e.value == -original.detail.value && e.player == original.detail.player
+   return historyCorrectionPermission() && (unlocked(b) || owner()) && nonempty(e.correctionOf,100) && nonempty(e.reason,500)
+    && original.entity == 'matches' && original.target == b.id
+    && goal.type in ['ponto','cartão amarelo','cartão vermelho','falta','substituição','tempo'] && goal.correctionOf == ''
+    && e.type == goal.type && e.side == goal.side && e.player == goal.player
+    && e.from == goal.from && e.to == goal.to
     && marker.eventId == e.correctionOf && marker.matchId == b.id && marker.actionId == d._audit && marker.at == request.time
-    && changedOnly(d,b,['score','publicEvents']) && scoreDelta(d,b,e) && publicEventFlow(d,b,e) && d.score[0] >= 0 && d.score[1] >= 0;
+    && changedOnly(d,b,['score','sets','publicEvents']) && publicEventFlow(d,b,e)
+    && (goal.type == 'ponto'
+     ? goal.value > 0 && e.value == -goal.value && (goal.setIndex == b.sets.size()
+       ? d.sets == b.sets && scoreDelta(d,b,e) && d.score[0] >= 0 && d.score[1] >= 0
+       : correctedClosedSet(d,b,e,goal.setIndex))
+     : e.value == 0 && d.score == b.score && d.sets == b.sets);
   }
   // Segmentos de tempo recebem horários DO SERVIDOR, não do computador do operador.
   // Atualizar os segundos na tela não cria gravações ou leituras por segundo.
@@ -187,14 +280,17 @@ service cloud.firestore {
      || (admin() && b.status in ['Agendada','Adiada','Suspensa'] && d.status == 'Cancelada')
      || (admin() && b.status == 'Cancelada' && d.status == 'Agendada' && nonempty(e.reason,300)));
   }
-  function clockCommand(d,b,e) {
+  function clockCommandBase(d,b,e) {
    let c=d.clock;
    let o=b.get('clock',emptyClock());
-   return unlocked(b) && changedOnly(d,b,['clock']) && (
-    (e.from in ['iniciar','parar'] && clockFlow(c,o)
+   let added=b.get('addedTime',{});
+   let leaving=added.get('phase','') == 'started' || 'acrescimos' in o.segments || (added.get('stage','') == b.stage && added.get('minutes',0) > 0);
+   return unlocked(b) && changedOnly(d,b,['clock','addedTime']) && (
+    (e.from in ['iniciar','parar'] && d.get('addedTime',{}) == b.get('addedTime',{}) && clockFlow(c,o)
      && ((e.from == 'iniciar' && b.status == 'Ao vivo' && !o.running && c.running)
       || (e.from == 'parar' && o.running && !c.running)))
     || (e.from == 'ajustar' && !o.running && nonempty(e.reason,500)
+     && d.get('addedTime',{}) == (leaving ? {'stage':b.stage,'minutes':0,'phase':'announced'} : b.get('addedTime',{}))
      && c.keys().hasOnly(['baseMs','mode','durationMs','segments','current','running'])
      && c.baseMs is int && c.baseMs >= 0 && c.baseMs <= 21600000 && c.baseMs == e.value
      && c.durationMs is int && c.durationMs >= 0 && c.durationMs <= 21600000
@@ -202,33 +298,96 @@ service cloud.firestore {
      && c.segments == {} && c.current == '' && c.running == false)
    );
   }
+  function clockCommand(d,b,e) {
+   let c=d.get('clock',emptyClock());
+   let o=b.get('clock',emptyClock());
+   let added=b.get('addedTime',{});
+   return e.from != 'iniciar-acrescimos' ? clockCommandBase(d,b,e) :
+    unlocked(b) && changedOnly(d,b,['clock','addedTime'])
+    && b.sport == 'Futebol' && b.status == 'Ao vivo'
+    && !o.running && !('acrescimos' in o.segments) && added.get('phase','announced') != 'started'
+    && added.stage == b.stage && added.minutes is int && added.minutes > 0 && added.minutes <= 30
+    && d.addedTime == {'stage':b.stage,'minutes':added.minutes,'phase':'started'}
+    && c == {'baseMs':0,'mode':'down','durationMs':added.minutes * 60000,
+      'segments':{'acrescimos':{'start':request.time,'end':null}},'current':'acrescimos','running':true};
+  }
   function otherEvent(d,b,e) {
    return unlocked(b) && (
-    (e.type in ['cartão amarelo','cartão vermelho','falta','substituição','tempo'] && b.status == 'Ao vivo' && athlete(e,b) && e.value == 0 && changedOnly(d,b,['publicEvents']) && publicEventFlow(d,b,e))
+    (e.type in ['cartão amarelo','cartão vermelho','falta','tempo'] && b.status == 'Ao vivo' && athlete(e,b) && e.value == 0 && changedOnly(d,b,['publicEvents']) && publicEventFlow(d,b,e))
+    || (e.type == 'substituição' && b.status == 'Ao vivo' && athlete(e,b) && e.player != '' && e.from == e.player && e.to != e.from
+     && e.to in b.rosterTeams && b.rosterTeams[e.to] == (e.side == 0 ? b.home : b.away)
+     && e.value == 0 && e.correctionOf == '' && changedOnly(d,b,['publicEvents']) && publicEventFlow(d,b,e))
     || (e.type == 'observação' && b.status == 'Ao vivo' && athlete(e,b) && e.value == 0 && changedOnly(d,b,[]))
+    || (e.type == 'acréscimos' && b.sport == 'Futebol' && b.status == 'Ao vivo'
+     && changedOnly(d,b,['addedTime']) && e.value is int && e.value >= 0 && e.value <= 30
+     && (e.value > 0 || (b.get('addedTime',{}).get('phase','') != 'started' && !('acrescimos' in b.get('clock',emptyClock()).segments)))
+     && d.addedTime == {'stage':b.stage,'minutes':e.value,
+      'phase': b.get('addedTime',{}).get('stage','') == b.stage &&
+        (b.get('addedTime',{}).get('phase','') == 'started' || 'acrescimos' in b.get('clock',emptyClock()).segments)
+        ? 'started' : 'announced'})
     || (e.type == 'aviso' && changedOnly(d,b,['publicNotice']) && d.publicNotice == e.text && bounded(d.publicNotice,300))
     || (e.type == 'etapa' && changedOnly(d,b,['stage']) && d.stage == e.to && d.stage == e.text && nonempty(d.stage,40))
-    || (e.type == 'súmula' && changedOnly(d,b,['notes']) && d.notes == e.text)
+    || (admin() && e.type == 'súmula' && changedOnly(d,b,['notes']) && d.notes == e.text)
     || (e.type == 'set' && b.status == 'Ao vivo' && b.sport in ['Vôlei','Vôlei de praia'] && b.score[0] != b.score[1]
      && changedOnly(d,b,['score','sets','stage']) && d.score == [0,0]
      && d.sets == b.sets.concat([{'score':b.score,'stage':b.stage}]) && d.sets.size() <= 20 && d.stage == e.to && nonempty(d.stage,40))
    );
   }
+  function visibilityChange(d,b,e) {
+   return owner() && !unlocked(b) && e.type == 'visibilidade pública'
+    && changedOnly(d,b,['publicHidden']) && d.publicHidden is bool
+    && d.publicHidden != b.get('publicHidden',false);
+  }
+  function matchRosterAddition(d,b,e) {
+   let p=get(/databases/$(database)/documents/players/$(e.from)).data;
+   let player={'id':p.id,'name':p.name,'team':p.team,'number':p.get('number',''),'position':p.get('position',''),'reserve':p.get('reserve',false)};
+   return rosterManager() && unlocked(b) && e.type == 'elenco' && e.correctionOf == '' && e.value == 0 && nonempty(e.reason,500)
+    && p.id == e.from && e.player == p.id && e.to == p.team && p.team in [b.home,b.away]
+    && e.side == (p.team == b.home ? 0 : 1) && activeRef('players',p.id) && activeRef('teams',p.team)
+    && get(/databases/$(database)/documents/teams/$(p.team)).data.get('archived',false) == false
+    && !(p.id in b.rosterTeams) && changedOnly(d,b,['roster','rosterTeams'])
+    && d.roster == b.roster.concat([player]) && d.roster.size() <= 80
+    && d.rosterTeams.size() == b.rosterTeams.size()+1 && d.rosterTeams.diff(b.rosterTeams).affectedKeys().hasOnly([p.id])
+    && d.rosterTeams[p.id] == p.team;
+  }
   function validMatchUpdate(d,b) {
    let e = logData(d).detail;
-   return stageDetail(e,b) && (e.type == 'publicação de lances' ? publishPublicEvents(d,b,e) : (e.type == 'campeonato' ? relinkChampionship(d,b,e) : (e.type == 'status' ? statusChange(d,b,e) : (e.type == 'cronômetro' ? clockCommand(d,b,e) : (e.type == 'ponto' ? (e.correctionOf == '' ? normalPoint(d,b,e) : reversal(d,b,e)) : otherEvent(d,b,e))))));
+   return stageDetail(e,b) && (e.type == 'visibilidade pública' ? visibilityChange(d,b,e) : d.get('publicHidden',false) == b.get('publicHidden',false)
+    && (e.type == 'elenco' ? matchRosterAddition(d,b,e) : e.correctionOf != '' ? reversal(d,b,e)
+     : e.type == 'súmula' ? admin() && changedOnly(d,b,['notes']) && d.notes == e.text && bounded(d.notes,5000)
+     : e.type == 'visibilidade pública' ? visibilityChange(d,b,e)
+     : e.type == 'publicação de lances' ? publishPublicEvents(d,b,e)
+     : e.type == 'campeonato' ? relinkChampionship(d,b,e)
+     : e.type == 'status' ? statusChange(d,b,e)
+     : e.type == 'cronômetro' ? clockCommand(d,b,e)
+     : e.type == 'ponto' ? normalPoint(d,b,e) : otherEvent(d,b,e)));
   }
   // Cadastro solicita acesso; somente o titular aprova ou bloqueia.
   // A conta principal nunca pode ser alterada por esta coleção.
   function userSchema(d,uid) {
    return d.keys().hasAll(['id','name','email','role','enabled','matches','createdAt','updatedAt','revision','auditId'])
-    && d.keys().hasOnly(['id','name','email','role','enabled','matches','createdAt','updatedAt','revision','auditId','permissions'])
+    && d.keys().hasOnly(['id','name','email','role','enabled','matches','createdAt','updatedAt','revision','auditId','permissions','followedEditions','deleted','removalRequested','removalReason','phone','operatedChampionships'])
+    && d.get('operatedChampionships',[]) is list && d.get('operatedChampionships',[]).size() <= 100
+    && d.get('operatedChampionships',[]).toSet().size() == d.get('operatedChampionships',[]).size()
+    && ((d.role == 'operator' && d.enabled) || d.get('operatedChampionships',[]) == [])
+    && bounded(d.get('phone',''),25)
+    && (d.get('phone','') == '' || d.phone.matches('[+0-9() .-]{10,25}'))
+    && d.get('removalRequested',false) is bool && bounded(d.get('removalReason',''),500)
+    && (!d.get('removalRequested',false) || (d.enabled == false && d.matches == []
+      && d.get('permissions',[]) == [] && d.get('followedEditions',[]) == []
+      && nonempty(d.get('removalReason',''),500)))
+    && d.get('deleted',false) is bool
+    && (!d.get('deleted',false) || (d.role == 'operator' && d.enabled == false
+      && d.matches == [] && d.get('permissions',[]) == [] && d.get('followedEditions',[]) == []))
     && d.id == uid && nonempty(d.name,100) && bounded(d.email,254)
     && d.role in ['pending','operator'] && d.enabled is bool && d.matches is list && d.matches.size() <= 100
     && d.matches.toSet().size() == d.matches.size()
-    && d.get('permissions',[]) is list && d.get('permissions',[]).size() <= 4
+    && d.get('permissions',[]) is list && d.get('permissions',[]).size() <= 5
     && d.get('permissions',[]).toSet().size() == d.get('permissions',[]).size()
-    && d.get('permissions',[]).hasOnly(['rosters','matchesCreate','championships','gamesView'])
+    && d.get('permissions',[]).hasOnly(['rosters','matchesCreate','championships','gamesView','historyCorrections'])
+    && d.get('followedEditions',[]) is list && d.get('followedEditions',[]).size() <= 20
+    && d.get('followedEditions',[]).toSet().size() == d.get('followedEditions',[]).size()
+    && ((d.role == 'operator' && d.enabled) || d.get('followedEditions',[]) == [])
     && (d.role != 'pending' || d.get('permissions',[]) == [])
     && (d.role != 'pending' || (d.enabled == false && d.matches == []))
     && d.createdAt is timestamp && d.updatedAt == request.time && d.revision is int && d.revision > 0
@@ -245,15 +404,61 @@ service cloud.firestore {
     && userSchema(request.resource.data,uid)
     && request.resource.data.email == request.auth.token.email
     && request.resource.data.role == 'pending' && request.resource.data.enabled == false
+    && nonempty(request.resource.data.get('phone',''),25)
+    && request.resource.data.get('deleted',false) == false
+    && request.resource.data.get('removalRequested',false) == false
     && request.resource.data.matches == [] && request.resource.data.revision == 1
     && request.resource.data.createdAt == request.time && userLogPair(request.resource.data,uid);
    allow update: if owner() && uid != 'mwYVHBGiEJSYfKimTiBUMzcWHhn1'
     && userSchema(request.resource.data,uid)
     && request.resource.data.name == resource.data.get('name','Operador cadastrado')
     && request.resource.data.email == resource.data.get('email','')
+    && request.resource.data.get('phone','') == resource.data.get('phone','')
     && request.resource.data.createdAt == resource.data.get('createdAt',request.time)
     && request.resource.data.revision == resource.data.get('revision',0)+1
+    && resource.data.get('deleted',false) == false
+    && (!request.resource.data.get('deleted',false) ||
+      getAfter(/databases/$(database)/documents/accessAudit/$(request.resource.data.auditId)).data.action == 'exclusão de acesso')
     && userLogPair(request.resource.data,uid);
+   allow update: if request.auth != null && request.auth.uid == uid && !owner()
+    && !(uid in ['mwYVHBGiEJSYfKimTiBUMzcWHhn1','WLMZmXFVXFS8lJUG1KSN2sfEtq13'])
+    && resource.data.get('deleted',false) == false && resource.data.get('removalRequested',false) == false
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+      ['enabled','matches','permissions','followedEditions','operatedChampionships','removalRequested','removalReason','updatedAt','revision','auditId'])
+    && request.resource.data.get('removalRequested',false) == true
+    && userSchema(request.resource.data,uid)
+    && request.resource.data.enabled == false
+    && request.resource.data.matches == [] && request.resource.data.get('permissions',[]) == []
+    && request.resource.data.get('followedEditions',[]) == []
+    && request.resource.data.get('operatedChampionships',[]) == []
+    && request.resource.data.removalReason.size() >= 5
+    && request.resource.data.revision == resource.data.get('revision',0)+1
+    && userLogPair(request.resource.data,uid)
+    && getAfter(/databases/$(database)/documents/accessAudit/$(request.resource.data.auditId)).data.action == 'solicitação de exclusão';
+   allow delete: if false;
+  }
+  match /users/{uid} {
+   allow update: if request.auth != null && request.auth.uid == uid && !owner()
+    && !(uid in ['mwYVHBGiEJSYfKimTiBUMzcWHhn1','WLMZmXFVXFS8lJUG1KSN2sfEtq13'])
+    && resource.data.get('deleted',false) == false && resource.data.get('removalRequested',false) == false
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+      ['name','phone','updatedAt','revision','auditId'])
+    && userSchema(request.resource.data,uid)
+    && nonempty(request.resource.data.get('phone',''),25)
+    && request.resource.data.revision == resource.data.get('revision',0)+1
+    && userLogPair(request.resource.data,uid)
+    && getAfter(/databases/$(database)/documents/accessAudit/$(request.resource.data.auditId)).data.action == 'dados cadastrais';
+  }
+  match /accountMethods/{uid} {
+   allow get: if owner() || (request.auth != null && request.auth.uid == uid);
+   allow list: if owner();
+   allow create,update: if request.auth != null && request.auth.uid == uid
+    && request.resource.data.keys().hasAll(['id','methods','updatedAt'])
+    && request.resource.data.keys().hasOnly(['id','methods','updatedAt'])
+    && request.resource.data.id == uid && request.resource.data.updatedAt == request.time
+    && request.resource.data.methods is list && request.resource.data.methods.size() <= 2
+    && request.resource.data.methods.toSet().size() == request.resource.data.methods.size()
+    && request.resource.data.methods.hasOnly(['password','google.com']);
    allow delete: if false;
   }
   match /accessAudit/{id} {
@@ -267,11 +472,25 @@ service cloud.firestore {
     && request.resource.data.after.auditId == id
     && request.resource.data.before == (exists(/databases/$(database)/documents/users/$(request.resource.data.target)) ? get(/databases/$(database)/documents/users/$(request.resource.data.target)).data : null)
     && ((owner() && request.resource.data.target != 'mwYVHBGiEJSYfKimTiBUMzcWHhn1'
-      && request.resource.data.action in ['aprovação','bloqueio','permissões','pendente'])
+      && request.resource.data.action in ['aprovação','bloqueio','permissões','pendente','exclusão de acesso']
+      && (request.resource.data.action != 'exclusão de acesso' ||
+        (request.resource.data.after.get('deleted',false) == true && request.resource.data.reason.size() >= 5)))
      || (!owner() && request.resource.data.target == request.auth.uid
       && request.resource.data.action == 'cadastro' && request.resource.data.before == null
       && request.resource.data.after.role == 'pending' && request.resource.data.after.enabled == false
-      && request.resource.data.after.matches == []));
+      && request.resource.data.after.matches == [])
+     || (!owner() && request.resource.data.target == request.auth.uid
+      && request.resource.data.action == 'solicitação de exclusão'
+      && request.resource.data.before is map
+      && request.resource.data.before.get('removalRequested',false) == false
+      && request.resource.data.after.removalRequested == true
+      && request.resource.data.after.enabled == false
+      && request.resource.data.reason == request.resource.data.after.removalReason)
+     || (!owner() && request.resource.data.target == request.auth.uid
+      && request.resource.data.action == 'dados cadastrais'
+      && request.resource.data.before is map
+      && request.resource.data.after.diff(request.resource.data.before).affectedKeys().hasOnly(
+        ['name','phone','updatedAt','revision','auditId'])));
    allow update,delete: if false;
   }
   match /settings/main {
@@ -281,30 +500,33 @@ service cloud.firestore {
    allow delete: if false;
   }
   match /championships/{id} {
-   allow read: if championshipManager();
-   allow create: if championshipManager() && championshipSchema(request.resource.data,id) && request.resource.data._revision == 1 && pair(request.resource.data,'championships',id,null);
-   allow update: if championshipManager() && championshipSchema(request.resource.data,id) && request.resource.data.sport == resource.data.sport
+   allow read: if owner() || (championshipManager() && resource.data.testData == false);
+   allow create: if sportsAvailable() && activeSports(request.resource.data) && championshipManager() && championshipSchema(request.resource.data,id) && request.resource.data._revision == 1 && pair(request.resource.data,'championships',id,null);
+   allow update: if sportsAvailable() && stableSports(request.resource.data,resource.data) && championshipManager() && championshipSchema(request.resource.data,id) && request.resource.data.sport == resource.data.sport
     && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'championships',id,resource.data);
    allow delete: if false;
+   allow update: if testClassify(request.resource.data,resource.data,id,'championships');
   }
   match /teams/{id} {
-   allow read: if rosterManager();
-   allow create: if rosterManager() && teamSchema(request.resource.data,id) && request.resource.data.get('archived',false) == false && request.resource.data._revision == 1 && pair(request.resource.data,'teams',id,null) && publishedTeam(request.resource.data,id);
-   allow update: if rosterManager() && teamSchema(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1
+   allow read: if owner() || (rosterManager() && resource.data.testData == false);
+   allow create: if sportsAvailable() && activeSports(request.resource.data) && rosterManager() && teamSchema(request.resource.data,id) && request.resource.data.get('archived',false) == false && request.resource.data._revision == 1 && pair(request.resource.data,'teams',id,null) && publishedTeam(request.resource.data,id);
+   allow update: if sportsAvailable() && stableSports(request.resource.data,resource.data) && rosterManager() && teamSchema(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1
     && (request.resource.data.get('archived',false) == resource.data.get('archived',false) || (owner() && logData(request.resource.data).detail.type in ['arquivamento','reativação'] && nonempty(logData(request.resource.data).detail.reason,500) && logData(request.resource.data).detail.reason.size() >= 5))
     && pair(request.resource.data,'teams',id,resource.data) && publishedTeam(request.resource.data,id);
    allow delete: if false;
+   allow update: if testClassify(request.resource.data,resource.data,id,'teams') && publishedTeam(request.resource.data,id);
   }
   match /players/{id} {
-   allow read: if rosterManager();
-   allow create: if rosterManager() && playerSchema(request.resource.data,id) && request.resource.data._revision == 1 && pair(request.resource.data,'players',id,null);
-   allow update: if rosterManager() && playerSchema(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'players',id,resource.data);
+   allow read: if owner() || (rosterManager() && resource.data.testData == false);
+   allow create: if sportsAvailable() && activeSports(request.resource.data) && rosterManager() && playerSchema(request.resource.data,id) && activeRef('teams',request.resource.data.team) && request.resource.data._revision == 1 && pair(request.resource.data,'players',id,null);
+   allow update: if sportsAvailable() && stableSports(request.resource.data,resource.data) && rosterManager() && playerSchema(request.resource.data,id) && activeRef('teams',request.resource.data.team) && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'players',id,resource.data);
    allow delete: if false;
+   allow update: if testClassify(request.resource.data,resource.data,id,'players');
   }
   // 17 — Apenas o titular remove partidas, com registro completo e publicação removida.
   function cleanupAllowed(id,b) {
    let a=getAfter(/databases/$(database)/documents/cleanupAudit/$(id)).data;
-   return owner() && !(b.status in ['Ao vivo','Pausada','Suspensa'])
+   return owner() && b.get('championshipId','') == '' && !(b.status in ['Ao vivo','Pausada','Suspensa'])
     && b.get('clock',emptyClock()).running == false
     && a.target == id && a.entity == 'matches' && a.actor == request.auth.uid
     && a.at == request.time && a.state == 'lixeira' && a.expiresAt is timestamp
@@ -352,6 +574,7 @@ service cloud.firestore {
   function startCleanupPurge(id) {
    let d=request.resource.data;
    return owner() && resource.data.state == 'lixeira' && resource.data.expiresAt <= request.time
+    && resource.data.before is map && resource.data.before.get('championshipId','') == ''
     && cleanupAuditBase(d,id) && d.state == 'purgando' && d.before == null && d.after == null
     && d.expiresAt == resource.data.expiresAt && d.reason == resource.data.reason
     && d.at == resource.data.at && d.actor == resource.data.actor
@@ -392,17 +615,18 @@ service cloud.firestore {
   }
   match /matches/{id} {
    allow get: if operatorFor(id) || (matchCreator() && !exists(/databases/$(database)/documents/matches/$(id)));
-   allow list: if admin();
-  allow create: if (matchCreator() && matchSchema(request.resource.data,id) && request.resource.data._revision == 1
+   allow list: if admin() || (resource.data.testData == false && championshipOperator(resource.data.get('championshipId','')));
+  allow create: if (sportsAvailable() && activeSports(request.resource.data) && activeRef('teams',request.resource.data.home) && activeRef('teams',request.resource.data.away) && (request.resource.data.get('championshipId','') == '' || activeRef('championships',request.resource.data.championshipId)) && matchCreator() && matchSchema(request.resource.data,id) && request.resource.data._revision == 1
    && exists(/databases/$(database)/documents/teams/$(request.resource.data.home)) && exists(/databases/$(database)/documents/teams/$(request.resource.data.away))
    && get(/databases/$(database)/documents/teams/$(request.resource.data.home)).data.get('archived',false) == false
    && get(/databases/$(database)/documents/teams/$(request.resource.data.away)).data.get('archived',false) == false
    && request.resource.data.score == [0,0] && request.resource.data.sets == [] && request.resource.data.status == 'Agendada' && request.resource.data.notes == ''
    && pair(request.resource.data,'matches',id,null) && publishedMatch(request.resource.data,id))
-   || (restoreMatch(request.resource.data,id));
-   allow update: if operatorFor(id) && meta(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1
+   || (sportsAvailable() && restoreMatch(request.resource.data,id));
+   allow update: if sportsAvailable() && stableSports(request.resource.data,resource.data) && operatorFor(id) && meta(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1
     && pair(request.resource.data,'matches',id,resource.data) && publishedMatch(request.resource.data,id) && validMatchUpdate(request.resource.data,resource.data);
    allow delete: if cleanupAllowed(id,resource.data);
+   allow update: if testClassify(request.resource.data,resource.data,id,'matches') && publishedMatch(request.resource.data,id);
   }
   match /publicSettings/main {
    allow read: if true;
@@ -411,18 +635,45 @@ service cloud.firestore {
   }
   match /publicTeams/{id} {
    allow read: if true;
-   allow create, update: if rosterManager() && request.resource.data == publicTeam(getAfter(/databases/$(database)/documents/teams/$(id)).data);
+   allow create, update: if activeSports(getAfter(/databases/$(database)/documents/teams/$(id)).data) && rosterManager() && request.resource.data == publicTeam(getAfter(/databases/$(database)/documents/teams/$(id)).data);
+   allow delete: if owner() && getAfter(/databases/$(database)/documents/teams/$(id)).data.get('testData',false) == true;
+  }
+  function timelinePublicData(a,id) {
+   let events = a.after.get('publicEvents',[]);
+   let last = events.size() > 0 ? events[events.size()-1] : {};
+   let athlete = last.get('id','') == id ? last : {};
+   let e = a.detail;
+   return {'id':id,'type':e.type,'side':e.side,'value':e.value,'stage':e.stage,
+    'from':e.from,'to':e.to,'correctionOf':e.correctionOf,
+    'playerName':athlete.get('playerName',''),'number':athlete.get('number',''),
+    'at':a.at,'revision':a.revision};
+  }
+  match /publicMatches/{matchId}/timeline/{eventId} {
+   allow read: if exists(/databases/$(database)/documents/publicMatches/$(matchId)) || operatorFor(matchId);
+   allow create,update: if operatorFor(matchId)
+    && getAfter(/databases/$(database)/documents/audit/$(eventId)).data.entity == 'matches'
+    && getAfter(/databases/$(database)/documents/audit/$(eventId)).data.target == matchId
+    && getAfter(/databases/$(database)/documents/audit/$(eventId)).data.detail.type in
+      ['ponto','cartão amarelo','cartão vermelho','falta','substituição','tempo','status','etapa','set','acréscimos','cronômetro']
+    && request.resource.data == timelinePublicData(
+      getAfter(/databases/$(database)/documents/audit/$(eventId)).data,eventId);
    allow delete: if false;
   }
+  // A projeção pública valida todos os campos; publishedMatch exige a mesma
+  // revisão e horário do servidor, impedindo que a partida mude sem sua projeção.
   match /publicMatches/{id} {
    allow read: if true;
-   allow create: if matchCreator() && request.resource.data == publicMatch(getAfter(/databases/$(database)/documents/matches/$(id)).data);
-   allow update: if operatorFor(id) && request.resource.data == publicMatch(getAfter(/databases/$(database)/documents/matches/$(id)).data);
-   allow delete: if cleanupAllowed(id,get(/databases/$(database)/documents/matches/$(id)).data);
+   allow create: if activeSports(getAfter(/databases/$(database)/documents/matches/$(id)).data) && matchCreator() && getAfter(/databases/$(database)/documents/matches/$(id)).data.get('publicHidden',false) == false && validPublicMatch(request.resource.data,getAfter(/databases/$(database)/documents/matches/$(id)).data);
+   allow update: if activeSports(getAfter(/databases/$(database)/documents/matches/$(id)).data) && operatorFor(id) && getAfter(/databases/$(database)/documents/matches/$(id)).data.get('publicHidden',false) == false && validPublicMatch(request.resource.data,getAfter(/databases/$(database)/documents/matches/$(id)).data);
+   allow delete: if (owner() && getAfter(/databases/$(database)/documents/matches/$(id)).data.get('testData',false) == true) || cleanupAllowed(id,get(/databases/$(database)/documents/matches/$(id)).data)
+    || (owner() && get(/databases/$(database)/documents/matches/$(id)).data.get('publicHidden',false) == false
+     && getAfter(/databases/$(database)/documents/matches/$(id)).data.get('publicHidden',false) == true);
   }
   match /audit/{id} {
    allow read: if admin();
-   allow create: if staff() && request.resource.data.keys().hasOnly(['entity','target','actor','at','revision','detail','before','after'])
+   allow create: if staff() && request.resource.data.keys().hasOnly(['entity','target','actor','actorName','actorRole','at','revision','detail','before','after'])
+    && bounded(request.resource.data.get('actorName',''),100)
+    && request.resource.data.get('actorRole',owner() ? 'admin' : 'operator') == (owner() ? 'admin' : 'operator')
     && request.resource.data.entity in ['settings','teams','players','matches','championships'] && nonempty(request.resource.data.target,100)
     && request.resource.data.actor == request.auth.uid && request.resource.data.at == request.time && detailSchema(request.resource.data.detail)
     && request.resource.data.after == getAfter(/databases/$(database)/documents/$(request.resource.data.entity)/$(request.resource.data.target)).data
@@ -435,13 +686,95 @@ service cloud.firestore {
   }
   match /corrections/{id} {
    allow read: if admin();
-   allow create: if admin() && request.resource.data.keys().hasOnly(['matchId','eventId','actionId','actor','at'])
+   allow get: if operator() && (!exists(/databases/$(database)/documents/corrections/$(id))
+    || operatorFor(resource.data.matchId));
+   allow create: if operatorFor(request.resource.data.matchId) && historyCorrectionPermission() && request.resource.data.keys().hasOnly(['matchId','eventId','actionId','actor','at'])
     && request.resource.data.eventId == id && request.resource.data.actor == request.auth.uid && request.resource.data.at == request.time
     && getAfter(/databases/$(database)/documents/audit/$(request.resource.data.actionId)).data.detail.correctionOf == id
     && getAfter(/databases/$(database)/documents/matches/$(request.resource.data.matchId)).data._audit == request.resource.data.actionId;
   allow update: if false;
   allow delete: if owner() && resource.data.matchId is string
    && get(/databases/$(database)/documents/cleanupAudit/$(resource.data.matchId)).data.state == 'purgando';
+  }
+  match /eventCredentials/{id} {
+   allow read: if owner();
+   allow create: if owner() && request.resource.data.keys().hasAll(['id','name','eventId','function','organization','validUntil','userId','status','issuedBy','issuedAt','updatedAt'])
+    && request.resource.data.keys().hasOnly(['id','name','eventId','function','organization','validUntil','userId','status','issuedBy','issuedAt','updatedAt'])
+    && request.resource.data.id == id && nonempty(request.resource.data.name,150) && nonempty(request.resource.data.function,80)
+    && bounded(request.resource.data.organization,150) && request.resource.data.validUntil is string && request.resource.data.validUntil.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}') && bounded(request.resource.data.userId,128)
+    && activeRef('championships',request.resource.data.eventId)
+    && request.resource.data.status == 'ativa' && request.resource.data.issuedBy == request.auth.uid
+    && request.resource.data.issuedAt == request.time && request.resource.data.updatedAt == request.time;
+   allow update: if owner() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])
+    && request.resource.data.status == 'revogada' && resource.data.status == 'ativa' && request.resource.data.updatedAt == request.time;
+   allow delete: if false;
+  }
+  // Histórico operacional sem snapshots privados, e sem exclusão de lançamentos.
+  function operationEventData(a,id) {
+   let e = a.detail;
+   let reason = e.correctionOf != '' ? e.reason : '';
+   return {'id':id,'entity':'matches','target':a.target,'revision':a.revision,'at':a.at,
+    'detail':{'type':e.type,'side':e.side,'value':e.value,'player':e.player,
+     'stage':e.stage,'setIndex':e.setIndex,'correctionOf':e.correctionOf,
+     'from':e.from,'to':e.to,'text':reason,'reason':reason}};
+  }
+  function validOperationEvent(matchId,eventId) {
+   let a = getAfter(/databases/$(database)/documents/audit/$(eventId)).data;
+   return a.entity == 'matches' && a.target == matchId
+    && a.detail.type in ['ponto','cartão amarelo','cartão vermelho','falta','substituição','tempo','status','etapa','set','acréscimos','cronômetro']
+    && request.resource.data == operationEventData(a,eventId);
+  }
+  match /matches/{matchId}/operationEvents/{eventId} {
+   allow read: if operatorFor(matchId);
+   allow create,update: if operatorFor(matchId) && validOperationEvent(matchId,eventId);
+   allow delete: if false;
+  }
+  // Fichas: leitura pontual dos campeonatos atribuídos, sem edição ou listagem geral.
+  match /championships/{id} {
+   allow get: if owner() || (operator() && resource.data.get('testData',false) == false
+    && ('championships' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions',[])
+     || id in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('operatedChampionships',[])));
+  }
+  // Identidade pública: consulta pontual dos logos, inclusive quando ainda não cadastrados.
+  // Somente a conta principal grava neste documento.
+  function brandingLogo(value) {
+   return value is string && value.size() <= 40000
+    && (value.matches('data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+')
+      || (value.size() <= 1500 && value.matches('(?i)https://[^\\s]+')));
+  }
+  function brandingImages(images) {
+   let padded = images.concat(['','','','','','']);
+   let joined = images.join('\n');
+   let logo = '(data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+|(?i:https)://[^\\s]{1,1000}[^\\s]{0,492})';
+   return images.size() <= 6
+    && padded[0].size() <= 40000 && padded[1].size() <= 40000
+    && padded[2].size() <= 40000 && padded[3].size() <= 40000
+    && padded[4].size() <= 40000 && padded[5].size() <= 40000
+    && (images.size() == 0 || (joined.split('\n').size() == images.size()
+      && joined.matches(logo + '(\n' + logo + ')*')));
+  }
+  // The panel validates the layout values. Readers normalize them before rendering.
+  function brandingLayout(d) {
+   return d is map && d.size() == 9
+    && d.keys().hasOnly(['system','school','organizers','sponsors','collaborators','watermarkText','opacity','size','angle']);
+  }
+  function brandingLayouts(d) {
+   return d is map && d.size() == 7
+    && brandingLayout(d.registration) && brandingLayout(d.credentials) && brandingLayout(d.certificates)
+    && brandingLayout(d.matchSheets) && brandingLayout(d.reports) && brandingLayout(d.auditReports) && brandingLayout(d.publicPanel);
+  }
+  function brandingSchema(d) {
+   return d.keys().hasOnly(['groups','surfaces','schoolLogo','layouts'])
+    && d.groups is map && d.groups.keys().hasOnly(['0','1','2'])
+    && brandingImages(d.groups['0']) && brandingImages(d.groups['1']) && brandingImages(d.groups['2'])
+    && d.surfaces is list && d.surfaces.toSet().size()==d.surfaces.size()
+    && d.surfaces.hasOnly(['registration','credentials','certificates','matchSheets','reports','auditReports','publicPanel'])
+    && (d.get('schoolLogo','') == '' || brandingLogo(d.schoolLogo)) && (!('layouts' in d) || brandingLayouts(d.layouts));
+  }
+  match /publicBranding/partners {
+   allow get: if true;
+   allow create,update: if owner() && brandingSchema(request.resource.data);
+   allow delete: if false;
   }
   match /{document=**} { allow read, write: if false; }
  }
