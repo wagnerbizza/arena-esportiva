@@ -35,6 +35,12 @@
     content:""; position:absolute; inset-inline:0; bottom:calc(-1px - var(--arena-weather-stack-gap) / 2);
     border-block-end:1px solid var(--muted,#8295a6); opacity:.45; pointer-events:none;
   }
+  main:has(.arena-live-pinnable.is-pinned) > .arena-weather-card.is-pinned::before {
+    content:""; position:absolute; top:100%; inset-inline:-1px;
+    height:calc(var(--arena-weather-stack-gap) + 2px);
+    background:var(--bg,#0c1014); pointer-events:none;
+  }
+  .arena-live-pinnable.is-pinned { background:var(--panel,#14202b); }
   .arena-weather-card > .arena-weather-pin {
     position:absolute; inset-block-start:5px; inset-inline-end:5px; z-index:1;
   }
