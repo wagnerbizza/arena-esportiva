@@ -2447,3 +2447,26 @@ body:not([data-admin="true"]) .public-event-icon {
  body.arena-rail-collapsed #arenaSidebar .arena-side-search>label,body.arena-rail-collapsed #arenaSidebar .arena-side-search-field,body.arena-rail-collapsed #arenaSideSearchResults {display:none}
  body.arena-rail-collapsed #arenaSidebar .arena-side-search-launch {display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;padding:10px}
 }
+
+.arena-score-center { position: relative; display: grid; justify-items: center; gap: 4px; }
+.arena-live-ball {
+  display: block; width: max-content; font-size: 1.25rem; line-height: 1.2;
+  animation: arena-ball-spin 2.4s linear infinite;
+}
+.arena-match-notice {
+  position: absolute; inset-inline-start: 50%; inset-block-start: 100%;
+  transform: translateX(-50%); z-index: 1; pointer-events: none;
+  border-radius: 8px; padding: 4px 9px; white-space: nowrap;
+  font-size: .8rem; font-weight: 800; background: #d7f9e2; color: #124826;
+  animation: arena-match-notice-in .25s ease-out;
+}
+.arena-match-notice[data-notice="yellow"] { background: #ffd85a; color: #322207; }
+.arena-match-notice[data-notice="red"] { background: #a91e32; color: #fff; }
+@keyframes arena-ball-spin { to { transform: rotate(1turn); } }
+@keyframes arena-match-notice-in {
+  from { transform: translateX(-50%) scale(.9); opacity: .35; }
+  to { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .arena-live-ball, .arena-match-notice { animation: none; }
+}

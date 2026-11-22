@@ -19,6 +19,32 @@
 
  const styles = document.createElement('style');
  styles.textContent = `
+@keyframes forecast-cloud-drift {
+  from { transform: translateX(-2px); }
+  to { transform: translateX(3px); }
+}
+@keyframes forecast-detail-in {
+  from { opacity: .55; }
+  to { opacity: 1; }
+}
+#arenaWeather[data-weather-clouds] [data-weather-summary]::before {
+  content: "☁";
+  display: inline-block;
+  margin-inline-end: .45em;
+  color: var(--accent);
+  animation: forecast-cloud-drift 2.8s ease-in-out infinite alternate;
+}
+#arenaWeather[open] .arena-weather-body {
+  animation: forecast-detail-in .2s ease-out;
+}
+.arena-weather-pin { transition: color .18s ease, background-color .18s ease; }
+.arena-weather-pin[aria-pressed="true"] { background-color: color-mix(in srgb, var(--accent) 12%, transparent) !important; }
+@media (prefers-reduced-motion: reduce) {
+  #arenaWeather[data-weather-clouds] [data-weather-summary]::before,
+  #arenaWeather[open] .arena-weather-body { animation: none; }
+  .arena-weather-pin { transition: none; }
+}
+
   .arena-weather-card {
     position:relative; margin-bottom:16px; border:1px solid var(--line,#344757);
     border-radius:12px; background:var(--panel,#151c23); min-width:0;
@@ -160,6 +186,7 @@
  function usable(data){return data&&data.current&&finite(data.current.temperature_2m)&&typeof data.current.time==='string'&&data.daily&&Array.isArray(data.daily.time)&&data.daily.time.length>0&&Array.isArray(data.daily.temperature_2m_min)&&Array.isArray(data.daily.temperature_2m_max)&&Array.isArray(data.daily.precipitation_probability_max);}
  function paint(data,at,stale){
   if(!usable(data))return false;
+  panel.toggleAttribute('data-weather-clouds', data.current.weather_code > 0);
   find('[data-weather-title]').textContent=place.name+' · '+number(data.current.temperature_2m)+' °C';
   find('[data-weather-summary]').textContent=label(data.current.weather_code)+' · '+(stale?'dados salvos':'previsão de 3 dias');
   const days=find('[data-weather-days]');days.replaceChildren();

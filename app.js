@@ -27,6 +27,42 @@ let arenaRailCollapsed=false,arenaRailPeek=false;
 try { arenaRailCollapsed=localStorage.getItem("arena-barra-recolhida-v1")==="1"; } catch {}
 let arenaSidebarPinned=!arenaRailCollapsed;
 try { const saved=localStorage.getItem("arena-barra-fixada-v1");if(saved!==null){arenaSidebarPinned=saved==="1";arenaRailCollapsed=!arenaSidebarPinned;} } catch {}
+
+const previousMatchEvents = new Map();
+const matchNotices = new Map();
+
+function updateMatchNotices() {
+  const activeIds = new Set();
+  for (const match of state.matches) {
+    activeIds.add(match.id);
+    const events = (admin && Array.isArray(match.events) ? match.events : match.publicEvents) || [];
+    const previous = previousMatchEvents.get(match.id);
+    previousMatchEvents.set(match.id, new Set(events.map(event => event.id)));
+    if (!previous || match.status !== "Ao vivo") {
+      matchNotices.delete(match.id);
+      continue;
+    }
+    const event = [...events].reverse().find(item => item.id && !previous.has(item.id) &&
+      !item.correctionOf && (item.type === "cartão amarelo" || item.type === "cartão vermelho" ||
+        (item.type === "ponto" && item.value > 0 && ["Futebol", "Futsal"].includes(match.sport))));
+    if (!event) continue;
+    const [label, kind] = event.type === "ponto" ? ["Gol!", "goal"] :
+      event.type === "cartão amarelo" ? ["Cartão amarelo", "yellow"] : ["Cartão vermelho", "red"];
+    const notice = { label, kind };
+    matchNotices.set(match.id, notice);
+    setTimeout(() => {
+      if (matchNotices.get(match.id) !== notice) return;
+      matchNotices.delete(match.id);
+      document.getElementById(`match-card-${match.id}`)?.querySelector(".arena-match-notice")?.remove();
+    }, 2600);
+  }
+  for (const id of previousMatchEvents.keys()) {
+    if (activeIds.has(id)) continue;
+    previousMatchEvents.delete(id);
+    matchNotices.delete(id);
+  }
+}
+
 let state = D.fresh(),
   section = "overview",
   selected = "",
@@ -1379,7 +1415,13 @@ function matchCard(m, button = false) {
     b = team(m.away),
     isLive = m.status === "Ao vivo",
     isFinished = ["Encerrada", "Homologada"].includes(m.status);
-  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score"><div>${badge(a)}<div class="name">${esc(a.name)}</div></div><strong>${sc[0]} <span class="muted">:</span> ${sc[1]}</strong><div>${badge(b)}<div class="name">${esc(b.name)}</div></div></div>${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${timelineControl(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && admin && role === "admin" && cloud && !C.demo && finalStatuses.includes(m.status) ? `<details><summary>Mais ações</summary><button type="button" data-public-visibility="${esc(m.id)}">${m.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button></details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
+  const notice = matchNotices.get(m.id);
+  const liveBall = isLive ? '<span class="arena-live-ball" aria-hidden="true">⚽</span>' : "";
+  const liveNotice = isLive && notice
+    ? `<span class="arena-match-notice" data-notice="${notice.kind}" role="status">${notice.label}</span>` : "";
+  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score"><div>${badge(a)}<div class="name">${esc(a.name)}</div></div><div class="arena-score-center">
+  <strong>${sc[0]} <span class="muted">:</span> ${sc[1]}</strong>${liveBall}${liveNotice}
+  </div><div>${badge(b)}<div class="name">${esc(b.name)}</div></div></div>${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${timelineControl(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && admin && role === "admin" && cloud && !C.demo && finalStatuses.includes(m.status) ? `<details><summary>Mais ações</summary><button type="button" data-public-visibility="${esc(m.id)}">${m.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button></details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
 }
 
 function liveStatusPanel(context) {
@@ -1413,6 +1455,7 @@ function liveStatusPanel(context) {
 }
 
 function render() {
+  updateMatchNotices();
   if (timelineOpenId && timelineAppliedSize !== configuredHistoryPageSize()) closeTimeline();
   resetTeamProfileContext();
   resetRemovedContext();
