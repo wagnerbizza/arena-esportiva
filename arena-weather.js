@@ -16,29 +16,28 @@
  pin.type = 'button';
  pin.className = 'arena-weather-pin';
  pin.setAttribute('aria-controls', panel.id);
- pin.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8M9 3v6l-4 4v2h14v-2l-4-4V3M12 15v7"/></svg>';
 
  const styles = document.createElement('style');
  styles.textContent = `
   .arena-weather-card { position:relative; margin-bottom:16px; }
   .arena-weather-card > #arenaWeather { margin-bottom:0; }
-  .arena-weather-card > #arenaWeather > summary { padding-inline-end:52px; min-height:44px; }
+  .arena-weather-card > #arenaWeather > summary { min-height:44px; }
   .arena-weather-card > #arenaWeather[open] .arena-weather-body { max-height:38dvh; overflow:auto; }
   .arena-weather-card.is-pinned { position:sticky; top:0; z-index:12; background:var(--bg,#0d141b); }
   html:has(.arena-weather-card.is-pinned), body:has(.arena-weather-card.is-pinned),
   html:has(.arena-live-pinnable.is-pinned), body:has(.arena-live-pinnable.is-pinned) { overflow-x:clip !important; }
-  .arena-live-pinnable { position:relative; padding-inline-end:60px !important; }
+  .arena-live-pinnable { position:relative; flex-wrap:wrap; }
   .arena-live-pinnable.is-pinned {
     position:sticky; top:var(--arena-weather-sticky-height,0px); z-index:11;
     max-height:40dvh; overflow:auto;
   }
   :is(.arena-weather-card,.arena-live-pinnable) .arena-weather-pin {
-    position:absolute; inset:5px 7px auto auto; display:grid; place-items:center;
-    width:44px; min-width:44px; height:44px; min-height:44px; padding:0;
-    border:1px solid var(--line,#344757); border-radius:9px;
-    background:var(--panel,#151c23); color:var(--text,#eef3f6);
+    display:block; width:100%; min-height:44px; padding:6px 12px;
+    border:0; border-top:1px solid var(--line,#344757); border-radius:0;
+    background:transparent !important; color:var(--text,#eef3f6) !important;
+    font-size:.85rem; text-align:end;
   }
-  :is(.arena-weather-card,.arena-live-pinnable) .arena-weather-pin[aria-pressed="true"] { color:var(--accent,#16c9f3); border-color:currentColor; }
+  :is(.arena-weather-card,.arena-live-pinnable) .arena-weather-pin:hover { text-decoration:underline; }
   @media print { .arena-weather-card { display:none !important; } }
  `;
  document.head.append(styles);
@@ -64,6 +63,7 @@
   button.setAttribute('aria-pressed', String(pinned));
   button.title = (pinned ? 'Desafixar ' : 'Fixar ') + label;
   button.setAttribute('aria-label', button.title);
+  button.textContent = pinned ? 'Desafixar' : 'Fixar';
  }
  function applyPins() {
   const pinned = storage.read(pinKey) === true;
