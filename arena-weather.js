@@ -27,11 +27,12 @@
   .arena-weather-card > #arenaWeather > summary {
     min-height:56px; padding-inline-end:60px; flex-wrap:wrap; overflow-wrap:anywhere;
   }
+  main:has(.live-status-panel) { --arena-weather-stack-gap:24px; }
   main:has(.live-status-panel) > .arena-weather-card {
-    margin-bottom:24px;
+    margin-bottom:var(--arena-weather-stack-gap);
   }
   main:has(.live-status-panel) > .arena-weather-card::after {
-    content:""; position:absolute; inset-inline:0; bottom:-13px;
+    content:""; position:absolute; inset-inline:0; bottom:calc(-1px - var(--arena-weather-stack-gap) / 2);
     border-block-end:1px solid var(--muted,#8295a6); opacity:.45; pointer-events:none;
   }
   .arena-weather-card > .arena-weather-pin {
@@ -48,6 +49,9 @@
   .arena-live-pinnable.is-pinned {
     position:sticky; top:var(--arena-weather-sticky-height,0px); z-index:11;
     max-height:40dvh; overflow:auto;
+  }
+  main:has(> .arena-weather-card.is-pinned) .arena-live-pinnable.is-pinned {
+    top:calc(var(--arena-weather-sticky-height,0px) + var(--arena-weather-stack-gap,24px));
   }
   :is(.arena-weather-card,.arena-live-pinnable) .arena-weather-pin {
     display:grid; place-items:center; width:44px; min-height:44px; padding:0; margin-inline-start:auto;
