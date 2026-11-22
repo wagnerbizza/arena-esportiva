@@ -4862,7 +4862,7 @@ document.addEventListener("pointermove",e=>{if(personalPress&&Math.hypot(e.clien
 for(const event of ["pointerup","pointercancel","scroll"])document.addEventListener(event,cancelPersonalPress,{passive:true,capture:true});
 document.addEventListener("click",e=>{if(Date.now()<personalSuppressUntil && !e.target.closest("#arenaPersonalTools")){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener("click",e=>{
- const b=e.target.closest("[data-personal-settings],[data-personal-options],[data-personal-toggle],[data-personal-color],[data-personal-move],[data-personal-close]");if(!b)return;
+ const b=e.target.closest("[data-personal-settings],#arenaPersonalTools button");if(!b)return;
  try{
   if(b.hasAttribute("data-personal-close")){$("#arenaPersonalTools")?.close();return;}
   if(b.hasAttribute("data-personal-settings")){showPersonalTools();return;}
