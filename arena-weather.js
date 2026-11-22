@@ -32,10 +32,10 @@
     max-height:40dvh; overflow:auto;
   }
   :is(.arena-weather-card,.arena-live-pinnable) .arena-weather-pin {
-    display:block; width:100%; min-height:44px; padding:6px 12px;
-    border:0; border-top:1px solid var(--line,#344757); border-radius:0;
+    display:grid; place-items:center; width:44px; min-height:44px; padding:0; margin-inline-start:auto;
+    border:0; border-radius:8px;
     background:transparent !important; color:var(--text,#eef3f6) !important;
-    font-size:.85rem; text-align:end;
+    font-size:.85rem; text-align:end; line-height:1;
   }
   :is(.arena-weather-card,.arena-live-pinnable) .arena-weather-pin:hover { text-decoration:underline; }
   @media print { .arena-weather-card { display:none !important; } }
@@ -63,7 +63,7 @@
   button.setAttribute('aria-pressed', String(pinned));
   button.title = (pinned ? 'Desafixar ' : 'Fixar ') + label;
   button.setAttribute('aria-label', button.title);
-  button.textContent = pinned ? 'Desafixar' : 'Fixar';
+  button.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6v6l4 4v2H5v-2l4-4V3Zm3 12v6"/>' + (pinned ? '' : '<path d="M3 3l18 18"/>') + '</svg>';
  }
  function applyPins() {
   const pinned = storage.read(pinKey) === true;
