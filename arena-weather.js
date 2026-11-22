@@ -37,6 +37,9 @@
   .arena-weather-card > .arena-weather-pin {
     position:absolute; inset-block-start:5px; inset-inline-end:5px; z-index:1;
   }
+  .arena-weather-card:has(> #arenaWeather:not([open])) > .arena-weather-pin {
+    inset-block-start:50%; transform:translateY(-50%);
+  }
   .arena-weather-card > #arenaWeather[open] .arena-weather-body { max-height:38dvh; overflow:auto; }
   .arena-weather-card.is-pinned { position:sticky; top:0; z-index:12; }
   html:has(.arena-weather-card.is-pinned), body:has(.arena-weather-card.is-pinned),
