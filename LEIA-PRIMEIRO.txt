@@ -1,0 +1,110 @@
+ARENA — TESTES RESERVADOS, ATALHOS PESSOAIS E CREDENCIAIS
+Edição 19/11/2026
+
+Este pacote aplica um patch localizado em app.js, spark-store.js, style.css e firestore.rules.
+Ele depende dos ajustes anteriores, incluindo a demonstração guiada já instalada.
+Não substitua esses arquivos integralmente. Aplicar o patch não reserva dados sozinho.
+Nenhuma conta, senha, vínculo com Google ou configuração é excluída.
+
+1 — INSTALAR EM UM MOMENTO SEM OPERAÇÃO DE JOGOS
+Peça aos operadores para sair durante a instalação e a preparação inicial.
+Guarde uma cópia/commit da versão funcional e confira o estado do Git.
+Copie arena-testes-atalhos-credenciais.patch para a pasta do projeto.
+
+Confira primeiro:
+ git apply --ignore-space-change --check .\arena-testes-atalhos-credenciais.patch
+
+Somente se não apresentar erro:
+ git apply --ignore-space-change .\arena-testes-atalhos-credenciais.patch
+
+Se a conferência falhar, pare e envie a mensagem. Não force a substituição.
+
+2 — PUBLICAR AS DUAS PARTES
+No Firebase, publique o conteúdo do firestore.rules MODIFICADO pelo patch no projeto correto.
+Não copie um arquivo completo de regras de outra versão.
+Depois sincronize/publique o site pelo seu procedimento habitual.
+Atualize o computador com Ctrl+F5; no celular, use aba anônima para conferir arquivos novos.
+Enviar ao GitHub NÃO publica as regras no Firebase sozinho.
+
+3 — PREPARAR UMA VEZ OS REGISTROS ANTIGOS
+Entre como administrador > Administração > Dados de teste.
+Clique em Preparar proteção dos registros antigos.
+Essa etapa apenas registra a classificação inicial como disponível; não escolhe testes e não exclui dados.
+Finalize antes as partidas ao vivo, pausadas ou suspensas e pare os relógios dos itens envolvidos.
+As consultas privadas de operadores podem ficar vazias até esta preparação terminar.
+Se houver mais de 500 registros, a preparação faz até 500 por vez; repita até a contagem chegar a zero.
+Não opere jogos em outra aba enquanto a classificação estiver rodando.
+
+4 — RESERVAR OS TESTES
+Na lista Disponíveis, pesquise e selecione APENAS os dados que são testes.
+Selecionar os exibidos marca a lista atual, não todos os registros do banco.
+Clique em Conferir reserva de testes e vínculos.
+A prévia inclui automaticamente dependências:
+ - Campeonato inclui as partidas vinculadas.
+ - Equipe inclui jogadores e todas as partidas em que participa.
+ - Jogador inclui partidas cuja cópia do elenco contém esse jogador.
+Uma equipe compartilhada pode incluir partidas reais. Confira cada item antes de prosseguir.
+Baixe a cópia privada da seleção, informe o motivo e digite RESERVAR para confirmar.
+O JSON é uma cópia para consulta; não há importação automática.
+O sistema revalida os vínculos no banco antes de aplicar. Se mudarem, refaça a prévia.
+
+5 — CONSULTAR E RESTAURAR
+Reservados ao administrador mostra os testes. Ver detalhes permite consultar campos e histórico privado.
+Os dados permanecem no banco, mas somem das telas normais, do público e das leituras operacionais.
+Isso organiza a visualização; NÃO libera armazenamento do Firebase.
+Para devolver, selecione na lista Reservados, confira a prévia, baixe a cópia e digite RESTAURAR.
+A restauração inclui pais necessários e os publica novamente conforme a visibilidade anterior.
+IMPORTANTE: as atribuições antigas são preservadas; restaurar reativa o acesso de quem já era autorizado.
+O histórico público anterior é preservado e pode voltar a ser consultado quando a partida for republicada.
+A classificação não altera senhas, aprovação ou privilégios do usuário.
+
+6 — SE A OPERAÇÃO FOR INTERROMPIDA
+A classificação pausa gravações esportivas temporariamente e as libera ao terminar.
+Os itens já processados ficam preservados; não há exclusão nem promessa de reversão automática do grupo inteiro.
+Confira Disponíveis e Reservados antes de continuar uma operação parcial.
+Se a conexão cair e a trava permanecer, confirme que nenhuma outra aba está classificando e use
+Liberar operação após interrupção. Depois refaça a prévia da seleção restante.
+Não use esse botão durante uma classificação ativa em outro dispositivo.
+
+7 — ATALHOS E FAVORITOS
+Meus atalhos fica no topo das áreas da central; também há atalhos pessoais no público.
+Abra Escolher atalhos e favoritos, adicione funções e use as setas para ordenar.
+Botão direito em uma aba no computador ou toque prolongado de cerca de 0,65 s no celular/tablet
+abre opções de atalho, favorito e cor. Toques normais continuam abrindo a função.
+Você também pode escolher as cores pelo botão visível, sem depender do gesto.
+As cores e preferências são locais à conta e ao navegador. Não se sincronizam entre dispositivos.
+Trocar a cor ou fixar uma aba não concede permissão nem altera a aparência dos outros usuários.
+O menu nativo continua disponível fora das abas compatíveis.
+
+8 — CREDENCIAIS POR EVENTO
+Administrador > Administração > Credenciais de eventos.
+Selecione um campeonato real/disponível; preencha nome, função, organização e validade.
+Opcionalmente vincule a uma conta já existente, apenas para identificação.
+Emitir e salvar cria um código na lista administrativa.
+Use Consultar/Atualizar, pesquisar, filtrar, Visualizar/imprimir e Revogar.
+A visualização tem botão para imprimir ou salvar PDF em formato de crachá.
+Funções sugeridas: Operador, Organização, Arbitragem, Apoio, Equipe técnica e Imprensa.
+A credencial NÃO cria conta, não fornece senha e não concede autorização para operar jogos.
+O código permite conferência pela organização; não há verificador público online neste pacote.
+Revogar não bloqueia a conta e não modifica um PDF já baixado. Confira situação e validade na lista.
+Credenciais de campeonatos reservados como testes não aparecem na lista normal.
+Não são fornecidos QR codes de autenticação ou garantia antifalsificação neste recurso.
+
+9 — CONFERÊNCIA DEPOIS DA INSTALAÇÃO
+Comece reservando uma partida de teste encerrada; confira que não aparece no operador e no público.
+Verifique-a na aba privada, restaure e confirme o retorno e o acesso antigo esperado.
+Depois reserve o conjunto de testes desejado, sempre conferindo os vínculos.
+Confira o login, as contas, os cadastros reais e uma partida real autorizada.
+Teste um atalho, um favorito e uma cor em computador e celular.
+Emita um crachá, imprima a prévia e revogue uma credencial de conferência.
+O novo tour também explica Dados de teste, Meus atalhos e Credenciais.
+
+VALIDAÇÃO REALIZADA
+Sintaxe JavaScript e aplicação do patch conferidas.
+Regras compiladas e testadas no emulador do Firestore.
+Reserva, restauração, remoção/retorno de projeções públicas e consultas por perfil testadas.
+Tentativas de leitura e escrita indevidas, mudança de placar disfarçada de classificação,
+trava de manutenção, operação normal, vínculos compartilhados e credenciais testados.
+Preferências locais por conta/perfil, ordenação dos vínculos e validade testadas em lógica.
+A aparência em navegador, o gesto de toque e a publicação na sua conta real ainda precisam de conferência.
+Nenhuma alteração foi publicada no seu Firebase ou GitHub por este pacote.

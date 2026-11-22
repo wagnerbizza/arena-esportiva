@@ -83,7 +83,9 @@ export function diagnosticPlan({D,M,readServer,training=false,fetchAsset,setting
   return items;
 }
 export async function runSystemChecks(options) {
-  const startedAt=new Date().toISOString(),plan=diagnosticPlan(options);
+  const startedAt=new Date().toISOString(),all=diagnosticPlan(options);
+  const plan=Array.isArray(options.onlyIds)?all.filter(item=>options.onlyIds.includes(item.id)):all;
+  ensure(plan.length>0,"Verificação solicitada não encontrada.");
   const report={version:1,startedAt,finishedAt:null,mode:options.training?"Demonstração: simulações locais":"Simulações locais e consultas ao servidor",scope:"Sem gravações reais. Aprovação de um teste não aprova o sistema inteiro.",rows:plan.map(({id,group,title})=>({id,group,title,status:"pending",detail:"Aguardando",durationMs:0}))};
   const emit=()=>options.onUpdate?.(JSON.parse(JSON.stringify(report)));
   emit();

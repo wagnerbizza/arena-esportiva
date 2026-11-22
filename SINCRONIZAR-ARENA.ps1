@@ -17,30 +17,25 @@ $EsperaAntesDeEnviar = 5
 
 $RepositorioEsperado = "https://github.com/wagnerbizza/arena-esportiva.git"
 
-# Somente estes arquivos e pastas entram na publicacao.
-$ArquivosPermitidos = @(
-    "index.html"
-    "painel.html"
-    "apresentacao.html"
-    "apresentacao-arena.js"
-    "app.js"
-    "arena-documentos.js"
-    "arena-weather.js"
-    "arena-diversao.js"
-    "arena-extras.css"
-    "arena-operacao.js"
-    "arena-operacao.css"
-    "testes/mesa-operacao.test.cjs"
-    "testes/diversao.test.cjs"
-    "SINCRONIZAR-ARENA.ps1"
-    "style.css"
-    "config.js"
-    "domain.js"
-    "spark-model.js"
-    "spark-store.js"
-    "report-pdf.js"
-    "vendor"
-)
+# Arquivos novos seguem o .gitignore. Estes filtros tambem valem para rastreados.
+function Get-ArenaArquivosParaCommit {
+    $Modificados = @(Invoke-ArenaGit -Argumentos @(
+        "-c", "core.quotePath=false", "diff", "--name-only", "--diff-filter=ACMRTUXB", "--"
+    ))
+    $Novos = @(Invoke-ArenaGit -Argumentos @(
+        "-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard", "--"
+    ))
+
+    $Arquivos = @($Modificados + $Novos | Sort-Object -Unique)
+    foreach ($Arquivo in $Arquivos) {
+        if ($Arquivo -match '(?i)\.(zip|7z|rar|patch|pem|p12|pfx|key)$|(^|/)\.env($|\.)|(^|/)serviceAccount[^/]*\.json$|(^|/)firebase-debug[^/]*\.log$|(^|/)Arquivos de Recuper[^/]*(/|$)') {
+            continue
+        }
+        if (Test-Path -LiteralPath $Arquivo -PathType Leaf) {
+            $Arquivo
+        }
+    }
+}
 
 # ============================================================
 # EXECUTA O GIT E CONFERE SE O COMANDO FUNCIONOU
@@ -176,7 +171,7 @@ try {
 
     Write-Host ""
     Write-Host "ARENA ESPORTIVA - SINCRONIZACAO ATIVA" -ForegroundColor Cyan
-    Write-Host "Salve os arquivos no VS Code para publicar." -ForegroundColor Green
+    Write-Host "Salve, copie ou substitua arquivos permitidos para publicar." -ForegroundColor Green
     Write-Host "Para encerrar: Ctrl+C." -ForegroundColor Yellow
     Write-Host ""
 
@@ -184,10 +179,7 @@ try {
         Test-ArenaRepository
         Test-ArenaIndex
 
-        $Mudancas = @(Invoke-ArenaGit -Argumentos (
-            @("status", "--porcelain", "--untracked-files=all", "--") +
-            $ArquivosPermitidos
-        ))
+        $Mudancas = @(Get-ArenaArquivosParaCommit)
 
         $CommitsLocais = (
             @(Invoke-ArenaGit -Argumentos @(
@@ -206,24 +198,11 @@ try {
                 # Confere novamente antes de preparar os arquivos.
                 Test-ArenaIndex
 
-                $Candidatos = @()
-
-                foreach ($Item in $ArquivosPermitidos) {
-                    $Rastreados = @(Invoke-ArenaGit -Argumentos @(
-                        "ls-files", "--", $Item
-                    ))
-
-                    if (
-                        (Test-Path -LiteralPath $Item) -or
-                        $Rastreados.Count -gt 0
-                    ) {
-                        $Candidatos += $Item
-                    }
-                }
+                $Candidatos = @(Get-ArenaArquivosParaCommit)
 
                 if ($Candidatos.Count -gt 0) {
                     Invoke-ArenaGit -Argumentos (
-                        @("add", "-A", "--") + $Candidatos
+                        @("--literal-pathspecs", "add", "--ignore-removal", "--") + $Candidatos
                     ) | Out-Host
 
                     $ParaCommit = @(Invoke-ArenaGit -Argumentos @(
@@ -234,9 +213,14 @@ try {
                         $Mensagem = "Arena: atualizacao " +
                             (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 
-                        Invoke-ArenaGit -Argumentos (
-                            @("commit", "--only", "-m", $Mensagem, "--") +
-                            $Candidatos
+                        $Exclusoes = @(Invoke-ArenaGit -Argumentos @(
+                            "diff", "--cached", "--name-only", "--diff-filter=D"
+                        ))
+                        if ($Exclusoes.Count -gt 0) {
+                            throw "Exclusoes preparadas no indice. Confira os arquivos antes de publicar."
+                        }
+                        Invoke-ArenaGit -Argumentos @(
+                            "commit", "-m", $Mensagem
                         ) | Out-Host
                     }
                 }
