@@ -10,7 +10,117 @@
  const main=document.querySelector('main');if(!main)return;
  const panel=document.createElement('details');panel.id='arenaWeather';panel.className='arena-weather noprint';panel.setAttribute('aria-label','Previsão do tempo');
  panel.innerHTML='<summary><strong data-weather-title>Previsão do tempo</strong><span data-weather-summary>Consultando previsão…</span></summary><div class="arena-weather-body"><p data-weather-status role="status" aria-live="polite"></p><div class="arena-weather-days" data-weather-days></div><div class="toolbar"><button type="button" data-weather-refresh>Atualizar previsão</button></div><form data-weather-search><label>Cidade<input name="city" type="search" minlength="3" maxlength="100" placeholder="Ex.: São Paulo" required autocomplete="off"></label><button type="submit">Buscar cidade</button></form><div class="arena-weather-results" data-weather-results></div><small>A cidade escolhida vale neste navegador. A previsão pode mudar. Fonte: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>.</small></div>';
- main.prepend(panel);const find=s=>panel.querySelector(s),status=text=>{find('[data-weather-status]').textContent=text;};
+ const weatherCard = document.createElement('div');
+ weatherCard.className = 'arena-weather-card noprint';
+ const pin = document.createElement('button');
+ pin.type = 'button';
+ pin.className = 'arena-weather-pin';
+ pin.setAttribute('aria-controls', panel.id);
+ pin.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8M9 3v6l-4 4v2h14v-2l-4-4V3M12 15v7"/></svg>';
+
+ const styles = document.createElement('style');
+ styles.textContent = `
+  .arena-weather-card { position:relative; margin-bottom:16px; }
+  .arena-weather-card > #arenaWeather { margin-bottom:0; }
+  .arena-weather-card > #arenaWeather > summary { padding-inline-end:52px; min-height:44px; }
+  .arena-weather-card > #arenaWeather[open] .arena-weather-body { max-height:38dvh; overflow:auto; }
+  .arena-weather-card.is-pinned { position:sticky; top:0; z-index:12; background:var(--bg,#0d141b); }
+  html:has(.arena-weather-card.is-pinned), body:has(.arena-weather-card.is-pinned),
+  html:has(.arena-live-pinnable.is-pinned), body:has(.arena-live-pinnable.is-pinned) { overflow-x:clip !important; }
+  .arena-live-pinnable { position:relative; padding-inline-end:60px !important; }
+  .arena-live-pinnable.is-pinned {
+    position:sticky; top:var(--arena-weather-sticky-height,0px); z-index:11;
+    max-height:40dvh; overflow:auto;
+  }
+  :is(.arena-weather-card,.arena-live-pinnable) .arena-weather-pin {
+    position:absolute; inset:5px 7px auto auto; display:grid; place-items:center;
+    width:44px; min-width:44px; height:44px; min-height:44px; padding:0;
+    border:1px solid var(--line,#344757); border-radius:9px;
+    background:var(--panel,#151c23); color:var(--text,#eef3f6);
+  }
+  :is(.arena-weather-card,.arena-live-pinnable) .arena-weather-pin[aria-pressed="true"] { color:var(--accent,#16c9f3); border-color:currentColor; }
+  @media print { .arena-weather-card { display:none !important; } }
+ `;
+ document.head.append(styles);
+ weatherCard.append(panel, pin);
+ main.prepend(weatherCard);
+
+ const pinKey = 'arena-weather-pinned-v1';
+ const liveKey = 'arena-live-pinned-v1';
+ const isPublic = document.body.dataset.admin === 'false';
+ const params = new URLSearchParams(location.search);
+ for (const [param, key] of [['fixarTempo', pinKey], ['fixarAoVivo', liveKey]]) {
+  const value = params.get(param);
+  if (value === '1' || value === '0') storage.write(key, value === '1');
+ }
+ let livePanel;
+ let livePin;
+ const refreshSpacing = () => {
+  const height = weatherCard.classList.contains('is-pinned') ? weatherCard.offsetHeight : 0;
+  main.style.setProperty('--arena-weather-sticky-height', height + 'px');
+ };
+ if (typeof ResizeObserver === 'function') new ResizeObserver(refreshSpacing).observe(weatherCard);
+ function updatePin(button, pinned, label) {
+  button.setAttribute('aria-pressed', String(pinned));
+  button.title = (pinned ? 'Desafixar ' : 'Fixar ') + label;
+  button.setAttribute('aria-label', button.title);
+ }
+ function applyPins() {
+  const pinned = storage.read(pinKey) === true;
+  weatherCard.classList.toggle('is-pinned', pinned);
+  updatePin(pin, pinned, 'previsão do tempo');
+  if (livePanel) {
+   const livePinned = storage.read(liveKey) === true;
+   livePanel.classList.toggle('is-pinned', livePinned);
+   updatePin(livePin, livePinned, 'jogos ao vivo');
+  }
+  refreshSpacing();
+ }
+ pin.addEventListener('click', () => {
+  storage.write(pinKey, pin.getAttribute('aria-pressed') !== 'true');
+  applyPins();
+ });
+ if (isPublic) {
+  function installLivePin() {
+   const current = main.querySelector('.live-status-panel');
+   if (current === livePanel) return;
+   livePanel = current;
+   if (current) {
+    livePanel.classList.add('arena-live-pinnable');
+    livePin = pin.cloneNode(true);
+    livePin.removeAttribute('aria-controls');
+    livePin.addEventListener('click', () => {
+     storage.write(liveKey, livePin.getAttribute('aria-pressed') !== 'true');
+     applyPins();
+    });
+    livePanel.append(livePin);
+   }
+   applyPins();
+  }
+  new MutationObserver(installLivePin).observe(main.querySelector('#app') || main, {childList:true, subtree:true});
+  installLivePin();
+
+  const share = document.createElement('button');
+  share.type = 'button';
+  share.textContent = 'Copiar link com estas fixações';
+  share.addEventListener('click', async () => {
+   const url = new URL(location.href);
+   url.searchParams.set('fixarTempo', storage.read(pinKey) === true ? '1' : '0');
+   url.searchParams.set('fixarAoVivo', storage.read(liveKey) === true ? '1' : '0');
+   try {
+    await navigator.clipboard.writeText(url.href);
+    share.textContent = 'Link copiado';
+   } catch (_) {
+    window.prompt('Copie e abra este link no outro aparelho:', url.href);
+   }
+  });
+  panel.querySelector('.toolbar').append(share);
+ }
+ window.addEventListener('storage', event => {
+  if (event.key === pinKey || event.key === liveKey) applyPins();
+ });
+ applyPins();
+ const find=s=>panel.querySelector(s),status=text=>{find('[data-weather-status]').textContent=text;};
  function label(code){if(code===0)return 'Céu limpo';if([1,2,3].includes(code))return 'Parcialmente nublado a nublado';if([45,48].includes(code))return 'Nevoeiro';if([51,53,55,56,57].includes(code))return 'Garoa';if([61,63,65,66,67,80,81,82].includes(code))return 'Chuva';if([71,73,75,77,85,86].includes(code))return 'Neve';if([95,96,99].includes(code))return 'Trovoadas';return 'Condição não informada';}
  const finite=x=>typeof x==='number'&&Number.isFinite(x),number=x=>finite(x)?Math.round(x).toLocaleString('pt-BR'):'—';
  function usable(data){return data&&data.current&&finite(data.current.temperature_2m)&&typeof data.current.time==='string'&&data.daily&&Array.isArray(data.daily.time)&&data.daily.time.length>0&&Array.isArray(data.daily.temperature_2m_min)&&Array.isArray(data.daily.temperature_2m_max)&&Array.isArray(data.daily.precipitation_probability_max);}
