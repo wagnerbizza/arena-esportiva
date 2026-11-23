@@ -5113,7 +5113,37 @@ function credentialHTML(record,event,branding=state.partners,preview=false) {
   const custom=window.ArenaDocuments?.active(branding,"credentials");
   const brand=position=>window.ArenaDocuments?.render(branding,"credentials",position,state.settings.logo||"",registrationStyleWithCurrentLogos().schoolLogo||"")||"";
   const logo=state.settings.logo||"",safe=/^https:\/\//i.test(logo)||/^data:image\/(png|jpeg|webp);base64,/i.test(logo);
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Credencial • ${esc(record.name)}</title><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font:14px Arial,sans-serif;color:#142832;background:#fff}.badge{width:90mm;min-height:130mm;border:2px solid #183e52;border-radius:5mm;padding:7mm;margin:10mm auto;text-align:center;overflow-wrap:anywhere}.logo{height:18mm;max-width:65mm;object-fit:contain}.function{padding:4mm;background:#163f55;color:#fff;font-size:22px;font-weight:bold}.name{font-size:24px;font-weight:bold;margin:9mm 0}.code{font-size:10px;margin-top:7mm}.status{font-weight:bold;color:${record.status==="revogada"?"#9b1c1c":"#174f30"}}.tools{text-align:center}@media print{.tools{display:none}}${partnerPrintCSS}</style></head><body>${preview ? "" : '<div class="tools"><button onclick="window.print()">Imprimir / salvar em PDF</button></div>'}<article class="badge">${brand("header")}${!custom&&safe?`<img class="logo" src="${esc(logo)}" alt="Logo da organização">`:""}<p>${esc(state.settings.title)}</p><h2>${esc(championshipTitle(event))}</h2>${sportLine?`<p>${esc(sportLine)}</p>`:""}<div class="function">${esc(record.function)}</div><div class="name">${esc(record.name)}</div><p>${esc(record.organization||"Organização do evento")}</p><p>Válida até ${esc(record.validUntil||"Não informada")}</p><p class="status">${record.status!=="ativa"?"CREDENCIAL REVOGADA":credentialIsExpired(record)?"CREDENCIAL VENCIDA":"CREDENCIAL ATIVA"}</p><p class="code">Código ${esc(record.id)}<br>Conferência pela organização na lista de credenciais.<br>Identificação de evento sem concessão de acesso ao sistema.</p>${brand("footer")+brand("background")}<p class="code">WagnerBIZZA • Arena</p></article></body></html>`;
+  const sizingTools = preview ? "" : `<form class="tools" id="badge-size">
+    <label>Orientação <select name="orientation"><option value="vertical">Vertical</option><option value="horizontal">Horizontal</option></select></label>
+    <label>Largura (mm) <input name="width" type="number" min="40" max="180" step="0.1" value="90" required></label>
+    <label>Altura (mm) <input name="height" type="number" min="40" max="180" step="0.1" value="130" required></label>
+    <button type="submit">Imprimir / salvar em PDF</button>
+    <p>Meça o espaço interno da capa. Na impressão, use escala de 100%.</p>
+  </form>`;
+  const sizingScript = preview ? "" : `<script>
+    const form=document.getElementById("badge-size"), frame=document.querySelector(".badge-size-frame"), badge=frame.firstElementChild;
+    const {orientation,width,height}=form.elements;
+    function fit(){
+      if(!form.checkValidity())return;
+      frame.style.width=width.value+"mm";
+      frame.style.height=height.value+"mm";
+      badge.style.width=orientation.value==="horizontal"?"130mm":"90mm";
+      const scale=Math.min(frame.clientWidth/badge.offsetWidth,frame.clientHeight/badge.offsetHeight);badge.style.left=(frame.clientWidth-badge.offsetWidth*scale)/2+"px";badge.style.top=(frame.clientHeight-badge.offsetHeight*scale)/2+"px";badge.style.transform="scale("+scale+")";
+    }
+    orientation.addEventListener("change",()=>{
+      if((orientation.value==="horizontal")!==(Number(width.value)>Number(height.value))){
+        const previous=width.value;width.value=height.value;height.value=previous;
+      }
+      fit();
+    });
+    form.addEventListener("input",event=>{if(event.target!==orientation)fit();});
+    form.addEventListener("submit",event=>{event.preventDefault();fit();window.print();});
+    window.addEventListener("load",fit);
+    window.addEventListener("beforeprint",fit);
+    if(typeof ResizeObserver==="function")new ResizeObserver(fit).observe(badge);
+    fit();
+  </script>`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Credencial • ${esc(record.name)}</title><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font:14px Arial,sans-serif;color:#142832;background:#fff}.badge{width:90mm;min-height:130mm;border:2px solid #183e52;border-radius:5mm;padding:7mm;margin:10mm auto;text-align:center;overflow-wrap:anywhere}.logo{height:18mm;max-width:65mm;object-fit:contain}.function{margin:4mm 0;font-size:16px;font-weight:bold}.name{position:relative;isolation:isolate;margin:6mm 0 4mm;padding:4mm 3mm;font-size:24px;font-weight:bold;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}.name-band{position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}.code{font-size:10px;margin-top:7mm}.status{font-weight:bold;color:${record.status==="revogada"?"#9b1c1c":"#174f30"}}.tools{text-align:center;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;padding:8px}.tools p{flex-basis:100%;margin:0}.tools input{width:7em}.badge-size-frame{width:90mm;height:130mm;margin:10mm auto;position:relative;break-inside:avoid;border:2px solid #183e52;border-radius:5mm}.badge-size-frame>.badge{position:absolute;inset:0 auto auto 0;min-height:0;margin:0;border:0;transform-origin:top left}@media print{.tools{display:none}}${partnerPrintCSS}</style></head><body>${sizingTools}${preview?"":'<div class="badge-size-frame">'}<article class="badge">${brand("header")}${!custom&&safe?`<img class="logo" src="${esc(logo)}" alt="Logo da organização">`:""}<p>${esc(state.settings.title)}</p><h2>${esc(championshipTitle(event))}</h2>${sportLine?`<p>${esc(sportLine)}</p>`:""}<div class="name"><svg class="name-band" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect width="100" height="100" fill="#163f55"/></svg>${esc(record.name)}</div><div class="function">${esc(record.function)}</div><p>${esc(record.organization||"Organização do evento")}</p><p>Válida até ${esc(record.validUntil||"Não informada")}</p><p class="status">${record.status!=="ativa"?"CREDENCIAL REVOGADA":credentialIsExpired(record)?"CREDENCIAL VENCIDA":"CREDENCIAL ATIVA"}</p><p class="code">Código ${esc(record.id)}<br>Conferência pela organização na lista de credenciais.<br>Identificação de evento sem concessão de acesso ao sistema.</p>${brand("footer")+brand("background")}<p class="code">WagnerBIZZA • Arena</p></article>${preview?"":"</div>"}${sizingScript}</body></html>`;
 }
 
 document.addEventListener("change",e=>{
