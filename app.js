@@ -4496,7 +4496,6 @@ function moveShortcut(id, dir){
 }
 function quickActionCards(){
   const actions = getVisibleShortcuts();
-  if (!actions.length) return "";
   return `<section class="card"><h2>Atalhos rápidos</h2><div class="shortcut-toolbar"><button type="button" data-shortcut-customize class="secondary-button">Personalizar atalhos</button></div><p class="muted">Ações mais usadas por ${role === "admin" ? "o administrador" : "o operador"}. Todos os acessos seguem as permissões atribuídas.</p><div class="grid">${actions.map(({id,label,detail})=>`<div class="shortcut-panel"><div class="shortcut-header"><button type="button" data-section="${id}" class="shortcut-primary"><strong>${esc(label)}</strong><small>${esc(detail)}</small></button><div class="shortcut-tools"><button type="button" data-shortcut-move="up" data-shortcut-target="${id}" title="Mover para cima" aria-label="Mover ${esc(label)} para cima">↑</button><button type="button" data-shortcut-move="down" data-shortcut-target="${id}" title="Mover para baixo" aria-label="Mover ${esc(label)} para baixo">↓</button><button type="button" data-shortcut-hide="${id}" title="Ocultar atalho" aria-label="Ocultar ${esc(label)}">✕</button></div></div></div>`).join("")}</div></section>`;
 }
 
@@ -4527,10 +4526,34 @@ function operatorStartPanel(showTasks = false) {
   </div></section>` : ""}`;
 }
 
+function overviewFirstKey(){
+ return "arena-overview-first-v1:"+JSON.stringify([user?.uid || "local",role,!!C.demo]);
+}
+document.addEventListener("change",e=>{
+ const select=e.target.closest("[data-overview-first]");
+ if(!select || !admin || !["shortcuts","numbers","games"].includes(select.value))return;
+ try { localStorage.setItem(overviewFirstKey(),select.value); }
+ catch { toast("O navegador não permitiu salvar a ordem das caixas.",true); return; }
+ refresh();
+});
 function overviewMatchView(){
  const rows=scopeMatches(state.matches,overviewGameScope).slice().sort((a,b)=>{if(overviewGameScope!=="finished"){const priority=m=>m.status==="Ao vivo"?0:m.status==="Pausada"?1:2;const d=priority(a)-priority(b);if(d)return d;}return overviewGameScope==="finished"?new Date(b.date)-new Date(a.date):new Date(a.date)-new Date(b.date);});
- return `<details class="card arena-quick-actions"><summary>Ações rápidas e personalização</summary>${quickActionCards()}</details><div class="grid">${[["Equipes",state.teams.length,"teams"],["Jogadores",state.players.length,"players"],["Partidas ao vivo",state.matches.filter(m=>m.status==="Ao vivo").length,"live"]].filter(([, , target]) => target === "live" || canManageRosters()).map(([label,n,target]) =>
-  `<button type="button" class="card overview-shortcut" ${target === "live" ? 'data-games-shortcut="live"' : `data-section="${target}"`}><span>${label}</span><strong class="kpi">${n}</strong></button>`).join("")}</div><section class="card"><h2>Quadra e campo</h2>${matchScopeButtons("overview",overviewGameScope)}<p class="muted">Jogos encerrados ficam em Finalizadas. Esta seleção muda apenas a visualização.</p></section><div class="grid">${rows.slice(0,6).map(m=>matchCard(m,true)).join("")||empty(overviewGameScope==="active"?"Nenhuma partida atual. Consulte Finalizadas ou programe um novo jogo.":"Nenhuma partida nesta seleção.")}</div>${rows.length>6?'<p>Exibindo seis partidas. Abra Jogos → Acompanhar jogos para consultar a lista completa.</p>':""}`;
+ const labels={shortcuts:"Atalhos rápidos",numbers:"Equipes, jogadores e partidas ao vivo",games:"Quadra e campo"};
+ const blocks={
+  shortcuts:`<details class="card arena-quick-actions"><summary>Ações rápidas e personalização</summary>${quickActionCards()}</details>`,
+  numbers:`<div class="grid">${[["Equipes",state.teams.length,"teams"],["Jogadores",state.players.length,"players"],["Partidas ao vivo",state.matches.filter(m=>m.status==="Ao vivo").length,"live"]].filter(([, , target]) => target === "live" || canManageRosters()).map(([label,n,target]) =>
+  `<button type="button" class="card overview-shortcut" ${target === "live" ? 'data-games-shortcut="live"' : `data-section="${target}"`}><span>${label}</span><strong class="kpi">${n}</strong></button>`).join("")}</div>`,
+  games:`<section class="card"><h2>Quadra e campo</h2>${matchScopeButtons("overview",overviewGameScope)}<p class="muted">Jogos encerrados ficam em Finalizadas. Esta seleção muda apenas a visualização.</p></section><div class="grid">${rows.slice(0,6).map(m=>matchCard(m,true)).join("")||empty(overviewGameScope==="active"?"Nenhuma partida atual. Consulte Finalizadas ou programe um novo jogo.":"Nenhuma partida nesta seleção.")}</div>${rows.length>6?'<p>Exibindo seis partidas. Abra Jogos → Acompanhar jogos para consultar a lista completa.</p>':""}`
+ };
+ const key=overviewFirstKey();
+ let first="shortcuts";
+ try { first=localStorage.getItem(key) || first; } catch {}
+ if(!Object.hasOwn(blocks,first)) first="shortcuts";
+ const order=[first,...Object.keys(blocks).filter(id=>id!==first)];
+ const choices=Object.entries(labels).map(([id,label])=>
+  `<option value="${id}" ${id===first?"selected":""}>${label}</option>`).join("");
+ return `<label>Primeira caixa da Visão geral
+   <select data-overview-first>${choices}</select></label>${order.map(id=>blocks[id]).join("")}`;
 }
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-match-scope]");if(!b||!admin||!['active','finished','all'].includes(b.dataset.matchScope))return;
@@ -4538,36 +4561,37 @@ document.addEventListener("click",e=>{
  if(b.dataset.scopeArea==="team")teamGameScope=b.dataset.matchScope;
  render();
 });
-document.addEventListener("click",e=>{
-  const customize=e.target.closest("[data-shortcut-customize]");
-  if(customize){
+function showShortcutEditor(){
     const current = getVisibleShortcuts();
     const all = getShortcutCatalog();
     const stored = getStoredShortcuts() || { order: [], hidden: {} };
     const hidden = stored.hidden || {};
-    const choices = all.map((item) => ({ ...item, hidden: !!hidden[item.id] || !current.some((x) => x.id === item.id) }));
-    const html = `<section class="card"><h2>Personalizar atalhos</h2><p class="muted">Ocultar ou reorganizar ações rápidas, sem alterar as permissões da conta.</p><div class="shortcut-config">${choices.map((item) => `<div class="shortcut-config-row ${item.hidden ? "is-hidden" : ""}"><span><strong>${esc(item.label)}</strong><small>${esc(item.detail)}</small></span><div class="shortcut-config-actions"><button type="button" data-shortcut-hide="${item.id}" ${item.hidden ? "" : "class=\"primary\""}>${item.hidden ? "Mostrar" : "Ocultar"}</button></div></div>`).join("")}</div><div class="toolbar"><button type="button" data-shortcut-reset class="primary">Restaurar padrão</button><button type="button" data-section="overview">Voltar para tela inicial</button></div></section>`;
+    const ordered = [...current,...all.filter(item=>!current.some(x=>x.id===item.id))];
+    const choices = ordered.map((item) => ({ ...item, hidden: !!hidden[item.id] || !current.some((x) => x.id === item.id) }));
+    const html = `<section class="card" data-shortcut-editor><h2>Personalizar atalhos</h2><p class="muted">Ocultar ou reorganizar ações rápidas, sem alterar as permissões da conta.</p><div class="shortcut-config">${choices.map((item) => `<div class="shortcut-config-row ${item.hidden ? "is-hidden" : ""}"><span><strong>${esc(item.label)}</strong><small>${esc(item.detail)}</small></span><div class="shortcut-config-actions">${item.hidden ? "" : `<button type="button" data-shortcut-move="up" data-shortcut-target="${item.id}" ${current[0]?.id===item.id?"disabled":""}>Subir</button><button type="button" data-shortcut-move="down" data-shortcut-target="${item.id}" ${current.at(-1)?.id===item.id?"disabled":""}>Descer</button>`}<button type="button" data-shortcut-hide="${item.id}" ${item.hidden ? "" : "class=\"primary\""}>${item.hidden ? "Mostrar" : "Ocultar"}</button></div></div>`).join("")}</div><div class="toolbar"><button type="button" data-shortcut-reset class="primary">Restaurar padrão</button><button type="button" data-section="overview">Voltar para tela inicial</button></div></section>`;
     const panel = document.getElementById("view");
     if (panel) panel.innerHTML = html;
-    return;
-  }
+}
+document.addEventListener("click",e=>{
+  if(e.target.closest("[data-shortcut-customize]")){ showShortcutEditor(); return; }
+  const refreshShortcuts=()=>e.target.closest("[data-shortcut-editor]")?showShortcutEditor():render();
   const move = e.target.closest("[data-shortcut-move]");
   if (move) {
     const dir = move.dataset.shortcutMove === "up" ? -1 : 1;
     moveShortcut(move.dataset.shortcutTarget, dir);
-    render();
+    refreshShortcuts();
     return;
   }
   const hide = e.target.closest("[data-shortcut-hide]");
   if (hide && hide.dataset.shortcutHide) {
     toggleShortcut(hide.dataset.shortcutHide, !getStoredShortcuts()?.hidden?.[hide.dataset.shortcutHide]);
-    render();
+    refreshShortcuts();
     return;
   }
   const reset = e.target.closest("[data-shortcut-reset]");
   if (reset) {
     saveStoredShortcuts({ order: [], hidden: {} });
-    render();
+    refreshShortcuts();
   }
 });
 

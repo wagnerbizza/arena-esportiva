@@ -1,7 +1,7 @@
 /* Mesa de operação: organiza os controles existentes e guarda apenas preferências locais. */
 (function(){
  'use strict';if(window.ArenaOperation)return;
- const defaults=['points','time','substitutions','coach','events','pauses','roster','notices','history','notes','championship'];
+ const defaults=['points','time','substitutions','coach','events','pauses','roster','notices','notes','championship','history'];
  const labels={points:'Pontos e cartões',time:'Tempo e acréscimos',substitutions:'Substituições de atletas e goleiros',coach:'Troca de técnico',events:'Cartões, faltas e outros lances',pauses:'Situação e etapas',roster:'Elenco da partida',notices:'Avisos ao público',history:'Histórico e anulações',notes:'Observações da súmula',championship:'Vínculo ao campeonato'};
  const sessionPreferences=new Map();
  const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -10,9 +10,9 @@
  function panel(id,node){if(!node)return null;node.removeAttribute('hidden');node.classList?.remove('card');const section=document.createElement('section');section.id='arena-op-'+id;section.className='card arena-op-panel';section.dataset.opPanel=id;section.tabIndex=-1;section.innerHTML='<div class="arena-op-heading"><h2>'+labels[id]+'</h2><button type="button" data-op-favorite="'+id+'" aria-pressed="false" title="Favoritar '+labels[id]+'">Favoritar</button></div>';section.append(node);return section;}
  function toolbar(root,prefs){const nav=root.querySelector('[data-op-shortcuts]');nav.replaceChildren();const panels=[...root.querySelectorAll('[data-op-panel]')];for(const section of panels){const id=section.dataset.opPanel,favorite=prefs.favorites.includes(id),button=section.querySelector('[data-op-favorite]');button.setAttribute('aria-pressed',String(favorite));button.textContent=favorite?'Favorito':'Favoritar';button.title=(favorite?'Remover dos favoritos: ':'Favoritar: ')+labels[id];if(favorite){const jump=document.createElement('button');jump.type='button';jump.dataset.opJump=id;jump.textContent=labels[id];nav.append(jump);}}
   if(!nav.children.length)nav.textContent='Use Favoritar nas seções para criar seus atalhos de operação.';
-  const list=root.querySelector('[data-op-order]');list.innerHTML=panels.map((section,i)=>{const id=section.dataset.opPanel;return '<div class="arena-op-order-row"><span>'+labels[id]+'</span><button type="button" data-op-move="'+id+'" data-op-direction="up" '+(i===0?'disabled':'')+' aria-label="Subir '+labels[id]+'">Subir</button><button type="button" data-op-move="'+id+'" data-op-direction="down" '+(i===panels.length-1?'disabled':'')+' aria-label="Descer '+labels[id]+'">Descer</button></div>';}).join('');
+  const list=root.querySelector('[data-op-order]');list.innerHTML=panels.filter(section=>section.dataset.opPanel!=="history").map((section,i)=>{const id=section.dataset.opPanel;return '<div class="arena-op-order-row"><span>'+labels[id]+'</span><button type="button" data-op-move="'+id+'" data-op-direction="first" '+(i===0?'disabled':'')+'>Colocar primeiro</button><button type="button" data-op-move="'+id+'" data-op-direction="up" '+(i===0?'disabled':'')+' aria-label="Subir '+labels[id]+'">Subir</button><button type="button" data-op-move="'+id+'" data-op-direction="down" '+(i===panels.filter(section=>section.dataset.opPanel!=='history').length-1?'disabled':'')+' aria-label="Descer '+labels[id]+'">Descer</button></div>';}).join('');
  }
- function apply(root,prefs){root.classList.toggle('arena-op-compact',prefs.compact);root.classList.toggle('arena-op-columns',prefs.columns);const grid=root.querySelector('[data-op-grid]');for(const id of prefs.order){const p=grid.querySelector('[data-op-panel="'+id+'"]');if(p)grid.append(p);}toolbar(root,prefs);}
+ function apply(root,prefs){root.classList.toggle('arena-op-compact',prefs.compact);root.classList.toggle('arena-op-columns',prefs.columns);const grid=root.querySelector('[data-op-grid]');for(const id of prefs.order){const p=grid.querySelector('[data-op-panel="'+id+'"]');if(p && id!=='history')grid.append(p);}const history=grid.querySelector('[data-op-panel=history]');if(history)grid.append(history);toolbar(root,prefs);}
  // Reserva a altura real do Menu, inclusive com texto ampliado ou tela girada.
  let observedMenu=null;
  const menuObserver=typeof window.ResizeObserver==='function'?new window.ResizeObserver(updateStickyOffset):null;
@@ -90,7 +90,18 @@
   if(button.dataset.opJump){const p=root.querySelector('[data-op-panel="'+button.dataset.opJump+'"]');p?.scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});p?.focus({preventScroll:true});return;}
   if(button.dataset.opEventKind){const form=root.querySelector('#event');if(form){form.elements.kind.value=button.dataset.opEventKind;form.elements.kind.dispatchEvent(new Event('change',{bubbles:true}));form.elements.player.focus();}return;}
   if(button.dataset.opFavorite){const id=button.dataset.opFavorite;prefs.favorites=prefs.favorites.includes(id)?prefs.favorites.filter(v=>v!==id):[...prefs.favorites,id];}
-  if(button.dataset.opMove){const id=button.dataset.opMove,index=prefs.order.indexOf(id),visible=[...root.querySelectorAll('[data-op-panel]')].map(p=>p.dataset.opPanel),v=visible.indexOf(id),other=visible[v+(button.dataset.opDirection==='up'?-1:1)],next=prefs.order.indexOf(other);if(index>=0&&next>=0)[prefs.order[index],prefs.order[next]]=[prefs.order[next],prefs.order[index]];}
+  if(button.dataset.opMove){
+   const id=button.dataset.opMove;
+   const visible=[...root.querySelectorAll('[data-op-panel]')].map(panel=>panel.dataset.opPanel).filter(key=>key!=='history');
+   const index=visible.indexOf(id);
+   if(index<0)return;
+   const direction=button.dataset.opDirection;
+   const target=direction==='first'?0:index+(direction==='up'?-1:1);
+   if(target<0||target>=visible.length||target===index)return;
+   visible.splice(index,1);
+   visible.splice(target,0,id);
+   prefs.order=[...visible,...prefs.order.filter(key=>!visible.includes(key)&&key!=='history'),'history'];
+  }
   if(button.hasAttribute('data-op-reset')){prefs.order=[...defaults];prefs.favorites=['points','time','events','history'];prefs.compact=false;prefs.columns=false;root.querySelector('[data-op-compact]').checked=false;root.querySelector('[data-op-columns]').checked=false;}
   apply(root,prefs);save(root,prefs);
  });
