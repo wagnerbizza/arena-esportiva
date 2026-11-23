@@ -121,25 +121,36 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
     return y;
   }
   const pageBranding = new Map();
-  function brandGroups(groups,y,size) {
-    for(const group of groups) {
-      if(!group.logos?.length)continue;
-      y=ensure(y+5,size+9);doc.setFontSize(8);
-      if(!['system','school'].includes(group.key)){doc.text(clean(group.label),left,y);y+=4;}
-      let x=left;
-      for(const logo of group.logos){
-        if(x+size>198){x=left;y=ensure(y+size*.7+3,size*.7+3);}
-        const imageSize=size*.65;
-        try{doc.addImage(logo,'PNG',x+(size-imageSize)/2,y,imageSize,imageSize,undefined,'FAST');}catch{}
-        x+=size+5;
-      }
-      y+=size*.7+3;
-    }
+  function placeBrandRow(groups, y, size) {
+    const logos = groups.flatMap(group => (group.logos || []).map((image, index) => ({
+      image, label: index===0 && !["system","school"].includes(group.key) ? clean(group.label) : ""
+    })));
+    if (!logos.length) return y;
+    const gap = logos.length>8 ? 2 : 5;
+    const side = Math.min(size, (width-gap*(logos.length-1))/logos.length);
+    const labelHeight = logos.some(item=>item.label) ? 5 : 0;
+    y = ensure(y, side+labelHeight+4);
+    doc.setFontSize(Math.min(8,side*1.15));
+    const start = left+(width-logos.length*side-(logos.length-1)*gap)/2;
+    logos.forEach(({image,label},i)=>{
+      const x=start+i*(side+gap);
+      if(label)doc.text(label,x,y+3,{maxWidth:side});
+      try { doc.addImage(image,"PNG",x,y+labelHeight,side,side,undefined,"FAST"); } catch {}
+    });
+    return y+side+labelHeight+4;
+  }
+  function brandGroups(groups,y,size,header=false) {
+    if (!groups.some(group=>group.logos?.length)) return y;
+    const adjacent = header && groups.some(group=>group.position==="beside")
+      ? groups.filter(group=>group.key==="system"||group.position==="beside") : [];
+    if(adjacent.length)y=placeBrandRow(adjacent,y,size);
+    const remaining=groups.filter(group=>!adjacent.includes(group));
+    if(remaining.length)y=placeBrandRow(remaining,y,size);
     return y;
   }
   function footerBrandGroups(groups, y, size) {
     const gap = 5;
-    const imageSize = size * .65;
+    const imageSize = size;
     const rowHeight = imageSize + 10;
     const perRow = Math.max(1, Math.floor((width + gap) / (size + gap)));
     let rowY = y + 5;
@@ -198,7 +209,7 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
     doc.setLineWidth(0.6);
     doc.line(left, 19, 198, 19);
     doc.setFontSize(15);
-    let y = g.documentBranding ? brandGroups(g.documentBranding.groups.filter(group=>["header","beside"].includes(group.position)),25,g.documentBranding.config.size)+4 : 25;
+    let y = g.documentBranding ? brandGroups(g.documentBranding.groups.filter(group=>["header","beside"].includes(group.position)),25,g.documentBranding.config.size,true)+4 : 25;
     doc.setFontSize(15);
     const title = doc.splitTextToSize(clean(g.title + " - " + g.sport), width);
     doc.text(title, left, y);
@@ -317,7 +328,7 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
     doc.setFontSize(7);
     doc.text("Sumula do sistema. Campos para assinatura em papel.", left, y);
     if(g.documentBranding){
-      footerBrandGroups(g.documentBranding.groups.filter(group=>group.position==='footer'),y,g.documentBranding.config.size);
+      footerBrandGroups(g.documentBranding.groups.filter(group=>group.position==='footer'),y+4,g.documentBranding.config.size);
       for(let page=firstPage;page<=doc.getNumberOfPages();page++)pageBranding.set(page,g.documentBranding);
     }
   });
@@ -332,10 +343,15 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
       doc.setFontSize(48);
       if(branding){
         if(branding.config.watermarkText){
-          doc.setFontSize(30);doc.text(doc.splitTextToSize(clean(branding.config.watermarkText),155),30,155,{angle:branding.config.angle});
+          doc.setFontSize(branding.config.size*1.28);doc.text(doc.splitTextToSize(clean(branding.config.watermarkText),155),30,155,{angle:branding.config.angle});
         }
         const images=branding.groups.filter(group=>group.position==='background').flatMap(group=>group.logos);
-        images.forEach((logo,index)=>{try{doc.addImage(logo,'PNG',35+(index%4)*39,65+Math.floor(index/4)*29,22,22,undefined,'FAST',branding.config.angle);}catch{}});
+        const side=branding.config.size,step=side+6,columns=Math.min(4,images.length||1);
+        images.forEach((logo,index)=>{
+          const row=Math.floor(index/columns),count=Math.min(columns,images.length-row*columns);
+          const x=105-(count*step-6)/2+(index%columns)*step;
+          try{doc.addImage(logo,'PNG',x,60+row*step,side,side,undefined,'FAST',branding.config.angle);}catch{}
+        });
       }else doc.text("WagnerBIZZA", 45, 165, { angle: 28 });
       doc.restoreGraphicsState();
     }
