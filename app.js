@@ -4449,11 +4449,22 @@ function publicHub(){
 }
 function publicTeamsPanel() {
  const games = state.matches.filter(m => !publicFilter || m.sport === publicFilter);
- const ids = [...new Set(games.flatMap(m => [m.home,m.away]).filter(Boolean))]
-  .sort((a,b) => name(a).localeCompare(name(b), "pt-BR"));
- return `<section aria-label="Equipes nas partidas publicadas"><h2>Equipes</h2><div class="grid">${ids.map(id =>
-  `<article class="card"><h3>${esc(name(id))}</h3><p>${games.filter(m => m.home === id || m.away === id).length} partida(s) nesta seleção</p></article>`).join("") ||
-  empty("Nenhuma equipe nas partidas desta seleção.")}</div></section>`;
+ const totals = new Map();
+ for (const game of games) {
+  for (const id of new Set([game.home,game.away].filter(Boolean)))
+   totals.set(id,(totals.get(id) || 0) + 1);
+ }
+ const teams = new Map(state.teams.filter(team => team.archived !== true && team.testData !== true).map(team => [team.id,team]));
+ const ids = new Set(totals.keys());
+ // Sem partida, ainda não há vínculo público com modalidade ou campeonato.
+ if (!publicEdition && !publicFilter) for (const id of teams.keys()) ids.add(id);
+ const entries = [...ids].sort((a,b) => name(a).localeCompare(name(b),"pt-BR",{numeric:true}));
+ return `<section aria-label="Equipes"><h2>Equipes</h2><div class="grid">${entries.map(id => {
+  const team = teams.get(id);
+  const total = totals.get(id) || 0;
+  const summary = total ? `${total} partida(s) nesta seleção` : "Aguardando primeira partida";
+  return `<article class="card">${team?.badge ? badge(team) : ""}<h3>${esc(name(id))}</h3><p>${summary}</p></article>`;
+ }).join("") || empty("Nenhuma equipe nesta seleção.")}</div></section>`;
 }
 function publicHubContent(){
  if(publicArea==="news")return publicNews();
