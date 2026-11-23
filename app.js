@@ -660,6 +660,11 @@ function printRegistrationSheet(championship) {
   sheet.document.open();
   sheet.document.write(registrationSheetHTML(championship,count));
   sheet.document.close();
+  for (const select of sheet.document.querySelectorAll(".registration-lineup")) {
+    select.addEventListener("change", () => {
+      select.nextElementSibling.textContent = select.value;
+    });
+  }
   sheet.document.getElementById("print").onclick = async () => {
     await Promise.all([...sheet.document.images].map(img => img.decode().catch(() => {})));
     sheet.print();
@@ -683,8 +688,9 @@ function registrationSheetHTML(championship,count,branding=state.partners,previe
   const editField = label => preview ? "" : ` contenteditable="plaintext-only" role="textbox" aria-label="${esc(label)}"`;
   const teamField = label => `<div class="registration-field"><span>${label}:</span><span class="registration-line"${editField(label)}></span></div>`;
   const playerFields = ["Nome do participante", "Turma", "Número da camisa", "Posição"];
+  const lineup = index => preview ? "" : `<select class="registration-lineup" aria-label="Escalação, linha ${index}"><option value="">—</option><option value="Titular">Titular</option><option value="Reserva/Banco">Reserva/Banco</option></select><span class="registration-lineup-print"></span>`;
   const participants = Array.from({length:count}, (_, i) =>
-    `<tr><td>${i + 1}</td>${playerFields.map(label => `<td><span class="registration-entry"${editField(label + ", linha " + (i + 1))}></span></td>`).join("")}<td></td></tr>`).join("");
+    `<tr><td>${i + 1}</td>${playerFields.map(label => `<td><span class="registration-entry"${editField(label + ", linha " + (i + 1))}></span></td>`).join("")}<td>${lineup(i + 1)}</td><td></td></tr>`).join("");
   return `<!doctype html><html lang="pt-BR"><meta charset="utf-8">
     <title>Ficha de inscrição — ${esc(championship.name)}</title>
     <style>
@@ -706,6 +712,8 @@ function registrationSheetHTML(championship,count,branding=state.partners,previe
       .registration-players{table-layout:fixed;font-size:${Math.min(size,11)}pt;margin-top:3mm}
       .registration-players th,.registration-players td{
         box-sizing:border-box;padding:.55mm 1.25mm;overflow-wrap:break-word;line-height:1.15;height:6mm}
+      .registration-lineup{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:9pt}
+      .registration-lineup-print{display:none;font-size:9pt}
       .registration-players th{vertical-align:middle;font-size:10pt}
       .registration-players th:first-child,.registration-players td:first-child{
         white-space:nowrap;overflow-wrap:normal;text-align:center;padding:.55mm}
@@ -720,10 +728,10 @@ function registrationSheetHTML(championship,count,branding=state.partners,previe
       .partners .partner-logos{justify-content:center}
       .partners img{width:80px;height:56px;object-fit:contain}
       @media screen and (max-width:600px){.registration-field{flex-basis:100%}}
-      @media print{button,.registration-tools{display:none}body{margin:0}[contenteditable]:focus{outline:none}}
+      @media print{button,.registration-tools{display:none}body{margin:0}.registration-lineup{display:none}.registration-lineup-print{display:block}[contenteditable]:focus{outline:none}}
     ${partnerPrintCSS}</style>
     ${!custom&&style.watermark ? `<div class="watermark" aria-hidden="true">${esc(style.watermark)}</div>` : ""}
-    ${preview ? "" : '<div class="registration-tools"><button type="button" id="print">Imprimir / Salvar PDF</button><div>Clique nos campos para digitar. Deixe em branco o que quiser preencher à mão após a impressão.</div></div>'}
+    ${preview ? "" : '<div class="registration-tools"><button type="button" id="print">Imprimir / Salvar PDF</button><div>Clique nos campos para digitar. Escolha Titular ou Reserva/Banco na coluna Escalação. Deixe em branco o que quiser preencher à mão.</div></div>'}
     <header>${brand("header")}${!custom&&style.schoolLogo ? `<img src="${esc(style.schoolLogo)}" alt="Logo da escola">` : ""}${!custom&&hasLogo ? `<img src="${esc(logo)}" alt="Logo da organização">` : ""}
       <div><strong>${esc(style.school || systemDisplayName())}</strong><h1>Ficha de inscrição</h1></div>
     </header>
@@ -733,7 +741,7 @@ function registrationSheetHTML(championship,count,branding=state.partners,previe
       ${teamField("Equipe (Time)")}${teamField("Sigla do time")}
       ${teamField("Responsável")}${teamField("Responsável técnico")}
     </div>
-    <table class="registration-players"><colgroup><col style="width:5%"><col style="width:33%"><col style="width:10%"><col style="width:12%"><col style="width:15%"><col style="width:25%"></colgroup><thead><tr><th>Nº</th><th>Nome do participante</th><th>Turma</th><th>Nº da camisa</th><th>Posição</th><th>Assinatura</th></tr></thead>
+    <table class="registration-players"><colgroup><col style="width:5%"><col style="width:28%"><col style="width:8%"><col style="width:10%"><col style="width:13%"><col style="width:14%"><col style="width:22%"></colgroup><thead><tr><th>Nº</th><th>Nome do participante</th><th>Turma</th><th>Nº da camisa</th><th>Posição</th><th>Escalação</th><th>Assinatura</th></tr></thead>
     <tbody>${participants}</tbody></table>${custom?brand("footer")+brand("background"):partners ? `<aside class="partners">${partners}</aside>` : ""}</html>`;
 }
 
