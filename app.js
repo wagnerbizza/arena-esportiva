@@ -4647,9 +4647,22 @@ function teamRegistrationView(){return `<div class="card"><h3>Dados do cadastro<
 // 25 — Navegação clara. Lista primeiro; formulários somente ao cadastrar/editar.
 let teamFormVisible=false,teamEditorId="";
 function teamDirectoryCard(t){
- const roster=state.players.filter(p=>p.team===t.id).length;
+ const roster=state.players.filter(p=>p.team===t.id);
+ const title=t.name?.trim() || "Equipe sem nome cadastrado";
+ const rosterClasses=[...new Set(roster.map(p=>p.className?.trim()).filter(Boolean))]
+  .sort((a,b)=>a.localeCompare(b,"pt-BR",{numeric:true}));
+ const teamClass=t.className?.trim();
+ const fields=[
+  [teamClass ? "Turma da equipe" : "Turma no elenco",teamClass || rosterClasses.join(" • ") || "Não informada"],
+  ["Escola",t.school || "Não informada"],
+  ["Responsável",t.manager || "Não informado"],
+  ["Técnico(a)",t.coach || "Não informado"],
+  ["Categoria",t.category || "Não informada"],
+  ["Modalidades",teamSports(t).join(" • ") || "Não informadas"]
+ ];
+ const summary=fields.map(([label,value])=>`<div><strong>${label}:</strong> ${esc(value)}</div>`).join("");
  const games=state.matches.filter(m=>[m.home,m.away].includes(t.id)).length;
- return `<article class="card team-directory-card"><div class="team-directory-title">${badge(t)}<span class="status">${t.archived?"Arquivada":"Ativa"}</span></div><h3>${esc(t.name)}</h3><p class="muted">${esc(t.category||"Categoria não informada")}<br>Técnico(a): ${esc(t.coach||"Não informado")}<br>${esc(teamSports(t).join(" • ")||"Modalidade não informada")}</p><p>${roster} jogador(es) • ${games} ${role==="admin"?"partida(s)":"partida(s) autorizada(s)"}</p><div class="toolbar"><button type="button" class="primary" data-team-profile="${esc(t.id)}">Ver dados da equipe</button><details style="width:100%"><summary>Mais ações</summary><div class="toolbar" style="margin-top:8px"><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="roster">Jogadores</button><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="games">Jogos</button><button type="button" data-edit-team="${esc(t.id)}">Editar cadastro</button> ${role==="admin" ? `<button type="button" data-profile-archive="${esc(t.id)}">${t.archived?"Reativar equipe":"Arquivar equipe"}</button>` : ""}</div></details></div></article>`;
+ return `<article class="card team-directory-card"><div class="team-directory-title">${badge({...t,name:title})}<span class="status">${t.archived?"Arquivada":"Ativa"}</span></div><h3>${esc(title)}${t.short?.trim()?` <small class="muted">(${esc(t.short.trim())})</small>`:""}</h3><div class="muted">${summary}</div><p>${roster.length} jogador(es) • ${games} ${role==="admin"?"partida(s)":"partida(s) autorizada(s)"}</p><div class="toolbar"><button type="button" class="primary" data-team-profile="${esc(t.id)}">Ver dados da equipe</button><details style="width:100%"><summary>Mais ações</summary><div class="toolbar" style="margin-top:8px"><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="roster">Jogadores</button><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="games">Jogos</button><button type="button" data-edit-team="${esc(t.id)}">Editar cadastro</button> ${role==="admin" ? `<button type="button" data-profile-archive="${esc(t.id)}">${t.archived?"Reativar equipe":"Arquivar equipe"}</button>` : ""}</div></details></div></article>`;
 }
 const participantColumns = [
   ["team", "Equipe"], ["player", "Participante"], ["number", "Nº"], ["position", "Posição"],
