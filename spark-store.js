@@ -1230,6 +1230,34 @@ export async function connectSpark({
     restoreDeletedMatch,
     purgeDeletedMatch,
     classifyTestRecords, testMaintenance, eventCredentials, issueCredential, revokeCredential,
+    operationLayout: account => {
+      if (!privateView || !authorized() || authentication.currentUser?.uid !== account) return null;
+      const ref = F.doc(database, "arenaOperationLayouts", account);
+      const allowed = () => {
+        if (!authorized() || authentication.currentUser?.uid !== account) throw Error("A sessão mudou.");
+      };
+      return {
+        uid: account,
+        watch(update, error) {
+          return F.onSnapshot(ref, {includeMetadataChanges:true}, snap => {
+            if (authentication.currentUser?.uid !== account || snap.metadata.hasPendingWrites || snap.metadata.fromCache) return;
+            update(snap.exists() ? snap.data().payload : null);
+          }, error);
+        },
+        async seed(payload) {
+          allowed();
+          await F.runTransaction(database, async tx => {
+            const snapshot = await tx.get(ref);
+            allowed();
+            if (!snapshot.exists()) tx.set(ref, {payload, updatedAt:F.serverTimestamp()});
+          });
+        },
+        async write(payload) {
+          allowed();
+          await F.setDoc(ref, {payload, updatedAt:F.serverTimestamp()});
+        },
+      };
+    },
     canOperate: canOperateMatch,
     canCorrect: canCorrectMatch,
     close: () => {

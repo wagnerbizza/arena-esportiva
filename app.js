@@ -1274,7 +1274,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=identidade-3");
+    const { connectSpark } = await import("./spark-store.js?v=mesa-sincronizada-10");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -1755,7 +1755,7 @@ function operate() {
       )
       .join("") || empty("Use Ver lances anteriores nesta seção para consultar o histórico operacional. A auditoria completa permanece com o administrador.")
   }</div>`;
-  return window.ArenaOperation?.build?window.ArenaOperation.build(m,markup,{account:C.demo?"treinamento-"+role:user?.uid||role,rosterHTML:operationRosterPanel(m)}):markup;
+  return window.ArenaOperation?.build?window.ArenaOperation.build(m,markup,{account:C.demo?"treinamento-"+role:user?.uid||role,rosterHTML:operationRosterPanel(m),layoutRemote:!C.demo&&user?cloud?.operationLayout?.(user.uid):null}):markup;
 }
 document.addEventListener("click",async event=>{
  const button=event.target.closest("[data-return-normal-clock]");if(!button||!admin||!selected)return;
@@ -2711,10 +2711,8 @@ document.addEventListener("click", async (e) => {
       quickPlayers = ["", ""];
       section = "matches";
       render();
-      requestAnimationFrame(() => document.getElementById("view")?.scrollIntoView({
-        behavior: preferences.motion ? "auto" : "smooth",
-        block: "start",
-      }));
+      requestAnimationFrame(() => scrollBelowPinnedCards(
+        document.querySelector("[data-op-score-anchor]") || document.getElementById("view")));
       if (!C.demo && role === "admin") await cloud.loadHistory([matchId], { live: true });
       return;
     }
@@ -4728,12 +4726,12 @@ function revealNavigationDestination(selector){
  const container=document.querySelector(selector);if(!container)return;
  // Os diálogos abertos gerenciam seu próprio foco.
  if(document.querySelector('dialog[open]'))return;
- const score=selector==='#view'?container.querySelector('.arena-op-strip'):null;
+ const score=selector==='#view'?container.querySelector('[data-op-score-anchor]'):null;
  const heading=container.matches('h1,h2,h3,h4')?container:container.querySelector('h1,h2,h3,h4');
  const target=score||heading||container;
  target.setAttribute('tabindex','-1');
  target.focus({preventScroll:true});
- scrollBelowPinnedCards(target,'instant');
+ scrollBelowPinnedCards(target);
 }
 let navigationRevealFrame=0;
 document.addEventListener('click',event=>{
