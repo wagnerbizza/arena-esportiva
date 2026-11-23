@@ -647,7 +647,7 @@ document.addEventListener("submit", event => {
 });
 
 function printRegistrationSheet(championship) {
-  const rows = prompt("Quantas linhas de inscrição? (1 a 60)", "20");
+  const rows = prompt("Quantas linhas de inscrição? (1 a 60)", "26");
   if (rows === null) return;
   const count = Number(rows);
   if (!Number.isInteger(count) || count < 1 || count > 60) {
@@ -680,8 +680,11 @@ function registrationSheetHTML(championship,count,branding=state.partners,previe
   }).join("");
   const logo = state.settings.logo || "";
   const hasLogo = /^https:\/\//i.test(logo) || /^data:image\/(png|jpeg|webp);base64,/i.test(logo);
+  const editField = label => preview ? "" : ` contenteditable="plaintext-only" role="textbox" aria-label="${esc(label)}"`;
+  const teamField = label => `<div class="registration-field"><span>${label}:</span><span class="registration-line"${editField(label)}></span></div>`;
+  const playerFields = ["Nome do participante", "Turma", "Número da camisa", "Posição"];
   const participants = Array.from({length:count}, (_, i) =>
-    `<tr><td>${i + 1}</td><td></td><td></td><td></td><td></td><td></td></tr>`).join("");
+    `<tr><td>${i + 1}</td>${playerFields.map(label => `<td><span class="registration-entry"${editField(label + ", linha " + (i + 1))}></span></td>`).join("")}<td></td></tr>`).join("");
   return `<!doctype html><html lang="pt-BR"><meta charset="utf-8">
     <title>Ficha de inscrição — ${esc(championship.name)}</title>
     <style>
@@ -693,12 +696,19 @@ function registrationSheetHTML(championship,count,branding=state.partners,previe
       h1{font-size:20pt;line-height:1.15;margin:6px 0}
       h2{font-size:14pt;line-height:1.2;margin:12px 0 8px}
       body>p{margin:8px 0}
-      .registration-players{table-layout:fixed;font-size:${Math.min(size,11)}pt;margin-top:10px}
+      .registration-meta{display:flex;flex-wrap:wrap;gap:2mm 5mm;margin:2mm 0}
+      .registration-field{display:flex;align-items:baseline;flex:1 1 40%;gap:2mm;min-width:0}
+      .registration-line{display:block;flex:1;min-width:0;min-height:1.2em;border-bottom:1px solid #777;overflow-wrap:anywhere;white-space:pre-wrap}
+      .registration-entry{display:block;min-height:1.2em;overflow-wrap:anywhere;white-space:pre-wrap}
+      [contenteditable]:focus{outline:2px solid #08799e;outline-offset:1px}
+      .registration-tools{margin-bottom:10px;font-size:10pt}
+      .registration-tools button{margin:0 0 4px}
+      .registration-players{table-layout:fixed;font-size:${Math.min(size,11)}pt;margin-top:3mm}
       .registration-players th,.registration-players td{
-        box-sizing:border-box;padding:1mm 1.5mm;overflow-wrap:break-word;line-height:1.2;height:7mm}
+        box-sizing:border-box;padding:.55mm 1.25mm;overflow-wrap:break-word;line-height:1.15;height:6mm}
       .registration-players th{vertical-align:middle;font-size:10pt}
       .registration-players th:first-child,.registration-players td:first-child{
-        white-space:nowrap;overflow-wrap:normal;text-align:center;padding:1mm}
+        white-space:nowrap;overflow-wrap:normal;text-align:center;padding:.55mm}
       .registration-players td:nth-child(3),.registration-players td:nth-child(4){
         white-space:nowrap;text-align:center}
       tr{break-inside:avoid} thead{display:table-header-group} button{margin-top:16px}
@@ -709,18 +719,22 @@ function registrationSheetHTML(championship,count,branding=state.partners,previe
       .partners>section{text-align:center;max-width:100%;break-inside:avoid}
       .partners .partner-logos{justify-content:center}
       .partners img{width:80px;height:56px;object-fit:contain}
-      @media print{button{display:none}body{margin:0}}
+      @media screen and (max-width:600px){.registration-field{flex-basis:100%}}
+      @media print{button,.registration-tools{display:none}body{margin:0}[contenteditable]:focus{outline:none}}
     ${partnerPrintCSS}</style>
     ${!custom&&style.watermark ? `<div class="watermark" aria-hidden="true">${esc(style.watermark)}</div>` : ""}
+    ${preview ? "" : '<div class="registration-tools"><button type="button" id="print">Imprimir / Salvar PDF</button><div>Clique nos campos para digitar. Deixe em branco o que quiser preencher à mão após a impressão.</div></div>'}
     <header>${brand("header")}${!custom&&style.schoolLogo ? `<img src="${esc(style.schoolLogo)}" alt="Logo da escola">` : ""}${!custom&&hasLogo ? `<img src="${esc(logo)}" alt="Logo da organização">` : ""}
       <div><strong>${esc(style.school || systemDisplayName())}</strong><h1>Ficha de inscrição</h1></div>
     </header>
     <h2>${esc(championshipTitle(championship))}</h2>
     <p>${esc(championship.sport)} · ${esc(championship.category || "Sem categoria")}</p>
-    <p>Equipe: ____________________________________________</p>
-    <p>Responsável: _______________________________________</p>
-    <table class="registration-players"><colgroup><col style="width:7%"><col style="width:30%"><col style="width:10%"><col style="width:11%"><col style="width:17%"><col style="width:25%"></colgroup><thead><tr><th>Nº</th><th>Nome do participante</th><th>Turma</th><th>Nº da camisa</th><th>Posição</th><th>Assinatura</th></tr></thead>
-    <tbody>${participants}</tbody></table>${custom?brand("footer")+brand("background"):partners ? `<aside class="partners">${partners}</aside>` : ""}${preview ? "" : '<button type="button" id="print">Imprimir / Salvar PDF</button>'}</html>`;
+    <div class="registration-meta">
+      ${teamField("Equipe (Time)")}${teamField("Sigla do time")}
+      ${teamField("Responsável")}${teamField("Responsável técnico")}
+    </div>
+    <table class="registration-players"><colgroup><col style="width:5%"><col style="width:33%"><col style="width:10%"><col style="width:12%"><col style="width:15%"><col style="width:25%"></colgroup><thead><tr><th>Nº</th><th>Nome do participante</th><th>Turma</th><th>Nº da camisa</th><th>Posição</th><th>Assinatura</th></tr></thead>
+    <tbody>${participants}</tbody></table>${custom?brand("footer")+brand("background"):partners ? `<aside class="partners">${partners}</aside>` : ""}</html>`;
 }
 
 async function qrLogoData(source) {
