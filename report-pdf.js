@@ -36,7 +36,7 @@ async function libraries() {
     });
   return loading;
 }
-export async function downloadCenteredQrPDF(svg, filename, title = "Painel público do Arena") {
+export async function downloadCenteredQrPDF(svg, filename, options) {
   const source = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
   const canvas = document.createElement("canvas");
   try {
@@ -50,22 +50,48 @@ export async function downloadCenteredQrPDF(svg, filename, title = "Painel públ
     URL.revokeObjectURL(source);
   }
   await libraries();
-  const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-  const side = 130;
+  const { orientation, title, instructions } = options;
+  const side = Number(options.side);
+  const titleSize = Number(options.titleSize);
+  const instructionsSize = Number(options.instructionsSize);
+  const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4", orientation });
   const page = doc.internal.pageSize;
   const centerX = page.getWidth() / 2;
+  const textWidth = page.getWidth() - 30;
   const top = (page.getHeight() - side) / 2;
+  const bottom = top + side;
+  const gap = 9;
+  const margin = 10;
+
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  const heading = doc.splitTextToSize(title, page.getWidth() - 40);
-  doc.text(heading, centerX, top - 9 - (heading.length - 1) * 8.2, { align: "center" });
-  doc.addImage(canvas, "PNG", centerX - side / 2, top, side, side);
+  doc.setFontSize(titleSize);
+  const heading = title.trim() ? doc.splitTextToSize(title.trim(), textWidth) : [];
+  const headingLineHeight = doc.getLineHeight() / doc.internal.scaleFactor;
+  const titleY = top - gap - Math.max(0, heading.length - 1) * headingLineHeight;
+
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(13);
-  doc.text([
-    "Abra a câmera do celular e aponte para o QR Code.",
-    "Toque no link que aparecer para acompanhar os jogos."
-  ], centerX, top + side + 11, { align: "center" });
+  doc.setFontSize(instructionsSize);
+  const directions = instructions.trim() ? doc.splitTextToSize(instructions.trim(), textWidth) : [];
+  const directionsLineHeight = doc.getLineHeight() / doc.internal.scaleFactor;
+  const directionsY = bottom + gap + directionsLineHeight;
+  const endY = directionsY + Math.max(0, directions.length - 1) * directionsLineHeight;
+
+  if (side > page.getWidth() - 2 * margin || top < margin
+      || (heading.length && titleY - headingLineHeight < margin)
+      || (directions.length && endY > page.getHeight() - margin)) {
+    throw Error("O QR Code e os textos não cabem nessa orientação. Reduza o lado do QR Code, encurte os textos ou diminua a fonte.");
+  }
+  if (heading.length) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(titleSize);
+    doc.text(heading, centerX, titleY, { align: "center" });
+  }
+  doc.addImage(canvas, "PNG", centerX - side / 2, top, side, side);
+  if (directions.length) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(instructionsSize);
+    doc.text(directions, centerX, directionsY, { align: "center" });
+  }
   doc.save(filename);
 }
 async function logoPNG(src) {
