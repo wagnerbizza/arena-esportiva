@@ -118,6 +118,10 @@
         badge: url(d.badge),
       };
       const prior=s.teams.find(t=>t.id===d.id);
+      for (const field of ["school", "className", "manager"]) {
+        const value = str(Object.hasOwn(d, field) ? d[field] : prior?.[field]);
+        if (value) updated[field] = value;
+      }
       if(Object.hasOwn(d,"sports")||Object.hasOwn(prior||{},"sports")){
         const sports=d.sports??prior?.sports??[];
         need(Array.isArray(sports)&&sports.every(x=>SPORTS.includes(x)),"Selecione modalidades válidas.");
@@ -156,6 +160,9 @@
         position: str(d.position, 50),
         reserve: !!d.reserve,
       };
+      const prior = s.players.find(p => p.id === d.id);
+      const className = str(Object.hasOwn(d, "className") ? d.className : prior?.className);
+      if (className) updated.className = className;
       if (d.id) s.players[s.players.findIndex((p) => p.id === d.id)] = updated;
       else s.players.push(updated);
     } else if (a.type === "match") {
@@ -188,7 +195,7 @@
         notes: "",
         roster: s.players
           .filter((p) => [d.home, d.away].includes(p.team))
-          .map((p) => ({ ...p })),
+          .map(({ className, ...snapshot }) => snapshot),
         coaches: [team(s, d.home).coach, team(s, d.away).coach],
       });
     } else if (a.type === "import") {

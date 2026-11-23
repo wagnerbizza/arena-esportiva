@@ -718,6 +718,13 @@ export async function connectSpark({
           if (!action.data.id && action.type !== "settings" && before)
             throw Error("Cadastro já existe.");
           next = { ...prepared };
+          const optionalFields = entity === "teams" ? ["school", "className", "manager"]
+            : entity === "players" ? ["className"] : [];
+          for (const field of optionalFields) {
+            if (Object.hasOwn(action.data, field)) continue;
+            if (Object.hasOwn(before || {}, field)) next[field] = before[field];
+            else delete next[field];
+          }
           if (entity === "matches" && championship) next.competition = championship.name + " • " + championship.season;
           for (const k of Object.keys(next))
             if (k.startsWith("_")) delete next[k];

@@ -99,16 +99,17 @@ service cloud.firestore {
    return d.get('publicHidden',false) == true || d.get('testData',false) == true ? !existsAfter(path) : getAfter(path).data._updatedAt == request.time && getAfter(path).data._revision == d._revision;
   }
   function teamSchema(d,id) {
-   return meta(d,id) && d.get('testData',false) is bool && d.keys().hasOnly(['testData','id','name','short','coach','category','badge','sports','archived','_revision','_audit','_updatedAt','_updatedBy'])
+   return meta(d,id) && d.get('testData',false) is bool && d.keys().hasOnly(['testData','id','name','short','coach','category','badge','sports','archived','school','className','manager','_revision','_audit','_updatedAt','_updatedBy'])
     && d.get('sports',[]) is list && d.get('sports',[]).size() <= 6 && d.get('sports',[]).toSet().size() == d.get('sports',[]).size() && d.get('sports',[]).hasOnly(['Futebol','Futsal','Basquete','Vôlei','Vôlei de praia','Handebol'])
     && d.get('archived',false) is bool
+    && bounded(d.get('school',''),150) && bounded(d.get('className',''),150) && bounded(d.get('manager',''),150)
     && nonempty(d.name,150) && bounded(d.short,12) && bounded(d.coach,150) && bounded(d.category,150) && image(d.badge);
   }
   function playerSchema(d,id) {
-   return meta(d,id) && d.get('testData',false) is bool && d.keys().hasOnly(['testData','id','name','team','number','position','reserve','_revision','_audit','_updatedAt','_updatedBy'])
+   return meta(d,id) && d.get('testData',false) is bool && d.keys().hasOnly(['testData','id','name','team','number','position','reserve','className','_revision','_audit','_updatedAt','_updatedBy'])
     && nonempty(d.name,150) && nonempty(d.team,100) && exists(/databases/$(database)/documents/teams/$(d.team))
     && get(/databases/$(database)/documents/teams/$(d.team)).data.get('archived',false) == false
-    && bounded(d.number,8) && bounded(d.position,50) && d.reserve is bool;
+    && bounded(d.number,8) && bounded(d.position,50) && bounded(d.get('className',''),150) && d.reserve is bool;
   }
   function settingsSchema(d) {
    return meta(d,'main') && d.keys().hasOnly(['id','title','subtitle','color','banner','logo','summaryLimit','historyPageSize','_revision','_audit','_updatedAt','_updatedBy'])

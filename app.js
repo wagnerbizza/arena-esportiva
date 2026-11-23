@@ -1384,7 +1384,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=arena-fases-operador-13");
+    const { connectSpark } = await import("./spark-store.js?v=arena-participantes-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -1701,7 +1701,7 @@ function view() {
   if (section === "overview")return overviewMatchView();
   if (section === "teams") return teamsDirectoryView();
   if (section === "players")
-    return `<div class="card"><h2>Cadastrar jogador</h2><p class="muted">Cadastre o elenco antes de criar a partida. A súmula preserva uma cópia do elenco daquela data.</p><form id="player"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome", "name", "text", "required")}${select("Equipe", "team", teamOptions())}${field("Número", "number")}${field("Posição", "position")}${select("Escalação", "reserve", '<option value="false">Titular</option><option value="true">Reserva / banco</option>')}</div><button class="primary">Salvar jogador</button> <button type="button" data-section="imports">Importar jogadores</button></form></div>${listPanel("players")}`;
+    return `<div class="card"><h2>Cadastrar jogador</h2><p class="muted">Cadastre o elenco antes de criar a partida. A súmula preserva uma cópia do elenco daquela data.</p><form id="player"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome", "name", "text", "required")}${select("Equipe", "team", teamOptions())}${field("Número", "number")}${field("Posição", "position")}${field("Turma do jogador (opcional)", "className", "text", 'maxlength="150"')}${select("Escalação", "reserve", '<option value="false">Titular</option><option value="true">Reserva / banco</option>')}</div><button class="primary">Salvar jogador</button> <button type="button" data-section="imports">Importar jogadores</button></form></div>${listPanel("players")}`;
   if (section === "createMatch" && canCreateMatches())
     return `<div class="card"><h2>Cadastrar partida</h2><p class="muted">Programe um jogo novo. Para acompanhar ou operar partidas, use Jogos.</p><form id="match"><div class="formgrid">${championshipSelectForCreate()}${select(
       "Modalidade",
@@ -2721,7 +2721,7 @@ document.addEventListener("submit", async (e) => {
       if(!t||t.archived||section!=="teams"||teamProfileTab!=="roster"||!teamPlayerDraft) throw Error("Abra uma equipe ativa para alterar o elenco.");
       const id=teamPlayerDraft.id||"";
       if(id&&!state.players.some(p=>p.id===id&&p.team===t.id)) throw Error("Jogador indisponível nesta equipe. Reabra o cadastro.");
-      const record={id,team:t.id,name:d.name.trim(),number:d.number.trim(),position:d.position.trim(),reserve:d.reserve==="true"};
+      const record={id,team:t.id,name:d.name.trim(),number:d.number.trim(),position:d.position.trim(),className:d.className.trim(),reserve:d.reserve==="true"};
       teamPlayerDraft=record;
       await dispatch({type:"player",data:record});
       teamPlayerDraft=null;teamHistoryLoaded=false;render();
@@ -3050,6 +3050,7 @@ document.addEventListener("click", async (e) => {
           (x) => x.id === (b.dataset.editTeam || b.dataset.editPlayer),
         );
       const f = $("#" + kind);
+      f.elements.className.value = "";
       for (const [k, v] of Object.entries(item)) {
         const control = f.elements[k === "id" ? "recordId" : k];
         if (control) control.value = String(v);
@@ -4400,7 +4401,7 @@ function teamProfileView(){
 function openTeamEditor(id){
  if(!canManageRosters())return;const t=state.teams.find(t=>t.id===id);if(!t)return;
  selectedTeamId="";teamFormVisible=true;teamEditorId=id;teamProfileBusy=false;teamProfileRequest++;section="teams";render();const f=$("#team");if(!f)return;
- for(const key of ["name","short","coach","category"]){f.elements[key].value=t[key]||"";}f.elements.recordId.value=t.id;
+ for(const key of ["name","short","coach","category","school","className","manager"]){f.elements[key].value=t[key]||"";}f.elements.recordId.value=t.id;
  for(const o of f.elements.sports.options)o.selected=(t.sports||[]).includes(o.value);
  setBadgeDraft(t.badge||"");f.scrollIntoView({block:"start"});f.elements.name.focus({preventScroll:true});toast("Altere os dados e clique em Salvar equipe.");
 }
@@ -4408,7 +4409,7 @@ document.addEventListener("click",async e=>{
  const b=e.target.closest("[data-team-profile],[data-profile-back],[data-profile-tab],[data-profile-edit],[data-profile-archive],[data-profile-new-player],[data-profile-player],[data-profile-events],[data-profile-history]");if(!b)return;
  try{
   if(!canManageRosters())throw Error("Conta sem acesso aos cadastros.");
-  if(b.dataset.teamProfile){teamProfileBusy=false;selectedTeamId=b.dataset.teamProfile;teamGameScope="active";teamProfileTab=["roster","games"].includes(b.dataset.initialTeamTab)?b.dataset.initialTeamTab:"data";teamProfileSport="";teamProfileChamp="";teamHistoryRows=[];teamHistoryLoaded=false;teamEventsKey="";teamProfileRequest++;section="teams";teamPlayerDraft=null;render();return;}
+  if(b.dataset.teamProfile){teamProfileBusy=false;selectedTeamId=b.dataset.teamProfile;teamGameScope="active";teamProfileTab=["roster","games"].includes(b.dataset.initialTeamTab)?b.dataset.initialTeamTab:"data";teamProfileSport="";teamProfileChamp="";teamHistoryRows=[];teamHistoryLoaded=false;teamEventsKey="";teamProfileRequest++;section="teams";teamPlayerDraft=state.players.find(player=>player.id===b.dataset.participantPlayer&&player.team===selectedTeamId)||null;render();if(teamPlayerDraft)$("#team-player")?.scrollIntoView({block:"center"});return;}
   if(b.hasAttribute("data-profile-back")){teamPlayerDraft=null;teamFormVisible=false;teamEditorId="";selectedTeamId="";teamProfileBusy=false;teamProfileRequest++;render();return;}
   if(b.dataset.profileTab){if(["stats","history"].includes(b.dataset.profileTab)&&role!=="admin")return;teamProfileTab=b.dataset.profileTab;teamPlayerDraft=null;render();return;}
   if(b.hasAttribute("data-profile-edit")){openTeamEditor(selectedTeamId);return;}
@@ -4437,7 +4438,7 @@ document.addEventListener("click",async e=>{
 });
 document.addEventListener("change",e=>{if(!canManageRosters())return;if(e.target.hasAttribute("data-profile-sport")){teamProfileSport=e.target.value;render();}if(e.target.hasAttribute("data-profile-champ")){teamProfileChamp=e.target.value;render();}});
 
-function teamRegistrationView(){return `<div class="card"><h3>Dados do cadastro</h3><form id="team"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome da equipe", "name", "text", 'required maxlength="150"')}${field("Sigla", "short", "text", 'maxlength="12"')}${field("Técnico(a)", "coach")}${field("Categoria", "category")}<label>Modalidades da equipe (Ctrl+clique para várias)<select name="sports" multiple size="6">${D.SPORTS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select><small>Cadastro da equipe. Não altera a modalidade das partidas existentes.</small></label><input name="badge" type="hidden"><label>Imagem do escudo / bandeira<input id="badgeFile" type="file" accept="image/png,image/jpeg,image/webp"><small>Escolha uma imagem do computador. O painel reduz seu tamanho automaticamente.</small></label><label>Ou endereço HTTPS da imagem<input name="badgeURL" type="url" placeholder="https://..."></label><div class="logo-preview" id="badgePreview">${badge({ name: "Time", short: "TIME", badge: "" })}<button type="button" data-remove-badge>Remover imagem</button></div></div><button class="primary">Salvar equipe</button> <button type="button" data-section="imports">Importar equipes</button></form></div>`;}
+function teamRegistrationView(){return `<div class="card"><h3>Dados do cadastro</h3><form id="team"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome da equipe", "name", "text", 'required maxlength="150"')}${field("Sigla", "short", "text", 'maxlength="12"')}${field("Técnico(a)", "coach")}${field("Categoria", "category")}${field("Escola", "school", "text", 'maxlength="150"')}${field("Turma padrão da equipe", "className", "text", 'maxlength="150"')}${field("Responsável pela equipe", "manager", "text", 'maxlength="150"')}<label>Modalidades da equipe (Ctrl+clique para várias)<select name="sports" multiple size="6">${D.SPORTS.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select><small>Cadastro da equipe. Não altera a modalidade das partidas existentes.</small></label><input name="badge" type="hidden"><label>Imagem do escudo / bandeira<input id="badgeFile" type="file" accept="image/png,image/jpeg,image/webp"><small>Escolha uma imagem do computador. O painel reduz seu tamanho automaticamente.</small></label><label>Ou endereço HTTPS da imagem<input name="badgeURL" type="url" placeholder="https://..."></label><div class="logo-preview" id="badgePreview">${badge({ name: "Time", short: "TIME", badge: "" })}<button type="button" data-remove-badge>Remover imagem</button></div></div><button class="primary">Salvar equipe</button> <button type="button" data-section="imports">Importar equipes</button></form></div>`;}
 // 25 — Navegação clara. Lista primeiro; formulários somente ao cadastrar/editar.
 let teamFormVisible=false,teamEditorId="";
 function teamDirectoryCard(t){
@@ -4445,9 +4446,156 @@ function teamDirectoryCard(t){
  const games=state.matches.filter(m=>[m.home,m.away].includes(t.id)).length;
  return `<article class="card team-directory-card"><div class="team-directory-title">${badge(t)}<span class="status">${t.archived?"Arquivada":"Ativa"}</span></div><h3>${esc(t.name)}</h3><p class="muted">${esc(t.category||"Categoria não informada")}<br>Técnico(a): ${esc(t.coach||"Não informado")}<br>${esc(teamSports(t).join(" • ")||"Modalidade não informada")}</p><p>${roster} jogador(es) • ${games} ${role==="admin"?"partida(s)":"partida(s) autorizada(s)"}</p><div class="toolbar"><button type="button" class="primary" data-team-profile="${esc(t.id)}">Ver dados da equipe</button><details style="width:100%"><summary>Mais ações</summary><div class="toolbar" style="margin-top:8px"><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="roster">Jogadores</button><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="games">Jogos</button><button type="button" data-edit-team="${esc(t.id)}">Editar cadastro</button> ${role==="admin" ? `<button type="button" data-profile-archive="${esc(t.id)}">${t.archived?"Reativar equipe":"Arquivar equipe"}</button>` : ""}</div></details></div></article>`;
 }
+const participantColumns = [
+  ["team", "Equipe"], ["player", "Participante"], ["number", "Nº"], ["position", "Posição"],
+  ["lineup", "Escalação"], ["school", "Escola"], ["className", "Turma"],
+  ["manager", "Responsável"], ["coach", "Técnico(a)"], ["championship", "Campeonato"],
+  ["sport", "Modalidade"], ["phase", "Fase"], ["group", "Grupo / chave"], ["round", "Rodada"]
+];
+
+function participantRows() {
+  const active = record => record.testData !== true;
+  const championships = new Map(state.championships.filter(active).map(c => [c.id, c]));
+  const phases = new Map((state.matchPhases || []).map(p => [p.id, p]));
+  const entries = new Map();
+  for (const match of state.matches.filter(active)) {
+    if (match.status === "Cancelada") continue;
+    const championship = championships.get(match.championshipId);
+    const info = phases.get(match.id);
+    const phase = info?.championshipId === match.championshipId ? info : null;
+    const entry = {
+      championship: championship ? championshipTitle(championship) : match.competition || "Partida avulsa",
+      championshipKey: match.championshipId || match.competition || "",
+      sport: match.sport || "", phase: phase?.phase || "", group: phase?.group || "", round: phase?.round || ""
+    };
+    for (const id of [match.home, match.away]) {
+      if (!entries.has(id)) entries.set(id, new Map());
+      entries.get(id).set(JSON.stringify(Object.values(entry)), entry);
+    }
+  }
+  const rosters = new Map();
+  for (const player of state.players.filter(active)) {
+    if (!rosters.has(player.team)) rosters.set(player.team, []);
+    rosters.get(player.team).push(player);
+  }
+  return state.teams.filter(active).flatMap(team => {
+    const players = rosters.get(team.id) || [null];
+    const contexts = entries.has(team.id) ? [...entries.get(team.id).values()] : [{}];
+    return contexts.flatMap(entry => players.map(player => ({
+      ...entry, teamId: team.id, team: team.name, player: player?.name || "", playerId: player?.id || "", archived: team.archived,
+      number: player?.number || "", position: player?.position || "",
+      lineup: player ? player.reserve ? "Reserva" : "Titular" : "",
+      school: team.school || "", className: player?.className || team.className || "",
+      manager: team.manager || "", coach: team.coach || ""
+    })));
+  });
+}
+
+const participantFilters = [
+  ["championshipKey", "Campeonato"], ["sport", "Modalidade"], ["group", "Grupo / chave"],
+  ["teamId", "Equipe"], ["school", "Escola"], ["className", "Turma"]
+];
+function participantOptionLabel(row, key) {
+  return row[{championshipKey: "championship", teamId: "team"}[key] || key] || "Sem informação";
+}
+function participantFilterRows(rows, form) {
+  const filters = new FormData(form);
+  const query = searchText(String(filters.get("query") || "").trim());
+  const sort = String(filters.get("groupBy") || "teamId");
+  const groupLabel = row => participantOptionLabel(row, sort);
+  const compare = (a,b) => String(a || "").localeCompare(String(b || ""), "pt-BR", { numeric: true });
+  return rows.filter(row => participantFilters.every(([key]) => {
+    const selected = filters.get(key);
+    return !selected || (row[key] || "—") === selected;
+  }) && (!query || searchText(participantColumns.map(([key]) => row[key] || "").join(" ")).includes(query)))
+    .sort((a,b) => compare(groupLabel(a), groupLabel(b)) || compare(a[sort],b[sort])
+      || compare(a.team,b.team) || compare(a.player,b.player) || compare(a.championship,b.championship));
+}
+function participantTable(rows, groupBy, editable) {
+  if (!rows.length) return empty("Nenhum cadastro para os filtros escolhidos.");
+  const groups = new Map();
+  for (const row of rows) {
+    const key = row[groupBy] || "—";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  const headers = participantColumns.map(([,label]) => label);
+  if (editable) headers.push("Ações");
+  return [...groups.values()].map(group => {
+    const body = group.map(row => {
+      const cells = participantColumns.map(([key]) => row[key] || (key === "player" ? "Sem jogador cadastrado" : "—"));
+      if (!editable) return tr(cells);
+      const actions = `<button type="button" data-team-profile="${esc(row.teamId)}" data-initial-team-tab="roster">Ver elenco</button> ${row.playerId && !row.archived ? `<button type="button" data-team-profile="${esc(row.teamId)}" data-initial-team-tab="roster" data-participant-player="${esc(row.playerId)}">Editar jogador</button>` : ""} <button type="button" data-edit-team="${esc(row.teamId)}">Editar equipe</button>`;
+      return tr(cells).replace(/<\/tr>$/, `<td>${actions}</td></tr>`);
+    });
+    return `<section><h3>${esc(participantOptionLabel(group[0], groupBy))}</h3>${table(headers,body)}</section>`;
+  }).join("");
+}
+function participantDirectory() {
+  if (!canManageRosters()) return "";
+  return `<details class="card" id="participant-directory"><summary>Conferência de equipes e participantes</summary>
+    <p>Os campeonatos, grupos e chaves vêm das partidas disponíveis para a sua conta. O relatório usa o elenco atual de cada equipe. Para conferir quem estava inscrito em uma partida específica, consulte a súmula.</p>
+    <form data-participant-filters>
+      <div class="formgrid">
+        <label>Buscar<input name="query" type="search" placeholder="Nome, técnico ou responsável"></label>
+        ${participantFilters.map(([key,label]) => `<label>${label}<select name="${key}"><option value="">Todos</option></select></label>`).join("")}
+        <label>Agrupar por<select name="groupBy">${[participantFilters[3], ...participantFilters.filter(([key]) => key !== "teamId")].map(([key,label]) => `<option value="${key}">${label}</option>`).join("")}</select></label>
+      </div>
+      <div class="toolbar"><button type="submit">Filtrar</button><button type="button" data-participant-export="print">Visualizar / imprimir PDF</button><button type="button" data-participant-export="csv">Baixar planilha (CSV)</button></div>
+    </form>
+    <div data-participant-results></div></details>`;
+}
+function refreshParticipantDirectory(directory) {
+  const all = participantRows();
+  const form = directory.querySelector("form");
+  for (const [key] of participantFilters) {
+    const select = form.elements[key], selected = select.value;
+    const options = new Map(all.map(row => [row[key] || "—", participantOptionLabel(row,key)]));
+    select.replaceChildren(new Option("Todos",""), ...[...options].sort((a,b) => a[1].localeCompare(b[1],"pt-BR")).map(([value,label]) => new Option(label,value)));
+    if (options.has(selected)) select.value = selected;
+  }
+  const rows = participantFilterRows(all,form);
+  directory.querySelector("[data-participant-results]").innerHTML = participantTable(rows,form.elements.groupBy.value,true);
+  return rows;
+}
+document.addEventListener("toggle", event => {
+  if (event.target.id === "participant-directory" && event.target.open && canManageRosters())
+    refreshParticipantDirectory(event.target);
+}, true);
+document.addEventListener("submit", event => {
+  if (!event.target.matches("[data-participant-filters]")) return;
+  event.preventDefault();
+  if (canManageRosters()) refreshParticipantDirectory(event.target.closest("details"));
+});
+document.addEventListener("click", event => {
+  const button = event.target.closest("[data-participant-export]");
+  if (!button || !canManageRosters()) return;
+  const form = button.closest("form");
+  const rows = refreshParticipantDirectory(form.closest("details"));
+  if (!rows.length) return toast("Nenhum cadastro para exportar.", true);
+  if (button.dataset.participantExport === "csv") {
+    const cell = value => {
+      const text = String(value || "");
+      const safe = /^\s*[=+@-]|^[\t\r\n]/.test(text) ? "'" + text : text;
+      return '"' + safe.replaceAll('"','""') + '"';
+    };
+    const lines = [participantColumns.map(([,label]) => cell(label)), ...rows.map(row => participantColumns.map(([key]) => cell(row[key])))];
+    download("arena-equipes-e-participantes.csv", "\ufeff" + lines.map(line => line.join(";")).join("\r\n"), "text/csv;charset=utf-8");
+    return;
+  }
+  const sheet = window.open("", "_blank");
+  if (!sheet) return toast("Permita a abertura da prévia de impressão.", true);
+  sheet.opener = null;
+  sheet.document.write(`<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Equipes e participantes</title>
+    <style>@page{size:A4 landscape;margin:10mm}body{font:12px Arial;color:#172b36}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px solid #bbb;padding:4px;overflow-wrap:anywhere}tr{break-inside:avoid}thead{display:table-header-group}h3{break-after:avoid}@media print{button{display:none}}</style>
+    <button type="button" id="print">Imprimir / salvar em PDF</button><h1>Equipes e participantes</h1><p>Elencos atuais e partidas disponíveis para a conta.</p>${participantTable(rows,form.elements.groupBy.value,false)}</html>`);
+  sheet.document.close();
+  sheet.document.getElementById("print").onclick = () => sheet.print();
+});
+
 function teamsDirectoryView(){
  if(teamFormVisible)return `<div class="sectionhead"><h2>${teamEditorId?"Editar equipe":"Nova equipe"}</h2><button type="button" data-team-form-back>← Voltar à lista de equipes</button></div>${teamRegistrationView()}`;
- return `<div class="sectionhead team-directory-heading"><div><h2>Equipes</h2><p>Escolha uma equipe abaixo. Em <strong>Ver dados da equipe</strong> você encontra técnico, modalidades, elenco e jogos.</p></div><div class="toolbar"><button type="button" class="primary" data-new-team-form>+ Nova equipe</button><button type="button" data-section="imports">Importar equipes</button></div></div>${listPanel("teams")}`;
+ return `<div class="sectionhead team-directory-heading"><div><h2>Equipes</h2><p>Escolha uma equipe abaixo. Em <strong>Ver dados da equipe</strong> você encontra técnico, modalidades, elenco e jogos.</p></div><div class="toolbar"><button type="button" class="primary" data-new-team-form>+ Nova equipe</button><button type="button" data-section="imports">Importar equipes</button></div></div>${participantDirectory()}${listPanel("teams")}`;
 }
 function locationTrail(){
  const labels={overview:"Visão geral",matches:"Acompanhar jogos",championships:"Campeonatos",standings:"Classificação",teams:"Equipes",players:"Jogadores",imports:"Importar",documentation:"Guias",matchSheets:"Súmulas",reports:"Relatórios esportivos",auditReports:"Relatório geral",certificates:"Certificados",monitor:"Operadores e partidas",users:"Usuários e permissões",settings:"Configurações",cleanup:"Limpeza de testes",testData:"Dados de teste",credentials:"Credenciais de eventos",account:"Minha conta"};
@@ -4469,7 +4617,7 @@ document.addEventListener("click",e=>{
 function teamPlayerEditor(t){
  if(!teamPlayerDraft||t.archived)return "";
  const p=teamPlayerDraft,v=k=>esc(p[k]||"");
- return `<section class="team-player-editor" aria-labelledby="teamPlayerTitle"><h4 id="teamPlayerTitle">${p.id?"Editar jogador":"Novo jogador"} • ${esc(t.name)}</h4><form id="team-player"><div class="formgrid"><label>Nome do jogador<input name="name" required maxlength="150" value="${v("name")}" autocomplete="off"></label><label>Número da camisa<input name="number" maxlength="8" value="${v("number")}"></label><label>Posição<input name="position" maxlength="50" value="${v("position")}" placeholder="Ex.: goleiro, zagueiro, atacante"></label><label>Escalação no cadastro<select name="reserve"><option value="false" ${!p.reserve?"selected":""}>Titular</option><option value="true" ${p.reserve?"selected":""}>Reserva / banco</option></select></label></div><p class="muted">Salva no elenco atual de ${esc(t.name)}. Não altera jogadores ou escalações das súmulas já criadas. O administrador principal pode consultar a alteração em Histórico de alterações.</p><div class="toolbar"><button class="primary">${p.id?"Salvar alterações do jogador":"Salvar jogador nesta equipe"}</button><button type="button" data-player-editor-cancel>Cancelar edição</button></div></form></section>`;
+ return `<section class="team-player-editor" aria-labelledby="teamPlayerTitle"><h4 id="teamPlayerTitle">${p.id?"Editar jogador":"Novo jogador"} • ${esc(t.name)}</h4><form id="team-player"><div class="formgrid"><label>Nome do jogador<input name="name" required maxlength="150" value="${v("name")}" autocomplete="off"></label><label>Número da camisa<input name="number" maxlength="8" value="${v("number")}"></label><label>Posição<input name="position" maxlength="50" value="${v("position")}" placeholder="Ex.: goleiro, zagueiro, atacante"></label><label>Turma do jogador (opcional)<input name="className" maxlength="150" value="${v("className")}"></label><label>Escalação no cadastro<select name="reserve"><option value="false" ${!p.reserve?"selected":""}>Titular</option><option value="true" ${p.reserve?"selected":""}>Reserva / banco</option></select></label></div><p class="muted">Salva no elenco atual de ${esc(t.name)}. Não altera jogadores ou escalações das súmulas já criadas. O administrador principal pode consultar a alteração em Histórico de alterações.</p><div class="toolbar"><button class="primary">${p.id?"Salvar alterações do jogador":"Salvar jogador nesta equipe"}</button><button type="button" data-player-editor-cancel>Cancelar edição</button></div></form></section>`;
 }
 document.addEventListener("click",e=>{if(e.target.closest("[data-player-editor-cancel]")){teamPlayerDraft=null;render();}});
 
