@@ -242,7 +242,7 @@
         need(text(a.reason),"Informe o motivo da inclusão no elenco.");
         need(!m.roster.some(row=>row.id===p.id) && !Object.hasOwn(m.rosterTeams,p.id),"Este jogador já está no elenco da partida.");
         need(m.roster.length<80,"O elenco da partida já atingiu a capacidade existente de 80 jogadores.");
-        const player={id:p.id,name:p.name,team:p.team,number:p.number||"",position:p.position||"",reserve:p.reserve===true};
+        const player={id:p.id,name:p.name,team:p.team,number:p.number||"",position:p.position||"",reserve:p.reserve===null?null:p.reserve===true};
         m.roster.push(player);m.rosterTeams[p.id]=p.team;
         Object.assign(e,{type:"elenco",side:p.team===m.home?0:1,player:p.id,from:p.id,to:p.team,reason:text(a.reason,500),text:"Inclusão no elenco da partida: "+p.name});
       } else if (a.type === "event") {

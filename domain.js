@@ -158,7 +158,7 @@
         name: str(d.name),
         number: str(d.number, 8),
         position: str(d.position, 50),
-        reserve: !!d.reserve,
+        reserve: d.reserve === null ? null : !!d.reserve,
       };
       const prior = s.players.find(p => p.id === d.id);
       const className = str(Object.hasOwn(d, "className") ? d.className : prior?.className);
