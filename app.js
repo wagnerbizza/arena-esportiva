@@ -217,6 +217,17 @@ function syncChampionshipDraft() {
 }
 const phaseOptions=["Grupos","Oitavas de final","Quartas de final","Semifinal","Disputa de terceiro lugar","Final"];
 let phaseEdition="",phaseMatch="",phaseAudit=[];
+function canEditMatchPhases(editionId){
+ return role==="admin" || (role==="operator" && operatorPermissions.includes("editMatchPhases") &&
+   operatorChampionships.includes(editionId));
+}
+function operatorPhasePicker(){
+ const editions=(state.championships||[]).filter(edition=>canEditMatchPhases(edition.id));
+ if(!editions.length)return "";
+ return `<section class="card"><h2>Grupos e chaves</h2><div class="toolbar">${editions.map(edition=>
+  `<button type="button" data-phase-edition="${esc(edition.id)}">${esc([championshipTitle(edition),edition.sport,edition.category].filter(Boolean).join(" · "))}</button>`).join("")}</div></section>${phasesView()}`;
+}
+
 function matchPhase(match){
  const info=state.matchPhases?.find(item=>item.id===match.id);
  return info?.championshipId===match.championshipId && info?.phase ? info:null;
@@ -230,8 +241,8 @@ function matchCompetitionLabel(match){
 }
 function phasesView(){
  const edition=(state.championships||[]).find(item=>item.id===phaseEdition);
- if(role!=="admin"||!edition)return "";
- const matches=state.matches.filter(match=>match.championshipId===edition.id&&match.testData!==true);
+ if(!edition||!canEditMatchPhases(edition.id))return "";
+ const matches=state.matches.filter(match=>match.championshipId===edition.id&&match.testData!==true&&(role==="admin"||cloud?.canOperate(match.id)));
  const selectedMatch=matches.find(match=>match.id===phaseMatch)||matches[0];
  const info=selectedMatch?matchPhase(selectedMatch):null;
  const matchOptions=matches.map(match=>`<option value="${esc(match.id)}" ${match.id===selectedMatch?.id?"selected":""}>${esc(name(match.home)+" × "+name(match.away)+" · "+format(match.date))}</option>`).join("");
@@ -258,11 +269,11 @@ function phasesView(){
 document.addEventListener("click",async event=>{
  const open=event.target.closest("[data-phase-edition]");
  const audit=event.target.closest("[data-phase-audit]");
- if(role!=="admin")return;
- if(open){
+ if(!admin||C.demo)return;
+ if(open&&canEditMatchPhases(open.dataset.phaseEdition)){
   phaseEdition=open.dataset.phaseEdition;phaseMatch="";phaseAudit=[];render();
   requestAnimationFrame(()=>document.getElementById("arena-fases")?.scrollIntoView({block:"start"}));
- }else if(audit&&!C.demo){
+ }else if(audit&&canEditMatchPhases(phaseEdition)){
   const id=audit.dataset.phaseAudit;
   try {
    const rows=await cloud.loadMatchPhaseHistory(id);
@@ -1337,7 +1348,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=arena-fases-12");
+    const { connectSpark } = await import("./spark-store.js?v=arena-fases-operador-13");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -1674,7 +1685,7 @@ function view() {
         ${filterSelect("matches", "edition", "Campeonato", operatorEditions, "Todos os jogos disponíveis")}
         ${filterSelect("matches", "team", "Equipe", teams.map((id) => [id,name(id)]), "Todas as equipes")}
       </div></div>` : "";
-    return `${choices}<div class="card"><h2>${canViewAllGames() || operatorEditions.length ? "Acompanhar jogos" : "Partidas atribuídas"}</h2><p>${canViewAllGames()?"Consulte todas as partidas publicadas — próximas, ao vivo e encerradas. Para alterar placar e relógio, o administrador precisa liberar a partida individualmente ou autorizar a operação do campeonato.":"Para anular: abra Ver lances anteriores no cartão da partida ou na mesa de operação e clique em Anular lance com motivo. É necessário que o administrador tenha salvo a autorização de Histórico e anulações e liberado a operação desta partida. Após o encerramento, somente o administrador retifica. A auditoria administrativa e os relatórios continuam exclusivos do administrador."}</p></div>${listPanel("matches")}`;
+    return `${operatorPhasePicker()}${choices}<div class="card"><h2>${canViewAllGames() || operatorEditions.length ? "Acompanhar jogos" : "Partidas atribuídas"}</h2><p>${canViewAllGames()?"Consulte todas as partidas publicadas — próximas, ao vivo e encerradas. Para alterar placar e relógio, o administrador precisa liberar a partida individualmente ou autorizar a operação do campeonato.":"Para anular: abra Ver lances anteriores no cartão da partida ou na mesa de operação e clique em Anular lance com motivo. É necessário que o administrador tenha salvo a autorização de Histórico e anulações e liberado a operação desta partida. Após o encerramento, somente o administrador retifica. A auditoria administrativa e os relatórios continuam exclusivos do administrador."}</p></div>${listPanel("matches")}`;
   }
   if (section === "matches")
     return selected ? operate() : listPanel("matches");
@@ -2535,9 +2546,11 @@ function operatorAuthorizationGroups(operator,editionOptions) {
  const operations=authorizationSection("championships","Operar campeonatos","Libera placar, relógio, cartões e avisos nas categorias autorizadas, inclusive para novas partidas vinculadas.",championshipOperationPicker(operator),(operator.operatedChampionships||[]).length,true);
  const matches=authorizationSection("matches","Operar partidas específicas","Use para jogos avulsos ou exceções. Não precisa marcar novamente as partidas já liberadas por campeonato.",operatorMatchPicker(operator),(operator.matches||[]).length);
  const history=authorizationSection("history","Histórico e anulações","O operador consulta o histórico operacional das partidas autorizadas. Pode anular gols/pontos, cartões, faltas, substituições e pedidos de tempo durante jogos abertos. Retificações após o encerramento ou em sets fechados são exclusivas do administrador. Anular gols ou pontos exige esta permissão adicional e justificativa. Não permite apagar lances, alterar registros anteriores ou editar a súmula administrativa.",`<label class="confirmation-check"><input type="checkbox" name="historyCorrectPermission" ${checked("historyCorrections")}><span>Permitir anular lances com justificativa nas partidas que este operador pode operar.</span></label><p class="muted">A anulação vira um novo registro; o lance original e a auditoria completa permanecem na súmula do administrador. Não concede acesso a outras partidas.</p>`,permissions.includes("historyCorrections")?1:0);
+ const phases=authorizationSection("phases","Grupos e chaves","Autoriza editar fase, grupo ou chave e rodada somente nas categorias marcadas em Operar campeonatos.",
+  `<label class="confirmation-check"><input type="checkbox" name="phaseEditPermission" ${checked("editMatchPhases")}><span>Editar grupos e chaves</span></label>`,permissions.includes("editMatchPhases")?1:0);
  const registrations=authorizationSection("records","Cadastros esportivos","Conceda somente os cadastros necessários. Criar uma partida não concede automaticamente sua operação.",`<label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${checked("rosters")}><span>Equipes e jogadores: cadastrar, editar e importar, inclusive técnicos e elencos.</span></label><label class="confirmation-check"><input type="checkbox" name="championshipPermission" ${checked("championships")}><span>Campeonatos e temporadas: cadastrar e editar.</span></label><label class="confirmation-check"><input type="checkbox" name="matchCreatePermission" ${checked("matchesCreate")}><span>Partidas: cadastrar novos jogos.</span></label>`,permissions.filter(id=>["rosters","championships","matchesCreate"].includes(id)).length);
  const viewing=authorizationSection("view","Acompanhar jogos sem operar","Consulta dos jogos publicados. Esta seção não libera gols, cartões, relógio ou anulações.",`<fieldset><legend>Campeonatos para acompanhar</legend>${editionOptions}<label class="confirmation-check"><input type="checkbox" name="gamesViewPermission" ${checked("gamesView")}><span>Consultar todos os jogos publicados, sem alterar placares.</span></label></fieldset>`,(operator.followedEditions||[]).length+(permissions.includes("gamesView")?1:0));
- return `<div class="toolbar"><button type="button" data-permissions-expand="true">Expandir autorizações</button><button type="button" data-permissions-expand="false">Recolher autorizações</button></div>${operations}${matches}${history}${registrations}${viewing}`;
+ return `<div class="toolbar"><button type="button" data-permissions-expand="true">Expandir autorizações</button><button type="button" data-permissions-expand="false">Recolher autorizações</button></div>${operations}${matches}${history}${phases}${registrations}${viewing}`;
 }
 document.addEventListener("click",event=>{
  const button=event.target.closest("[data-permissions-expand]");if(!button||role!=="admin")return;
@@ -2573,7 +2586,7 @@ function usersView() {
     permissions.includes("championships") && "Campeonatos",
     permissions.includes("matchesCreate") && "Novas partidas",
   ].filter(Boolean).join(", ") || "Nenhum";
-  const permissionNames={rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos",historyCorrections:"Anular lances com justificativa"};
+  const permissionNames={rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos",historyCorrections:"Anular lances com justificativa",editMatchPhases:"Editar grupos e chaves"};
   const accessAuditRows=(state.accessAudit||[]).slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
   const accessAuditDate=value=>value?.toDate?.().toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})||"Aguardando confirmação do servidor";
   const accessAuditValue=(key,value)=>{
@@ -2659,7 +2672,7 @@ document.addEventListener("submit", async (e) => {
           toast(user?.emailVerified ? "Solicitação registrada. Aguarde a aprovação do administrador principal." : "Solicitação registrada. Confira a confirmação enviada ao seu e-mail.");
         } else {
           await cloud.manageUser({userId:d.userId, access:d.access,
-            matches: new FormData(f).getAll("assignedMatches"), followedEditions: new FormData(f).getAll("followedEditions"), operatedChampionships: new FormData(f).getAll("operatedChampionships"), permissions:[...(f.elements.rosterPermission.checked?["rosters"]:[]),...(f.elements.matchCreatePermission.checked?["matchesCreate"]:[]),...(f.elements.championshipPermission.checked?["championships"]:[]),...(f.elements.gamesViewPermission.checked?["gamesView"]:[]),...(f.elements.historyCorrectPermission.checked?["historyCorrections"]:[])], reason:d.reason});
+            matches: new FormData(f).getAll("assignedMatches"), followedEditions: new FormData(f).getAll("followedEditions"), operatedChampionships: new FormData(f).getAll("operatedChampionships"), permissions:[...(f.elements.rosterPermission.checked?["rosters"]:[]),...(f.elements.matchCreatePermission.checked?["matchesCreate"]:[]),...(f.elements.championshipPermission.checked?["championships"]:[]),...(f.elements.gamesViewPermission.checked?["gamesView"]:[]),...(f.elements.historyCorrectPermission.checked?["historyCorrections"]:[]),...(f.elements.phaseEditPermission.checked?["editMatchPhases"]:[])], reason:d.reason});
           managedUserId = "";
           toast("Permissões salvas e registradas no histórico.");
         }
@@ -2696,7 +2709,7 @@ document.addEventListener("submit", async (e) => {
       else if (f.id === "championship") { editedChampionshipId = ""; championshipDraft=null; render(); }
       else if (!C.demo) f.reset();
     } else if (f.id === "arena-phase-form") {
-      if(role!=="admin"||C.demo)throw Error("Disponível na administração conectada.");
+      if(C.demo||!canEditMatchPhases(phaseEdition))throw Error("Sem autorização para editar fases nesta edição.");
       if(d.phase&&!phaseOptions.includes(d.phase))throw Error("Fase inválida.");
       await cloud.saveMatchPhase(d.matchId,phaseEdition,d);
       toast("Fase salva.");

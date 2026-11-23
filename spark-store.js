@@ -24,6 +24,9 @@ export async function connectSpark({
     return Boolean(match?.championshipId &&
       (profile?.operatedChampionships || []).includes(match.championshipId));
   }
+  const canEditMatchPhases = championshipId => isOwner() || (authorized() &&
+    (profile?.permissions || []).includes("editMatchPhases") &&
+    (profile?.operatedChampionships || []).includes(championshipId));
   const canCorrectMatch = id => canOperateMatch(id) && (isOwner() || (profile?.permissions || []).includes("historyCorrections"));
   const canManageRosters = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("rosters"));
   const canCreateMatches = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("matchesCreate"));
@@ -210,6 +213,16 @@ export async function connectSpark({
         }
       }
       for (const championshipId of [...new Set(profile?.operatedChampionships || [])]) {
+        if(canEditMatchPhases(championshipId)){
+          const phaseEpoch=dataEpoch;
+          const query=F.query(F.collection(database,"arenaMatchPhases"),F.where("championshipId","==",championshipId));
+          stops.push(F.onSnapshot(query,snapshot=>{
+            if(phaseEpoch!==dataEpoch)return;
+            const others=(state.matchPhases||[]).filter(item=>item.championshipId!==championshipId);
+            state.matchPhases=[...others,...snapshot.docs.map(doc=>({...doc.data(),id:doc.id}))];
+            publish();
+          },()=>{}));
+        }
         watchCollection("matches", games => {
           championshipGames.set(championshipId,games);
           publishOperatorGames();
@@ -1030,7 +1043,7 @@ export async function connectSpark({
       const before = snap.data();
       if (before.deleted === true) throw Error("Este operador foi removido e está disponível apenas para consulta.");
       const granted=access==="active"?[...new Set(permissions===undefined?(before.permissions||[]):permissions)]:[];
-      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView","historyCorrections"].includes(p)))throw Error("Permissão específica inválida.");
+      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView","historyCorrections","editMatchPhases"].includes(p)))throw Error("Permissão específica inválida.");
       const editions = access === "active"
         ? [...new Set(followedEditions ?? before.followedEditions ?? [])] : [];
       const known = new Set(state.championships.map((c) => c.name + " • " + c.season));
@@ -1268,7 +1281,7 @@ export async function connectSpark({
       };
     },
     async saveMatchPhase(matchId,championshipId,data){
-      if(!privateView||!isOwner())throw Error("Edição de fases exclusiva da administração.");
+      if(!privateView||!canEditMatchPhases(championshipId))throw Error("Sem autorização para editar fases nesta edição.");
       const account=authentication.currentUser?.uid;
       const phase=String(data.phase||""),group=phase?String(data.group||"").trim().slice(0,40):"",
         round=phase?String(data.round||"").trim().slice(0,40):"";
@@ -1278,7 +1291,7 @@ export async function connectSpark({
         const [game,previous]=await Promise.all([
           tx.get(F.doc(database,"matches",matchId)),tx.get(ref)
         ]);
-        if(!isOwner()||authentication.currentUser?.uid!==account)throw Error("A sessão mudou.");
+        if(!canEditMatchPhases(championshipId)||authentication.currentUser?.uid!==account)throw Error("A sessão mudou.");
         if(!game.exists()||game.data().championshipId!==championshipId||game.data().testData===true)
           throw Error("A partida precisa estar vinculada a esta edição.");
         const old=previous.data();
@@ -1288,9 +1301,10 @@ export async function connectSpark({
       });
     },
     async loadMatchPhaseHistory(matchId){
-      if(!privateView||!isOwner())throw Error("Consulta exclusiva da administração.");
-      const snap=await F.getDocs(F.query(F.collection(database,"arenaMatchPhases",matchId,"history"),F.orderBy("updatedAt","desc"),F.limit(20)));
-      return snap.docs.map(doc=>doc.data());
+      const match=state.matches.find(item=>item.id===matchId);
+      if(!privateView||!match||!canEditMatchPhases(match.championshipId))throw Error("Sem autorização para consultar esta partida.");
+      const snap=await F.getDocs(F.query(F.collection(database,"arenaMatchPhases",matchId,"history"),F.where("championshipId","==",match.championshipId)));
+      return snap.docs.map(doc=>doc.data()).sort((a,b)=>b.updatedAt.toMillis()-a.updatedAt.toMillis()).slice(0,20);
     },
     canOperate: canOperateMatch,
     canCorrect: canCorrectMatch,
