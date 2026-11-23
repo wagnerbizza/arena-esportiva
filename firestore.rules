@@ -502,6 +502,8 @@ service cloud.firestore {
   }
   match /championships/{id} {
    allow read: if owner() || (championshipManager() && resource.data.testData == false);
+   // A transação de cadastro verifica se o ID ainda está livre.
+   allow get: if championshipManager() && !exists(/databases/$(database)/documents/championships/$(id));
    allow create: if sportsAvailable() && activeSports(request.resource.data) && championshipManager() && championshipSchema(request.resource.data,id) && request.resource.data._revision == 1 && pair(request.resource.data,'championships',id,null);
    allow update: if sportsAvailable() && stableSports(request.resource.data,resource.data) && championshipManager() && championshipSchema(request.resource.data,id) && request.resource.data.sport == resource.data.sport
     && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'championships',id,resource.data);
@@ -510,6 +512,8 @@ service cloud.firestore {
   }
   match /teams/{id} {
    allow read: if owner() || (rosterManager() && resource.data.testData == false);
+   // A transação de cadastro verifica se o ID ainda está livre.
+   allow get: if rosterManager() && !exists(/databases/$(database)/documents/teams/$(id));
    allow create: if sportsAvailable() && activeSports(request.resource.data) && rosterManager() && teamSchema(request.resource.data,id) && request.resource.data.get('archived',false) == false && request.resource.data._revision == 1 && pair(request.resource.data,'teams',id,null) && publishedTeam(request.resource.data,id);
    allow update: if sportsAvailable() && stableSports(request.resource.data,resource.data) && rosterManager() && teamSchema(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1
     && (request.resource.data.get('archived',false) == resource.data.get('archived',false) || (owner() && logData(request.resource.data).detail.type in ['arquivamento','reativação'] && nonempty(logData(request.resource.data).detail.reason,500) && logData(request.resource.data).detail.reason.size() >= 5))
@@ -519,6 +523,8 @@ service cloud.firestore {
   }
   match /players/{id} {
    allow read: if owner() || (rosterManager() && resource.data.testData == false);
+   // A transação de cadastro verifica se o ID ainda está livre.
+   allow get: if rosterManager() && !exists(/databases/$(database)/documents/players/$(id));
    allow create: if sportsAvailable() && activeSports(request.resource.data) && rosterManager() && playerSchema(request.resource.data,id) && activeRef('teams',request.resource.data.team) && request.resource.data._revision == 1 && pair(request.resource.data,'players',id,null);
    allow update: if sportsAvailable() && stableSports(request.resource.data,resource.data) && rosterManager() && playerSchema(request.resource.data,id) && activeRef('teams',request.resource.data.team) && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'players',id,resource.data);
    allow delete: if false;
