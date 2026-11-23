@@ -98,7 +98,7 @@ function publicEditionState(data) {
 // Para mudar a visualização inicial de partidas, altere group: "active" abaixo.
 const listDefaults = {
   teams: { query: "", category: "", sport:"",status:"active", order:"" },
-  players: { query: "", team: "", position: "", reserve: "", order:"" },
+  players: { query: "", team: "", position: "", reserve: "", order:"", teamStatus:"active" },
   matches: { query: "", sport: "", group: "active", status: "", championshipId: "", edition: "", team: "", order:"" },
 };
 const listFilters = Object.fromEntries(Object.entries(listDefaults).map(([k, v]) => [k, { ...v }]));
@@ -114,9 +114,24 @@ function lineupField(label, reserve) {
 }
 const searchText = (v) => String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
 const alphabetical = (a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", { numeric: true });
+function playerListTeams(status) {
+  const scheduled = new Set(state.matches.filter(match => !match.testData && ["Agendada","Ao vivo","Pausada","Suspensa"].includes(match.status))
+    .flatMap(match => [match.home,match.away]));
+  return state.teams.filter(team => {
+    if (team.testData) return false;
+    if (status === "archived") return team.archived === true;
+    if (status === "scheduled") return !team.archived && scheduled.has(team.id);
+    return status === "" || !team.archived;
+  });
+}
+function listSource(kind) {
+  if (kind !== "players") return state[kind];
+  const ids = new Set(playerListTeams(listFilters.players.teamStatus).map(team => team.id));
+  return state.players.filter(player => !player.testData && ids.has(player.team));
+}
 function filteredRecords(kind) {
   const f = listFilters[kind], q = searchText(f.query);
-  return state[kind].filter((r) => {
+  return listSource(kind).filter((r) => {
     if (kind === "teams") return (!f.sport||teamSports(r).includes(f.sport))&&(!f.status||(f.status==="archived"?r.archived===true:r.archived!==true))&&(!q || searchText([r.name, r.short, r.coach, r.manager, r.school, r.className].join(" ")).includes(q)) && (!f.category || (r.category || "") === f.category);
     if (kind === "players") return (!q || searchText([r.name, r.number, name(r.team), r.position, r.className, lineupLabel(r.reserve)].join(" ")).includes(q)) && (!f.team || r.team === f.team) && (!f.position || (r.position || "") === f.position) && (!f.reserve || lineupKey(r.reserve) === f.reserve);
     return (!f.edition || (r.championshipId && r.competition === f.edition)) && (!f.team || [r.home,r.away].includes(f.team)) && (!q || searchText([name(r.home), name(r.away), r.competition, r.place].join(" ")).includes(q)) && (!f.championshipId || (f.championshipId === "__unlinked" ? !r.championshipId : r.championshipId === f.championshipId)) && (!f.sport || r.sport === f.sport) && (!f.status || r.status === f.status) && (f.group === "all" || (f.group === "finished" ? finalStatuses.includes(r.status) : !finalStatuses.includes(r.status)));
@@ -147,14 +162,20 @@ function listPanel(kind) {
   const titles = { teams: "Equipes cadastradas", players: "Jogadores cadastrados", matches: role === "admin" ? "Partidas cadastradas" : canViewAllGames() ? "Jogos disponíveis" : "Partidas atribuídas" };
   let controls = `<label class="list-search">${kind === "matches" ? "Buscar equipe, competição ou local" : kind === "players" ? "Buscar nome, camisa, equipe, posição ou turma" : "Buscar equipe, sigla, técnico, escola, turma ou responsável"}<input type="search" data-list-filter="${kind}" data-filter-key="query" value="${esc(f.query)}" placeholder="Digite para buscar…" autocomplete="off"></label>`;
   if (kind === "teams") controls += filterSelect(kind, "category", "Categoria", unique(state.teams, "category"), "Todas as categorias")+filterSelect(kind,"sport","Modalidade",D.SPORTS,"Todas as modalidades")+filterSelect(kind,"status","Situação da equipe",[["active","Ativas"],["archived","Arquivadas"]],"Todas as equipes");
-  if (kind === "players") controls += filterSelect(kind, "team", "Equipe", state.teams.slice().sort(alphabetical).map((t) => [t.id, t.name]), "Todas as equipes") + filterSelect(kind, "position", "Posição", unique(state.players, "position"), "Todas as posições") + filterSelect(kind, "reserve", "Escalação", [["pending", "A definir"], ["false", "Titular"], ["true", "Reserva / banco"]], "Todos");
+  if (kind === "players") {
+    const teamStates = [["active","Ativas"],["scheduled","Com jogo marcado ou em andamento"],["archived","Arquivadas"]];
+    controls += filterSelect(kind,"teamStatus","Situação da equipe",teamStates,"Todas as não reservadas") +
+      filterSelect(kind,"team","Equipe",playerListTeams(f.teamStatus).sort(alphabetical).map(team => [team.id,team.name]),"Todas da seleção") +
+      filterSelect(kind,"position","Posição",unique(listSource(kind),"position"),"Todas as posições") +
+      filterSelect(kind,"reserve","Escalação",[["pending","A definir"],["false","Titular"],["true","Reserva / banco"]],"Todos");
+  }
   if (kind === "matches") controls += filterSelect(kind, "sport", "Modalidade", D.SPORTS, "Todas as modalidades") + filterSelect(kind, "status", "Situação específica", matchStatuses, "Todas as situações") + filterSelect(kind, "championshipId", "Campeonato / temporada", championshipFilterOptions(), "Todos os campeonatos");
   controls += filterSelect(kind, "order", "Ordenar", [["az","Nome A–Z"],["za","Nome Z–A"]], kind === "matches" ? "Ordem por horário" : "Nome A–Z (padrão)");
   const groups = kind === "matches" ? `<div class="list-groups" aria-label="Visualização das partidas">${[["active", "Em andamento e próximas"], ["finished", "Finalizadas"], ["all", "Todas"]].map(([v, title]) => `<button type="button" data-list-group="${v}" aria-pressed="${f.group === v}" class="${f.group === v ? "primary" : ""}">${title}</button>`).join("")}</div>` : "";
   return `<section class="card list-filters" aria-label="Filtros de ${titles[kind]}"><h2>${titles[kind]}</h2>${groups}<div class="list-controls">${controls}<button type="button" data-list-reset="${kind}">Limpar filtros</button></div><p class="muted list-count" id="list-count-${kind}" role="status">${listCount(kind)}</p>${kind === "matches" ? '<small>Finalizadas inclui encerradas, homologadas e canceladas. Adiadas e suspensas continuam em andamento e próximas.</small>' : ""}</section><div id="list-results-${kind}" class="${kind === "players" ? "card" : "grid"}">${listResults(kind)}</div>`;
 }
 function listCount(kind) {
-  return `${filteredRecords(kind).length} de ${state[kind].length} ${ { teams: "equipes", players: "jogadores", matches: "partidas" }[kind]} nesta visualização`;
+  return `${filteredRecords(kind).length} de ${listSource(kind).length} ${ { teams: "equipes", players: "jogadores", matches: "partidas" }[kind]} nesta visualização`;
 }
 function listResults(kind) {
   const rows = filteredRecords(kind);
@@ -187,6 +208,13 @@ function handleListFilter(e) {
   const el = e.target, kind = el.dataset?.listFilter, key = el.dataset?.filterKey;
   if (!listFilters[kind] || !Object.hasOwn(listFilters[kind], key)) return;
   listFilters[kind][key] = el.value;
+  if (kind === "players" && key === "teamStatus") {
+    listFilters.players.team = "";
+    listFilters.players.position = "";
+    render();
+    document.querySelector('[data-list-filter="players"][data-filter-key="teamStatus"]')?.focus();
+    return;
+  }
   if (kind === "matches" && key === "edition") {
     listFilters.matches.team = "";
     listFilters.matches.championshipId = "";
@@ -4662,7 +4690,7 @@ function teamDirectoryCard(t){
  ];
  const summary=fields.map(([label,value])=>`<div><strong>${label}:</strong> ${esc(value)}</div>`).join("");
  const games=state.matches.filter(m=>[m.home,m.away].includes(t.id)).length;
- return `<article class="card team-directory-card"><div class="team-directory-title">${badge({...t,name:title})}<span class="status">${t.archived?"Arquivada":"Ativa"}</span></div><h3>${esc(title)}${t.short?.trim()?` <small class="muted">(${esc(t.short.trim())})</small>`:""}</h3><div class="muted">${summary}</div><p>${roster.length} jogador(es) • ${games} ${role==="admin"?"partida(s)":"partida(s) autorizada(s)"}</p><div class="toolbar"><button type="button" class="primary" data-team-profile="${esc(t.id)}">Ver dados da equipe</button><details style="width:100%"><summary>Mais ações</summary><div class="toolbar" style="margin-top:8px"><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="roster">Jogadores</button><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="games">Jogos</button><button type="button" data-edit-team="${esc(t.id)}">Editar cadastro</button> ${role==="admin" ? `<button type="button" data-profile-archive="${esc(t.id)}">${t.archived?"Reativar equipe":"Arquivar equipe"}</button>` : ""}</div></details></div></article>`;
+ return `<article class="card team-directory-card"><div class="team-directory-title">${badge({...t,name:title})}<span class="status">${t.archived?"Arquivada":"Ativa"}</span></div><h3>${esc(title)}${t.short?.trim()?` <small class="muted">(${esc(t.short.trim())})</small>`:""}</h3><div class="muted">${summary}</div><p>${roster.length} jogador(es) • ${games} ${role==="admin"?"partida(s)":"partida(s) autorizada(s)"}</p><div class="toolbar"><button type="button" class="primary" data-team-profile="${esc(t.id)}">Ver dados da equipe</button><details style="width:100%"><summary>Mais ações</summary><div class="toolbar" style="margin-top:8px"><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="roster">Jogadores</button><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="games">Jogos</button><button type="button" data-edit-team="${esc(t.id)}">Editar cadastro</button> ${role==="admin" ? `<button type="button" data-profile-archive="${esc(t.id)}">${t.archived?"Reativar equipe":"Arquivar equipe"}</button> <button type="button" data-test-reserve-team="${esc(t.id)}">Reservar como teste</button>` : ""}</div></details></div></article>`;
 }
 const participantColumns = [
   ["team", "Equipe"], ["player", "Participante"], ["number", "Nº"], ["position", "Posição"],
@@ -5389,6 +5417,19 @@ document.addEventListener("change",e=>{
  if(e.target.matches("[data-test-select]")){const key=e.target.dataset.testSelect;e.target.checked?testSelection.add(key):testSelection.delete(key);testPlan=null;testBackup=false;render();}
 });
 document.addEventListener("click",async e=>{
+ const shortcut=e.target.closest("[data-test-reserve-team]");
+ if(shortcut && role==="admin"){
+  const key="teams/"+shortcut.dataset.testReserveTeam;
+  if(C.demo) return toast("Use a conta administrativa real.",true);
+  testOnlyReserved=false;
+  testSearch="";
+  testSelection=new Set([key]);
+  testPlan={items:planTestClassification(testRecords(),testSelection,true),hidden:true};
+  testBackup=false;
+  section="testData";
+  render();
+  return;
+ }
  const b=e.target.closest("[data-test-scope],[data-test-preview],[data-test-backup],[data-test-prepare],[data-test-unlock],[data-test-detail],[data-test-history],[data-test-select-all],[data-test-select-clear]");if(!b||role!=="admin")return;
  try{
   if(b.hasAttribute("data-test-select-all")){for(const el of document.querySelectorAll("[data-test-select]"))testSelection.add(el.dataset.testSelect);testPlan=null;testBackup=false;render();}
