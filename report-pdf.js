@@ -36,7 +36,7 @@ async function libraries() {
     });
   return loading;
 }
-export async function downloadCenteredQrPDF(svg, filename) {
+export async function downloadCenteredQrPDF(svg, filename, title = "Painel público do Arena") {
   const source = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
   const canvas = document.createElement("canvas");
   try {
@@ -53,7 +53,19 @@ export async function downloadCenteredQrPDF(svg, filename) {
   const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   const side = 130;
   const page = doc.internal.pageSize;
-  doc.addImage(canvas, "PNG", (page.getWidth() - side) / 2, (page.getHeight() - side) / 2, side, side);
+  const centerX = page.getWidth() / 2;
+  const top = (page.getHeight() - side) / 2;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  const heading = doc.splitTextToSize(title, page.getWidth() - 40);
+  doc.text(heading, centerX, top - 9 - (heading.length - 1) * 8.2, { align: "center" });
+  doc.addImage(canvas, "PNG", centerX - side / 2, top, side, side);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(13);
+  doc.text([
+    "Abra a câmera do celular e aponte para o QR Code.",
+    "Toque no link que aparecer para acompanhar os jogos."
+  ], centerX, top + side + 11, { align: "center" });
   doc.save(filename);
 }
 async function logoPNG(src) {

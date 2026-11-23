@@ -757,8 +757,8 @@ document.addEventListener("click", async (event) => {
       const filename = logo ? "arena-qr-code-com-logo.svg" : "arena-qr-code.svg";
       const svg = qrSvg(button.dataset.shareQr, logo);
       if (button.hasAttribute("data-qr-pdf")) {
-        const { downloadCenteredQrPDF } = await import("./report-pdf.js?v=qr-centralizado-1");
-        await downloadCenteredQrPDF(svg, filename.replace(/\.svg$/, ".pdf"));
+        const { downloadCenteredQrPDF } = await import("./report-pdf.js?v=qr-centralizado-2");
+        await downloadCenteredQrPDF(svg, filename.replace(/\.svg$/, ".pdf"), button.dataset.qrTitle);
       } else {
         download(filename, svg, "image/svg+xml");
       }
@@ -4011,7 +4011,7 @@ function qrCodesView() {
  for(const c of state.championships||[])if(!c.testData)editions.set(championshipTitle(c),c.sport||"");
  for(const match of state.matches)if(!match.testData&&!match.publicHidden&&match.competition)editions.set(match.competition,match.sport||"");
  const cards=[["Painel público do Arena",publicPanelURL(),"Todos os jogos publicados"],...[...editions].sort((a,b)=>a[0].localeCompare(b[0],"pt-BR")).map(([title,sport])=>[title,publicPanelURL(title),sport])];
- return `<section class="card"><h2>Central de QR codes e links</h2><p>Compartilhe o painel público ou a página de um campeonato. Os links não concedem acesso à operação.</p><p class="muted">A prévia usa QR code sem logo. O botão Com logo incorpora o logo principal configurado no Arena.</p></section><div class="grid arena-qr-grid">${cards.map(([title,url,detail])=>`<article class="card"><h3>${esc(title)}</h3><p class="muted">${esc(detail)}</p><div class="arena-qr-preview" data-qr-preview="${esc(url)}"><span>Preparando QR code…</span></div><label>Link público<input readonly value="${esc(url)}" aria-label="Link de ${esc(title)}"></label><div class="toolbar"><button type="button" data-share-copy="${esc(url)}">Copiar link</button><a class="button" href="${esc(url)}" target="_blank" rel="noopener">Abrir página</a><button type="button" class="primary" data-share-qr="${esc(url)}" data-qr-pdf>Baixar PDF centralizado</button>${state.settings.logo?`<button type="button" data-share-qr="${esc(url)}" data-qr-pdf data-qr-logo>Baixar PDF com logo</button>`:""}<button type="button" data-share-qr="${esc(url)}">Baixar QR code</button>${state.settings.logo?`<button type="button" data-share-qr="${esc(url)}" data-qr-logo>Baixar com logo</button>`:""}</div></article>`).join("")}</div>`;
+ return `<section class="card"><h2>Central de QR codes e links</h2><p>Compartilhe o painel público ou a página de um campeonato. Os links não concedem acesso à operação.</p><p class="muted">A prévia usa QR code sem logo. O botão Com logo incorpora o logo principal configurado no Arena.</p></section><div class="grid arena-qr-grid">${cards.map(([title,url,detail])=>`<article class="card"><h3>${esc(title)}</h3><p class="muted">${esc(detail)}</p><div class="arena-qr-preview" data-qr-preview="${esc(url)}"><span>Preparando QR code…</span></div><label>Link público<input readonly value="${esc(url)}" aria-label="Link de ${esc(title)}"></label><div class="toolbar"><button type="button" data-share-copy="${esc(url)}">Copiar link</button><a class="button" href="${esc(url)}" target="_blank" rel="noopener">Abrir página</a><button type="button" class="primary" data-share-qr="${esc(url)}" data-qr-title="${esc(title)}" data-qr-pdf>Baixar PDF centralizado</button>${state.settings.logo?`<button type="button" data-share-qr="${esc(url)}" data-qr-title="${esc(title)}" data-qr-pdf data-qr-logo>Baixar PDF com logo</button>`:""}<button type="button" data-share-qr="${esc(url)}">Baixar QR code</button>${state.settings.logo?`<button type="button" data-share-qr="${esc(url)}" data-qr-logo>Baixar com logo</button>`:""}</div></article>`).join("")}</div>`;
 }
 async function renderQRPreviews() {
  const nodes=[...app.querySelectorAll("[data-qr-preview]")];
