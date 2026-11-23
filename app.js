@@ -660,14 +660,72 @@ function printRegistrationSheet(championship) {
   sheet.document.open();
   sheet.document.write(registrationSheetHTML(championship,count));
   sheet.document.close();
-  for (const select of sheet.document.querySelectorAll(".registration-lineup")) {
-    select.addEventListener("change", () => {
-      select.nextElementSibling.textContent = select.value;
-    });
-  }
+  const playersTable = sheet.document.querySelector(".registration-players tbody");
+  playersTable.addEventListener("change", event => {
+    const select = event.target;
+    if (select.matches(".registration-lineup")) select.nextElementSibling.textContent = select.value;
+  });
+  if (canManageRosters()) setupRegistrationRoster(sheet, playersTable);
   sheet.document.getElementById("print").onclick = async () => {
     await Promise.all([...sheet.document.images].map(img => img.decode().catch(() => {})));
     sheet.print();
+  };
+}
+
+function setupRegistrationRoster(sheet, playersTable) {
+  const doc = sheet.document;
+  const chooser = doc.getElementById("registration-team");
+  const fill = doc.getElementById("registration-fill");
+  const status = doc.getElementById("registration-fill-status");
+  const teams = state.teams.filter(team => !team.archived && team.testData !== true).slice().sort(alphabetical);
+  for (const team of teams) {
+    const option = doc.createElement("option");
+    option.value = team.id;
+    option.textContent = team.name;
+    chooser.append(option);
+  }
+  fill.disabled = true;
+  chooser.addEventListener("change", () => { fill.disabled = !chooser.value; });
+  fill.onclick = () => {
+    if (!canManageRosters()) return;
+    const team = teams.find(item => item.id === chooser.value);
+    if (!team) return;
+    const players = state.players.filter(player => player.team === team.id && player.testData !== true)
+      .sort((a, b) => Number(a.reserve === true) - Number(b.reserve === true) || alphabetical(a, b));
+    if (players.length > 60) {
+      status.textContent = "O elenco tem mais de 60 jogadores. Preencha a ficha manualmente em partes.";
+      return;
+    }
+    const fields = [...doc.querySelectorAll(".registration-line,.registration-entry")];
+    if ((fields.some(field => field.textContent.trim()) ||
+        [...playersTable.querySelectorAll(".registration-lineup")].some(select => select.value)) &&
+        !sheet.confirm("Substituir os dados preenchidos nesta ficha pelos dados da equipe selecionada?")) return;
+
+    while (playersTable.rows.length < players.length) {
+      const row = playersTable.rows[0].cloneNode(true);
+      const index = playersTable.rows.length + 1;
+      row.cells[0].textContent = index;
+      for (const field of row.querySelectorAll("[aria-label]")) {
+        field.setAttribute("aria-label", field.getAttribute("aria-label").replace(/\d+$/, String(index)));
+      }
+      playersTable.append(row);
+    }
+    const teamValues = [team.name, team.short, team.manager, team.coach];
+    doc.querySelectorAll(".registration-line").forEach((field, index) => {
+      field.textContent = teamValues[index] || "";
+    });
+    [...playersTable.rows].forEach((row, index) => {
+      const player = players[index];
+      const values = player ? [player.name, player.className || team.className, player.number, player.position] : [];
+      row.querySelectorAll(".registration-entry").forEach((field, column) => {
+        field.textContent = values[column] || "";
+      });
+      const lineup = row.querySelector(".registration-lineup");
+      lineup.value = !player ? "" : player.reserve === true ? "Reserva/Banco" : player.reserve === false ? "Titular" : "";
+      lineup.nextElementSibling.textContent = lineup.value;
+    });
+    status.textContent = players.length ? `${players.length} jogador(es) inserido(s). Revise a ficha antes de imprimir.`
+      : "Dados da equipe inseridos. O elenco ainda está vazio.";
   };
 }
 
@@ -731,7 +789,13 @@ function registrationSheetHTML(championship,count,branding=state.partners,previe
       @media print{button,.registration-tools{display:none}body{margin:0}.registration-lineup{display:none}.registration-lineup-print{display:block}[contenteditable]:focus{outline:none}}
     ${partnerPrintCSS}</style>
     ${!custom&&style.watermark ? `<div class="watermark" aria-hidden="true">${esc(style.watermark)}</div>` : ""}
-    ${preview ? "" : '<div class="registration-tools"><button type="button" id="print">Imprimir / Salvar PDF</button><div>Clique nos campos para digitar. Escolha Titular ou Reserva/Banco na coluna Escalação. Deixe em branco o que quiser preencher à mão.</div></div>'}
+    ${preview ? "" : `<div class="registration-tools">
+      <button type="button" id="print">Imprimir / Salvar PDF</button>
+      ${canManageRosters() ? `<div><label>Equipe cadastrada <select id="registration-team"><option value="">Selecione uma equipe</option></select></label>
+        <button type="button" id="registration-fill">Preencher com o cadastro</button>
+        <span id="registration-fill-status" role="status"></span></div>` : ""}
+      <div>Clique nos campos para digitar. Escolha Titular ou Reserva/Banco na coluna Escalação. Deixe em branco o que quiser preencher à mão.</div>
+    </div>`}
     <header>${brand("header")}${!custom&&style.schoolLogo ? `<img src="${esc(style.schoolLogo)}" alt="Logo da escola">` : ""}${!custom&&hasLogo ? `<img src="${esc(logo)}" alt="Logo da organização">` : ""}
       <div><strong>${esc(style.school || systemDisplayName())}</strong><h1>Ficha de inscrição</h1></div>
     </header>
