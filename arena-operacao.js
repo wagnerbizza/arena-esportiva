@@ -3,6 +3,10 @@
  'use strict';if(window.ArenaOperation)return;
  const defaults=['points','time','substitutions','coach','events','pauses','roster','notices','notes','championship','history'];
  const labels={points:'Pontos e cartões',time:'Tempo e acréscimos',substitutions:'Substituições de atletas e goleiros',coach:'Troca de técnico',events:'Cartões, faltas e outros lances',pauses:'Situação e etapas',roster:'Elenco da partida',notices:'Avisos ao público',history:'Histórico e anulações',notes:'Observações da súmula',championship:'Vínculo ao campeonato'};
+ const icon=(path)=>'<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg>';
+ const star=icon('<path d="m12 3 2.8 5.7 6.3.9-4.6 4.4 1.1 6.3-5.6-3-5.6 3 1.1-6.3-4.6-4.4 6.3-.9Z"/>');
+ const chevron=icon('<path d="m6 9 6 6 6-6"/>');
+ const grip=icon('<path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" stroke-width="3.5"/>');
  const sessionPreferences=new Map();
  const panelColors={azul:['Azul','#45a4ff'],verde:['Verde','#49c99a'],laranja:['Laranja','#f4a858'],roxo:['Roxo','#b58cff'],rosa:['Rosa','#ee80ac']};
  const panelTitle=(prefs,id)=>prefs.names?.[id]||labels[id];
@@ -11,7 +15,9 @@
  function save(root,prefs){sessionPreferences.set(root.dataset.opKey,prefs);try{localStorage.setItem(root.dataset.opKey,JSON.stringify(prefs));}catch{const label=root.querySelector('[data-op-save-status]');if(label)label.textContent='Preferência aplicada nesta tela; o navegador não permitiu salvar.';return;}const label=root.querySelector('[data-op-save-status]');if(label)label.textContent='Preferências salvas para esta conta neste navegador.';}
  function panel(id,node){if(!node)return null;node.removeAttribute('hidden');node.classList?.remove('card');const section=document.createElement('section');section.id='arena-op-'+id;section.className='card arena-op-panel';section.dataset.opPanel=id;section.tabIndex=-1;section.innerHTML='<div class="arena-op-heading"><h2>'+labels[id]+'</h2><button type="button" data-op-favorite="'+id+'" aria-pressed="false" title="Favoritar '+labels[id]+'">Favoritar</button></div>';const toggle=document.createElement('button');toggle.type='button';toggle.dataset.opFold=id;
   toggle.setAttribute('aria-controls',section.id+'-content');const customize=document.createElement('button');customize.type='button';customize.dataset.opCustomize=id;customize.textContent='⋯';
-  section.querySelector('.arena-op-heading').append(toggle,customize);
+  const heading=section.querySelector('.arena-op-heading');
+  const handle=document.createElement('button');handle.type='button';handle.dataset.opDrag='';
+  handle.innerHTML=grip;heading.prepend(handle);heading.append(toggle,customize);
   const content=document.createElement('div');content.id=section.id+'-content';content.dataset.opContent='';
   content.append(node);section.append(content);return section;}
  function toolbar(root,prefs){const nav=root.querySelector('[data-op-shortcuts]');nav.replaceChildren();const panels=[...root.querySelectorAll('[data-op-panel]')];for(const section of panels){const id=section.dataset.opPanel,fold=section.querySelector('[data-op-fold]'),closed=prefs.collapsed.includes(id);
@@ -20,11 +26,15 @@
    section.querySelector('[data-op-customize]').setAttribute('aria-label','Personalizar '+title);
    if(color)section.style.setProperty('--arena-op-box-color',color[1]);
    else section.style.removeProperty('--arena-op-box-color');
-   fold.textContent=closed?'Expandir':'Recolher';fold.setAttribute('aria-expanded',String(!closed));
-   fold.setAttribute('aria-label',fold.textContent+' '+title);section.querySelector('[data-op-content]').hidden=closed;
-   const favorite=prefs.favorites.includes(id),button=section.querySelector('[data-op-favorite]');button.setAttribute('aria-pressed',String(favorite));button.textContent=favorite?'Favorito':'Favoritar';button.title=(favorite?'Remover dos favoritos: ':'Favoritar: ')+labels[id];if(favorite){const jump=document.createElement('button');jump.type='button';jump.dataset.opJump=id;jump.textContent=title;nav.append(jump);}}
-  if(!nav.children.length)nav.textContent='Use Favoritar nas seções para criar seus atalhos de operação.';
-  const list=root.querySelector('[data-op-order]');list.innerHTML=panels.map((section,i)=>{const id=section.dataset.opPanel;return '<div class="arena-op-order-row"><span>'+escape(panelTitle(prefs,id))+'</span><button type="button" data-op-move="'+id+'" data-op-direction="first" '+(i===0?'disabled':'')+'>Colocar primeiro</button><button type="button" data-op-move="'+id+'" data-op-direction="last" '+(i===panels.length-1?'disabled':'')+'>Colocar por último</button><button type="button" data-op-move="'+id+'" data-op-direction="up" '+(i===0?'disabled':'')+' aria-label="Subir '+labels[id]+'">Subir</button><button type="button" data-op-move="'+id+'" data-op-direction="down" '+(i===panels.length-1?'disabled':'')+' aria-label="Descer '+labels[id]+'">Descer</button></div>';}).join('');
+   const handle=section.querySelector('[data-op-drag]');
+   handle.title='Arrastar '+title+' • Alt + ↑ ou ↓ para mover pelo teclado';
+   handle.setAttribute('aria-label','Reordenar '+title);
+   handle.setAttribute('aria-keyshortcuts','Alt+ArrowUp Alt+ArrowDown');
+   fold.innerHTML=chevron;fold.setAttribute('aria-expanded',String(!closed));
+   fold.setAttribute('aria-label',(closed?'Expandir':'Recolher')+' '+title);section.querySelector('[data-op-content]').hidden=closed;
+   const favorite=prefs.favorites.includes(id),button=section.querySelector('[data-op-favorite]');button.setAttribute('aria-pressed',String(favorite));button.innerHTML=star;button.title=(favorite?'Remover dos favoritos: ':'Favoritar: ')+title;button.setAttribute('aria-label',button.title);if(favorite){const jump=document.createElement('button');jump.type='button';jump.dataset.opJump=id;jump.textContent=title;nav.append(jump);}}
+  if(!nav.children.length)nav.textContent='Marque uma estrela para adicionar um atalho.';
+  const list=root.querySelector('[data-op-order]');list.innerHTML=panels.map((section,i)=>{const id=section.dataset.opPanel;return '<div class="arena-op-order-row"><span>'+escape(panelTitle(prefs,id))+'</span><button type="button" data-op-favorite="'+id+'" aria-pressed="'+prefs.favorites.includes(id)+'">'+(prefs.favorites.includes(id)?'Favorito':'Favoritar')+'</button><button type="button" data-op-move="'+id+'" data-op-direction="first" '+(i===0?'disabled':'')+'>Colocar primeiro</button><button type="button" data-op-move="'+id+'" data-op-direction="last" '+(i===panels.length-1?'disabled':'')+'>Colocar por último</button><button type="button" data-op-move="'+id+'" data-op-direction="up" '+(i===0?'disabled':'')+' aria-label="Subir '+labels[id]+'">Subir</button><button type="button" data-op-move="'+id+'" data-op-direction="down" '+(i===panels.length-1?'disabled':'')+' aria-label="Descer '+labels[id]+'">Descer</button></div>';}).join('');
  }
  function apply(root,prefs){root.classList.toggle('arena-op-compact',prefs.compact);root.classList.toggle('arena-op-columns',prefs.columns);const grid=root.querySelector('[data-op-grid]');for(const id of prefs.order){const p=grid.querySelector('[data-op-panel="'+id+'"]');if(p && p!==grid.lastElementChild)grid.append(p);}toolbar(root,prefs);}
  // Reserva a altura real do Menu, inclusive com texto ampliado ou tela girada.
@@ -101,6 +111,85 @@
   for(const [id,node]of Object.entries({points:quick,time,substitutions:substitution,coach,events:eventsWrap,pauses,roster,notices,history,notes,championship})){const section=panel(id,node);if(section)grid.append(section);}
   root.querySelector('[data-op-compact]').checked=prefs.compact;root.querySelector('[data-op-columns]').checked=prefs.columns;apply(root,prefs);return root.outerHTML;
  }
+ function storePanelOrder(root,grid){
+  const prefs=read(root.dataset.opKey);
+  const order=[...grid.children].map(panel=>panel.dataset.opPanel);
+  prefs.order=[...order,...prefs.order.filter(id=>!order.includes(id))];
+  toolbar(root,prefs);save(root,prefs);
+ }
+ let drag=null;
+ function clearDrop(){
+  if(drag?.target)drag.target.removeAttribute('data-op-drop');
+  if(drag)drag.target=null;
+ }
+ function updateDrop(){
+  if(!drag)return;
+  clearDrop();
+  const target=document.elementFromPoint(drag.x,drag.y)?.closest('[data-op-panel]');
+  if(!target||target===drag.panel||target.parentElement!==drag.grid)return;
+  const rect=target.getBoundingClientRect();
+  const inSameRow=[...drag.grid.children].some(panel=>panel!==target&&
+   Math.abs(panel.getBoundingClientRect().top-rect.top)<2);
+  drag.after=inSameRow?drag.x>rect.left+rect.width/2:drag.y>rect.top+rect.height/2;
+  drag.target=target;
+  target.dataset.opDrop=drag.after?'after':'before';
+ }
+ function dragFrame(){
+  if(!drag?.started)return;
+  if(!drag.panel.isConnected){finishDrag(false);return;}
+  const distance=drag.y<80?drag.y-80:drag.y>innerHeight-80?drag.y-innerHeight+80:0;
+  if(distance)window.scrollBy({top:Math.max(-18,Math.min(18,distance/4)),behavior:'instant'});
+  updateDrop();
+  drag.frame=requestAnimationFrame(dragFrame);
+ }
+ function finishDrag(commit){
+  if(!drag)return;
+  const {panel,grid,root,target,after,frame,pointer,handle}=drag;
+  clearDrop();drag=null;
+  if(frame)cancelAnimationFrame(frame);
+  if(handle.hasPointerCapture?.(pointer))handle.releasePointerCapture(pointer);
+  panel.removeAttribute('data-op-dragging');
+  if(commit&&target?.parentElement===grid&&panel.parentElement===grid){
+   if(after)target.after(panel);else target.before(panel);
+   storePanelOrder(root,grid);
+  }
+ }
+ document.addEventListener('pointerdown',event=>{
+  const handle=event.target.closest('[data-op-drag]');
+  if(!handle||event.button!==0||!event.isPrimary||drag)return;
+  const panel=handle.closest('[data-op-panel]'),root=panel.closest('.arena-operation-workspace');
+  drag={panel,root,grid:panel.parentElement,handle,pointer:event.pointerId,x:event.clientX,y:event.clientY,
+   startX:event.clientX,startY:event.clientY,started:false};
+  handle.setPointerCapture?.(event.pointerId);
+ });
+ document.addEventListener('pointermove',event=>{
+  if(!drag||drag.pointer!==event.pointerId)return;
+  drag.x=event.clientX;drag.y=event.clientY;
+  if(!drag.started && Math.hypot(drag.x-drag.startX,drag.y-drag.startY)>5){
+   drag.started=true;drag.panel.dataset.opDragging='';dragFrame();
+  }
+ });
+ document.addEventListener('pointerup',event=>{
+  if(drag?.pointer!==event.pointerId)return;
+  drag.x=event.clientX;drag.y=event.clientY;
+  if(drag.started)updateDrop();
+  finishDrag(drag.started);
+ });
+ for(const type of ['pointercancel','lostpointercapture'])document.addEventListener(type,event=>{
+  if(drag?.pointer===event.pointerId)finishDrag(false);
+ });
+ document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&drag){finishDrag(false);return;}
+  const handle=event.target.closest('[data-op-drag]');
+  if(!handle||!event.altKey||!['ArrowUp','ArrowDown'].includes(event.key))return;
+  event.preventDefault();
+  const panel=handle.closest('[data-op-panel]'),grid=panel.parentElement;
+  const neighbor=event.key==='ArrowUp'?panel.previousElementSibling:panel.nextElementSibling;
+  if(!neighbor)return;
+  if(event.key==='ArrowUp')neighbor.before(panel);else neighbor.after(panel);
+  storePanelOrder(panel.closest('.arena-operation-workspace'),grid);
+  handle.focus({preventScroll:true});
+ });
  function customizePanel(section){
   if(!section)return;
   const root=section.closest('.arena-operation-workspace'),key=root.dataset.opKey,id=section.dataset.opPanel;

@@ -80,3 +80,17 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 .arena-op-customize::backdrop { background:#0009; }
 .arena-op-customize form { display:grid; gap:12px; }
 .arena-op-heading [data-op-customize] { min-width:44px; font-size:1.25rem; }
+
+.arena-op-heading :is([data-op-drag],[data-op-fold],[data-op-favorite]) {
+  min-width:44px; min-height:44px; padding:0; display:grid; place-items:center;
+}
+.arena-op-heading [data-op-drag] {
+  touch-action:none; user-select:none; -webkit-touch-callout:none; cursor:grab;
+}
+.arena-op-heading [data-op-drag]:active { cursor:grabbing; }
+.arena-op-heading [data-op-favorite][aria-pressed="true"] svg { fill:currentColor; }
+.arena-op-heading [data-op-fold][aria-expanded="true"] svg { transform:rotate(180deg); }
+.arena-op-panel[data-op-dragging] { opacity:.6; }
+.arena-op-panel[data-op-drop="before"] { box-shadow:inset 0 3px var(--accent); }
+.arena-op-panel[data-op-drop="after"] { box-shadow:inset 0 -3px var(--accent); }
+@media print { [data-op-drag] { display:none!important; } }
