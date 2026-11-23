@@ -215,11 +215,73 @@ function syncChampionshipDraft() {
   if (c) { f.elements.sport.value = c.sport; f.elements.competition.value = championshipTitle(c); }
   f.elements.competition.readOnly = Boolean(c);
 }
+const phaseOptions=["Grupos","Oitavas de final","Quartas de final","Semifinal","Disputa de terceiro lugar","Final"];
+let phaseEdition="",phaseMatch="",phaseAudit=[];
+function matchPhase(match){
+ const info=state.matchPhases?.find(item=>item.id===match.id);
+ return info?.championshipId===match.championshipId && info?.phase ? info:null;
+}
+function phaseLabel(match){
+ const info=matchPhase(match);
+ return info?[info.phase,info.group,info.round].filter(Boolean).join(" · "):"";
+}
+function matchCompetitionLabel(match){
+ return [match.competition||"Partida avulsa",phaseLabel(match)].filter(Boolean).join(" — ");
+}
+function phasesView(){
+ const edition=(state.championships||[]).find(item=>item.id===phaseEdition);
+ if(role!=="admin"||!edition)return "";
+ const matches=state.matches.filter(match=>match.championshipId===edition.id&&match.testData!==true);
+ const selectedMatch=matches.find(match=>match.id===phaseMatch)||matches[0];
+ const info=selectedMatch?matchPhase(selectedMatch):null;
+ const matchOptions=matches.map(match=>`<option value="${esc(match.id)}" ${match.id===selectedMatch?.id?"selected":""}>${esc(name(match.home)+" × "+name(match.away)+" · "+format(match.date))}</option>`).join("");
+ const grouped=new Map();
+ for(const match of matches){
+  const phase=matchPhase(match);
+  const key=phase?[phase.phase,phase.group].filter(Boolean).join(" · "):"Sem fase";
+  if(!grouped.has(key))grouped.set(key,[]);
+  grouped.get(key).push(match);
+ }
+ const keys=[...grouped.keys()].sort((a,b)=>(phaseOptions.findIndex(phase=>a.startsWith(phase))+7)%7-(phaseOptions.findIndex(phase=>b.startsWith(phase))+7)%7||a.localeCompare(b,"pt-BR"));
+ const history=phaseAudit.filter(row=>row.championshipId===edition.id);
+ return `<section class="card" id="arena-fases"><h2>Grupos e chaves</h2><p>${esc(championshipTitle(edition))} · ${esc(edition.sport)} · ${esc(edition.category||"Sem categoria")}</p>
+ ${selectedMatch?`<form id="arena-phase-form"><div class="formgrid">
+ <label>Partida<select name="matchId" data-phase-match>${matchOptions}</select></label>
+ <label>Fase<select name="phase"><option value="">Sem fase</option>${phaseOptions.map(value=>`<option ${info?.phase===value?"selected":""}>${esc(value)}</option>`).join("")}</select></label>
+ ${field("Grupo ou chave","group","text",`maxlength="40" placeholder="Ex.: Grupo A ou Chave 2" value="${esc(info?.group||"")}"`)}
+ ${field("Rodada ou confronto","round","text",`maxlength="40" placeholder="Ex.: Rodada 1 ou Jogo 2" value="${esc(info?.round||"")}"`)}
+ </div><button class="primary" ${C.demo?"disabled":""}>Salvar fase da partida</button></form>
+ <h3>Partidas por fase</h3>${keys.map(key=>`<section><h4>${esc(key)}</h4><ul>${grouped.get(key).map(match=>`<li>${esc(name(match.home)+" × "+name(match.away))} · ${esc(matchPhase(match)?.round||match.status)} · ${esc(gameResult(match).join(" × "))}</li>`).join("")}</ul></section>`).join("")}
+ <button type="button" data-phase-audit="${esc(selectedMatch.id)}" ${C.demo?"disabled":""}>Consultar histórico de alterações</button>
+ ${history.length?`<ul>${history.map(row=>`<li>${esc(format(row.updatedAt?.toDate?.()||row.updatedAt))} · ${esc(row.actor)} · ${esc([row.phase,row.group,row.round].filter(Boolean).join(" · ")||"Sem fase")}</li>`).join("")}</ul>`:""}`:"<p>Vincule uma partida a esta edição para organizar as fases.</p>"}</section>`;
+}
+document.addEventListener("click",async event=>{
+ const open=event.target.closest("[data-phase-edition]");
+ const audit=event.target.closest("[data-phase-audit]");
+ if(role!=="admin")return;
+ if(open){
+  phaseEdition=open.dataset.phaseEdition;phaseMatch="";phaseAudit=[];render();
+  requestAnimationFrame(()=>document.getElementById("arena-fases")?.scrollIntoView({block:"start"}));
+ }else if(audit&&!C.demo){
+  const id=audit.dataset.phaseAudit;
+  try {
+   const rows=await cloud.loadMatchPhaseHistory(id);
+   const current=document.querySelector("#arena-phase-form [name=matchId]");
+   if(current?.value!==id)return;
+   phaseAudit=rows;refresh();
+   if(!rows.length)toast("Nenhuma alteração de fase registrada.");
+  }catch(error){toast(error.message,true);}
+ }
+});
+document.addEventListener("change",event=>{
+ if(!event.target.matches("[data-phase-match]"))return;
+ phaseMatch=event.target.value;phaseAudit=[];render();
+});
 function championshipsView() {
   const c = (state.championships || []).find((c) => c.id === editedChampionshipId);
   const draft = championshipDraft && championshipDraft.id === (c?.id || "") ? championshipDraft : c;
   const value = (key) => esc(draft?.[key] || "");
-  return `<div class="card"><h2>${c ? "Editar campeonato / temporada" : "Cadastrar campeonato / temporada"}</h2><p class="muted">Cadastre a primeira modalidade e categoria. Depois, use Adicionar modalidade ou categoria no cartão da edição.</p><form id="championship"><input type="hidden" name="recordId" value="${value("id")}"><div class="formgrid">${field("Nome do campeonato", "name", "text", `required maxlength="100" value="${value("name")}"`)}${field("Edição / temporada", "season", "text", `required maxlength="40" placeholder="Ex.: 2026 ou 2º semestre de 2026" value="${value("season")}"`)}<label>Modalidade<select name="sport" required>${D.SPORTS.map((sport) => `<option ${draft?.sport === sport ? "selected" : ""} ${c && c.sport !== sport ? "disabled" : ""}>${esc(sport)}</option>`).join("")}</select><small>A modalidade fica fixa nesta categoria após salvar.</small></label>${field("Categoria", "category", "text", `maxlength="150" placeholder="Ex.: Livre, Sub-17, Feminino" value="${value("category")}"`)}<label>Situação<select name="status">${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${draft?.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></label></div><button class="primary">${c ? "Salvar alterações" : "Cadastrar campeonato"}</button> ${c ? '<button type="button" data-new-championship>Cancelar edição / novo cadastro</button>' : ""}</form><p class="muted">Encerrar o campeonato impede criar novas partidas vinculadas; não encerra partidas automaticamente. Alterações do nome ou da edição não reescrevem súmulas existentes.</p></div><section class="card list-filters"><h2>Campeonatos cadastrados</h2><div class="list-controls"><label class="list-search">Buscar campeonato, edição, modalidade ou categoria<input type="search" data-championship-filter="query" value="${esc(championshipQuery)}" placeholder="Digite para buscar…"></label><label>Situação<select data-championship-filter="status"><option value="">Todas as situações</option>${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${championshipStatus === status ? "selected" : ""}>${status}</option>`).join("")}</select></label><button type="button" data-clear-championship-filters>Limpar filtros</button></div><p id="championship-count" class="muted" role="status">${championshipCount()}</p></section><div class="grid" id="championship-results">${championshipCards()}</div>`;
+  return `<div class="card"><h2>${c ? "Editar campeonato / temporada" : "Cadastrar campeonato / temporada"}</h2><p class="muted">Cadastre a primeira modalidade e categoria. Depois, use Adicionar modalidade ou categoria no cartão da edição.</p><form id="championship"><input type="hidden" name="recordId" value="${value("id")}"><div class="formgrid">${field("Nome do campeonato", "name", "text", `required maxlength="100" value="${value("name")}"`)}${field("Edição / temporada", "season", "text", `required maxlength="40" placeholder="Ex.: 2026 ou 2º semestre de 2026" value="${value("season")}"`)}<label>Modalidade<select name="sport" required>${D.SPORTS.map((sport) => `<option ${draft?.sport === sport ? "selected" : ""} ${c && c.sport !== sport ? "disabled" : ""}>${esc(sport)}</option>`).join("")}</select><small>A modalidade fica fixa nesta categoria após salvar.</small></label>${field("Categoria", "category", "text", `maxlength="150" placeholder="Ex.: Livre, Sub-17, Feminino" value="${value("category")}"`)}<label>Situação<select name="status">${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${draft?.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></label></div><button class="primary">${c ? "Salvar alterações" : "Cadastrar campeonato"}</button> ${c ? '<button type="button" data-new-championship>Cancelar edição / novo cadastro</button>' : ""}</form><p class="muted">Encerrar o campeonato impede criar novas partidas vinculadas; não encerra partidas automaticamente. Alterações do nome ou da edição não reescrevem súmulas existentes.</p></div><section class="card list-filters"><h2>Campeonatos cadastrados</h2><div class="list-controls"><label class="list-search">Buscar campeonato, edição, modalidade ou categoria<input type="search" data-championship-filter="query" value="${esc(championshipQuery)}" placeholder="Digite para buscar…"></label><label>Situação<select data-championship-filter="status"><option value="">Todas as situações</option>${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${championshipStatus === status ? "selected" : ""}>${status}</option>`).join("")}</select></label><button type="button" data-clear-championship-filters>Limpar filtros</button></div><p id="championship-count" class="muted" role="status">${championshipCount()}</p></section><div class="grid" id="championship-results">${championshipCards()}</div>${phasesView()}`;
 }
 function visibleChampionships() {
   const q = searchText(championshipQuery);
@@ -246,6 +308,7 @@ function championshipCards() {
         <div class="toolbar">
           <button type="button" data-edit-championship="${esc(c.id)}">Editar</button>
           <button type="button" data-championship-games="${esc(c.id)}">Ver partidas</button>
+          ${role==="admin"?`<button type="button" data-phase-edition="${esc(c.id)}">Grupos e chaves</button>`:""}
           <button type="button" data-registration-sheet="${esc(c.id)}">Ficha de inscrição</button>
         </div>
       </section>`;
@@ -1274,7 +1337,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=mesa-sincronizada-10");
+    const { connectSpark } = await import("./spark-store.js?v=arena-fases-12");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -1439,7 +1502,7 @@ function matchCard(m, button = false) {
   };
   const result = isFinished ? (sc[0] === sc[1] ? "Resultado final: empate" :
     "Vencedor: " + (sc[0] > sc[1] ? a.name : b.name)) : "";
-  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score arena-team-scoreboard">${teamScore(a, 0)}<div class="arena-score-center"><span aria-hidden="true">×</span>${liveBall}</div>${teamScore(b, 1)}</div>${result ? `<p class="arena-match-result">${esc(result)}</p>` : ""}${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${timelineControl(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && admin && role === "admin" && cloud && !C.demo && finalStatuses.includes(m.status) ? `<details><summary>Mais ações</summary><button type="button" data-public-visibility="${esc(m.id)}">${m.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button></details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
+  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(matchCompetitionLabel(m))}</p><div class="score arena-team-scoreboard">${teamScore(a, 0)}<div class="arena-score-center"><span aria-hidden="true">×</span>${liveBall}</div>${teamScore(b, 1)}</div>${result ? `<p class="arena-match-result">${esc(result)}</p>` : ""}${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${timelineControl(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && admin && role === "admin" && cloud && !C.demo && finalStatuses.includes(m.status) ? `<details><summary>Mais ações</summary><button type="button" data-public-visibility="${esc(m.id)}">${m.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button></details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
 }
 
 function liveStatusPanel(context) {
@@ -1903,7 +1966,7 @@ function prepare(rows) {
 // 6 — Relatórios. PDF usa a impressão do navegador; Excel contém várias abas.
 function reportPDFData(m,branding=state.partners) {
   return {
-          title: m.competition || "Partida avulsa",
+          title: matchCompetitionLabel(m),
           organizationLogo: state.settings?.logo || "",
           documentBranding:window.ArenaDocuments?.model(branding,"matchSheets",state.settings.logo||"",registrationStyleWithCurrentLogos().schoolLogo||"")||null,
           sport: m.sport,
@@ -1975,7 +2038,7 @@ function reportMatch(m) {
   const logoHeader = documentBrandingActive("matchSheets")
     ? (brandingHeader ? `<div style="flex:0 1 auto;min-width:0;max-width:42%">${brandingHeader}</div>` : "")
     : organizationLogoMarkup;
-  return `<article class="card report-sheet"><div class="report-header" style="display:flex;align-items:center;gap:10px"><div style="display:flex;align-items:center;min-width:0;flex:1;gap:12px">${logoHeader}<div style="min-width:0"><span class="tag">SÚMULA DA PARTIDA</span><h2>${esc(m.competition || "Partida avulsa")} • ${esc(m.sport)}</h2></div></div><span class="report-brand">WagnerBIZZA</span></div><div class="report-score"><div>${badge(team(m.home))}<strong>${esc(name(m.home))}</strong></div><b>${sc.join(" × ")}</b><div>${badge(team(m.away))}<strong>${esc(name(m.away))}</strong></div></div><div class="report-meta"><p><b>Data:</b> ${esc(format(m.date))}<br><b>Local:</b> ${esc(m.place || "Não informado")}</p><p><b>Arbitragem / mesa:</b> ${esc(m.referees || "Não informada")}<br><b>Situação:</b> ${esc(m.status)} • <b>Etapa:</b> ${esc(m.stage)} • <b>Relógio:</b> ${m.clock ? M.clockText(m) : "Não utilizado"}</p></div>${m.publicNotice ? '<p class="report-alert"><b>Aviso:</b> ' + esc(m.publicNotice) + "</p>" : ""}${m.sets.length ? "<p><b>Parciais:</b> " + m.sets.map((s) => esc(s.score.join(" × "))).join(" / ") + "</p>" : ""}<div class="roster-grid">${roster}</div><h3>Histórico e ocorrências</h3><div class="tablewrap report-events"><table><thead><tr><th>Horário / jogo</th><th>Etapa</th><th>Acontecimento</th><th>Equipe / atleta</th><th>Descrição / motivo</th><th>Responsável</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Nenhum lançamento carregado.</td></tr>'}</tbody></table></div><small>Nomes antigos são recuperados do cadastro disponível; quando ausentes, o UID é preservado.</small><section class="report-notes"><h3>Observações da súmula</h3><p>${esc(m.notes || "Sem observações.")}</p></section><section class="signatures"><div>Árbitro(a): __________________________</div><div>Mesa: __________________________</div><div>Responsável da equipe da casa: __________________________</div><div>Responsável da equipe visitante: __________________________</div><small>Súmula do sistema. Campos para assinatura em papel.</small></section>${partnerMarkup("matchSheets")}</article>`;
+  return `<article class="card report-sheet"><div class="report-header" style="display:flex;align-items:center;gap:10px"><div style="display:flex;align-items:center;min-width:0;flex:1;gap:12px">${logoHeader}<div style="min-width:0"><span class="tag">SÚMULA DA PARTIDA</span><h2>${esc(matchCompetitionLabel(m))} • ${esc(m.sport)}</h2></div></div><span class="report-brand">WagnerBIZZA</span></div><div class="report-score"><div>${badge(team(m.home))}<strong>${esc(name(m.home))}</strong></div><b>${sc.join(" × ")}</b><div>${badge(team(m.away))}<strong>${esc(name(m.away))}</strong></div></div><div class="report-meta"><p><b>Data:</b> ${esc(format(m.date))}<br><b>Local:</b> ${esc(m.place || "Não informado")}</p><p><b>Arbitragem / mesa:</b> ${esc(m.referees || "Não informada")}<br><b>Situação:</b> ${esc(m.status)} • <b>Etapa:</b> ${esc(m.stage)} • <b>Relógio:</b> ${m.clock ? M.clockText(m) : "Não utilizado"}</p></div>${m.publicNotice ? '<p class="report-alert"><b>Aviso:</b> ' + esc(m.publicNotice) + "</p>" : ""}${m.sets.length ? "<p><b>Parciais:</b> " + m.sets.map((s) => esc(s.score.join(" × "))).join(" / ") + "</p>" : ""}<div class="roster-grid">${roster}</div><h3>Histórico e ocorrências</h3><div class="tablewrap report-events"><table><thead><tr><th>Horário / jogo</th><th>Etapa</th><th>Acontecimento</th><th>Equipe / atleta</th><th>Descrição / motivo</th><th>Responsável</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Nenhum lançamento carregado.</td></tr>'}</tbody></table></div><small>Nomes antigos são recuperados do cadastro disponível; quando ausentes, o UID é preservado.</small><section class="report-notes"><h3>Observações da súmula</h3><p>${esc(m.notes || "Sem observações.")}</p></section><section class="signatures"><div>Árbitro(a): __________________________</div><div>Mesa: __________________________</div><div>Responsável da equipe da casa: __________________________</div><div>Responsável da equipe visitante: __________________________</div><small>Súmula do sistema. Campos para assinatura em papel.</small></section>${partnerMarkup("matchSheets")}</article>`;
 }
 function certificatePanel() {
   return `<section class="card certificate-panel noprint"><span class="tag">EMISSÃO DE DOCUMENTOS</span><h2>Certificados</h2><p class="muted">Preencha os dados e abra a visualização de impressão para imprimir ou salvar o certificado em PDF. Também é possível baixar os dados preenchidos em JSON; o sistema não mantém um arquivo permanente de certificados emitidos.</p><datalist id="certificateChampionships">${(state.championships||[]).map(c=>`<option value="${esc(championshipTitle(c))}">${esc(c.sport)}</option>`).join("")}</datalist><form id="arenaCertificateForm"><div class="formgrid">${field("Nome completo do participante", "certificateName", "text", 'required maxlength="120" placeholder="Nome que aparecerá no certificado"')}${field("Participação / reconhecimento", "certificateRole", "text", 'required maxlength="120" value="Participação"')}${field("Evento / campeonato", "certificateEvent", "text", 'required maxlength="150" list="certificateChampionships" placeholder="Nome do evento ou campeonato"')}${field("Modalidade", "certificateSport", "text", 'maxlength="80" placeholder="Ex.: Futebol, Basquete, Vôlei"')}${field("Local", "certificatePlace", "text", 'maxlength="120" placeholder="Cidade ou local do evento"')}${field("Data de emissão", "certificateDate", "date", `required value="${new Date().toISOString().slice(0,10)}"`)}${field("Responsável pela emissão", "certificateIssuer", "text", 'required maxlength="100" value="WagnerBIZZA"')}</div><div class="toolbar"><button class="primary" type="submit">Visualizar / imprimir ou salvar em PDF</button><button type="button" data-certificate-json>Baixar dados do certificado (JSON)</button></div></form><div class="certificate-institutional"><h3>Certificado institucional do projeto</h3><p>Documento de reconhecimento da idealização e do desenvolvimento da plataforma Arena Esportiva.</p><div class="toolbar"><button type="button" data-institutional-certificate>Visualizar / imprimir em PDF</button><button type="button" data-institutional-certificate-json>Baixar dados institucionais (JSON)</button></div></div><p class="muted">Cada emissão recebe um código identificador. Nesta etapa, o código identifica o documento, mas ainda não representa uma validação pública online nem um registro permanente no Firebase.</p></section>`;
@@ -2048,7 +2111,7 @@ function documentMatches(includeSelection = true) {
    && (!f.championship||m.championshipId===f.championship)
    && (!f.sport||m.sport===f.sport) && (!f.status||m.status===f.status)
    && (!f.from||day>=f.from) && (!f.to||day<=f.to)
-   && (!f.query||normalize([m.id,m.competition,c?.name,c?.season,c?.category,name(m.home),name(m.away),m.place].join(" ")).includes(normalize(f.query)));
+   && (!f.query||normalize([m.id,m.competition,phaseLabel(m),c?.name,c?.season,c?.category,name(m.home),name(m.away),m.place].join(" ")).includes(normalize(f.query)));
  }).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
 }
 function responsibleLabel(e) {
@@ -2086,7 +2149,7 @@ async function prepareReportImages(selector) {
 function sportsReportPreview(){
  const matches=documentMatches();
  if(!matches.length)return `<section class="card">${documentReportHeader("Relatório esportivo","reports")}${empty("Nenhuma partida corresponde à seleção.")}${partnerMarkup("reports")}</section>`;
- return `<section class="card">${documentReportHeader("Relatório esportivo","reports")}<h3>Resultados das partidas • ${matches.length}</h3>${table(["Modalidade","Campeonato","Partida","Placar","Data","Local","Situação"],matches.map(m=>tr([m.sport,m.competition||"Partida avulsa",name(m.home)+" × "+name(m.away),gameResult(m).join(" × "),format(m.date),m.place||"Não informado",m.status])))}${partnerMarkup("reports")}</section>`;
+ return `<section class="card">${documentReportHeader("Relatório esportivo","reports")}<h3>Resultados das partidas • ${matches.length}</h3>${table(["Modalidade","Campeonato","Partida","Placar","Data","Local","Situação"],matches.map(m=>tr([m.sport,matchCompetitionLabel(m),name(m.home)+" × "+name(m.away),gameResult(m).join(" × "),format(m.date),m.place||"Não informado",m.status])))}${partnerMarkup("reports")}</section>`;
 }
 function reports() {
  return `<section class="card noprint"><h2>Relatórios esportivos</h2><p>Visualize resultados das partidas e exporte os dados selecionados. O Excel detalhado contém resultados, elencos, eventos e parciais.</p>${reportMatchSelector()}<div class="toolbar"><button type="button" data-sports-report-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-report-excel class="primary">Baixar relatório (Excel)</button><button type="button" data-sports-report-json>Baixar relatório (JSON)</button></div></section><div id="reportOutput">${sportsReportPreview()}</div>`;
@@ -2143,6 +2206,9 @@ function exportExcel() {
       "ID da partida": m.id,
       Modalidade: m.sport,
       Competição: m.competition,
+      Fase: matchPhase(m)?.phase || "",
+      "Grupo ou chave": matchPhase(m)?.group || "",
+      "Rodada ou confronto": matchPhase(m)?.round || "",
       "Equipe da casa": name(m.home),
       "Equipe visitante": name(m.away),
       "Pontos casa": D.score(m)[0],
@@ -2629,6 +2695,11 @@ document.addEventListener("submit", async (e) => {
       if(f.id==="team"){teamFormVisible=false;teamEditorId="";selectedTeamId=d.id||"";teamProfileTab="data";render();}
       else if (f.id === "championship") { editedChampionshipId = ""; championshipDraft=null; render(); }
       else if (!C.demo) f.reset();
+    } else if (f.id === "arena-phase-form") {
+      if(role!=="admin"||C.demo)throw Error("Disponível na administração conectada.");
+      if(d.phase&&!phaseOptions.includes(d.phase))throw Error("Fase inválida.");
+      await cloud.saveMatchPhase(d.matchId,phaseEdition,d);
+      toast("Fase salva.");
     } else if (f.id === "championship-link") {
       await dispatch({type:"championshipLink", matchId:selected, championshipId:d.championshipId, reason:d.reason});
     } else if (f.id === "clock-config") {
@@ -3089,7 +3160,7 @@ document.addEventListener("click", async (e) => {
       if(!matches.length)throw Error("Não há partidas para exportar nesta seleção.");
       download(b.hasAttribute("data-match-json")?"sumulas-esportivas.json":"relatorio-esportivo.json",JSON.stringify({
         formato:b.hasAttribute("data-match-json")?"arena-sumulas-v1":"arena-relatorio-esportivo-v1",
-        geradoEm:new Date().toISOString(),partidas:matches
+        geradoEm:new Date().toISOString(),partidas:matches.map(match=>({...match,faseCampeonato:matchPhase(match)}))
       },(_key,value)=>value?.toDate?value.toDate().toISOString():value,2));
     } else if (b.hasAttribute("data-report-excel")) {
       if (!C.demo) {

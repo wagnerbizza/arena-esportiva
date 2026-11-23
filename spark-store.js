@@ -132,6 +132,15 @@ export async function connectSpark({
   }
   function listen(full) {
     state = D.fresh();
+    if (full && isOwner()) {
+      // A coleção de fases é independente das partidas e do status da conexão.
+      const phaseEpoch=dataEpoch;
+      stops.push(F.onSnapshot(F.collection(database,"arenaMatchPhases"), snapshot=>{
+        if(phaseEpoch!==dataEpoch)return;
+        state.matchPhases=snapshot.docs.map(doc=>({...doc.data(),id:doc.id}));
+        publish();
+      },()=>{}));
+    }
     if (publicBranding) state.settings = publicBranding;
     const ownerView = full && isOwner();
     watchDoc("publicBranding/partners", data => { state.partners = data; });
@@ -1257,6 +1266,31 @@ export async function connectSpark({
           await F.setDoc(ref, {payload, updatedAt:F.serverTimestamp()});
         },
       };
+    },
+    async saveMatchPhase(matchId,championshipId,data){
+      if(!privateView||!isOwner())throw Error("Edição de fases exclusiva da administração.");
+      const account=authentication.currentUser?.uid;
+      const phase=String(data.phase||""),group=phase?String(data.group||"").trim().slice(0,40):"",
+        round=phase?String(data.round||"").trim().slice(0,40):"";
+      const ref=F.doc(database,"arenaMatchPhases",matchId);
+      const audit=F.doc(F.collection(ref,"history"));
+      await F.runTransaction(database,async tx=>{
+        const [game,previous]=await Promise.all([
+          tx.get(F.doc(database,"matches",matchId)),tx.get(ref)
+        ]);
+        if(!isOwner()||authentication.currentUser?.uid!==account)throw Error("A sessão mudou.");
+        if(!game.exists()||game.data().championshipId!==championshipId||game.data().testData===true)
+          throw Error("A partida precisa estar vinculada a esta edição.");
+        const old=previous.data();
+        if(old?.championshipId===championshipId&&old.phase===phase&&old.group===group&&old.round===round)return;
+        const record={championshipId,phase,group,round,actor:account,auditId:audit.id,updatedAt:F.serverTimestamp()};
+        tx.set(ref,record);tx.set(audit,record);
+      });
+    },
+    async loadMatchPhaseHistory(matchId){
+      if(!privateView||!isOwner())throw Error("Consulta exclusiva da administração.");
+      const snap=await F.getDocs(F.query(F.collection(database,"arenaMatchPhases",matchId,"history"),F.orderBy("updatedAt","desc"),F.limit(20)));
+      return snap.docs.map(doc=>doc.data());
     },
     canOperate: canOperateMatch,
     canCorrect: canCorrectMatch,
