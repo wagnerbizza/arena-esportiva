@@ -5621,10 +5621,20 @@ function credentialsPanel() {
   const rows=all.filter(r=>(!credentialStatus||r.status===credentialStatus)&&[r.name,r.function,r.organization,r.id].join(" ").toLocaleLowerCase("pt-BR").includes(query));
   return `<section class="card"><h2>Credenciais de eventos</h2><p>Crachás de identificação para operadores, organização, arbitragem e apoio. Não criam contas e não concedem permissões no sistema. A lista e a emissão são exclusivas do administrador.</p><form id="event-credential"><div class="formgrid"><label>Edição do campeonato<select name="eventId" required><option value="">Selecione a edição</option>${eventOptions}</select></label><label>Conta existente opcional<select name="credentialUser"><option value="">Pessoa sem conta vinculada</option>${(state.users||[]).filter(u=>!u.deleted).map(u=>`<option value="${esc(u.id)}">${esc(u.name||u.email||u.id)}</option>`).join("")}</select></label><label>Nome completo<input name="name" maxlength="150" required></label><label>Função<input name="function" list="credentialFunctions" maxlength="80" required></label><datalist id="credentialFunctions"><option>Operador</option><option>Organização</option><option>Arbitragem</option><option>Apoio</option><option>Equipe técnica</option><option>Imprensa</option></datalist><label>Organização / equipe<input name="organization" maxlength="150"></label><label>Modalidade no crachá<select name="credentialDisplay"><option value="hidden" selected>Sem modalidade no crachá</option><option value="all">Todas as modalidades</option></select></label><label>Válida até<input type="date" name="validUntil" required></label></div><button class="primary" ${C.demo||credentialBusy||!eventOptions?"disabled":""}>Emitir e salvar credencial</button></form><p>O código é um identificador para conferência nesta lista, sem validação pública online. A revogação não altera um crachá já impresso: a organização deve consultar a situação atual.</p></section><section class="card"><h3>Credenciais emitidas</h3><div class="toolbar"><button type="button" data-credential-load ${C.demo||credentialBusy?"disabled":""}>${credentialLoaded?"Atualizar credenciais":"Consultar credenciais"}</button></div><div class="formgrid"><label>Pesquisar nome, função ou código<input name="credential-query" value="${esc(credentialQuery)}"></label><label>Situação<select name="credential-status"><option value="ativa" ${credentialStatus==="ativa"?"selected":""}>Ativas</option><option value="revogada" ${credentialStatus==="revogada"?"selected":""}>Revogadas</option><option value="" ${!credentialStatus?"selected":""}>Todas</option></select></label></div>${!credentialLoaded?'<p>Consulte a lista para carregar os registros do banco.</p>':`<div class="tablewrap"><table><thead><tr><th>Pessoa / código</th><th>Evento</th><th>Função / organização</th><th>Validade / situação</th><th>Ações</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}<small class="cell-sub">${esc(r.id)}</small></td><td>${esc(championshipTitle(state.championships.find(c=>c.id===r.eventId)))}</td><td>${esc(r.function)}<small class="cell-sub">${esc(r.organization)}</small></td><td>${esc(credentialValidityLabel(r.validUntil))}<br>${esc(r.status)}${credentialIsExpired(r)?" • VENCIDA":""}</td><td><label>Modalidade no crachá<select data-credential-display="${esc(r.id)}">${credentialDisplayOptions(credentialDisplay(r.id))}</select></label><button type="button" data-credential-print="${esc(r.id)}">Visualizar / imprimir</button>${r.status==="ativa"?`<button type="button" data-credential-revoke="${esc(r.id)}">Revogar</button>`:""}</td></tr>`).join("")}</tbody></table></div><p>${rows.length} credencial(is). Eventos reservados como teste não entram nesta lista.</p>`}</section>`;
 }
-function printEventCredential(record) {
+async function printEventCredential(record) {
   const event=state.championships.find(c=>c.id===record.eventId);if(!event)throw Error("Evento indisponível nesta área.");
   const win=window.open("","_blank");if(!win)throw Error("Permita abrir a visualização de impressão neste navegador.");
   win.opener=null;win.document.open();win.document.write(credentialHTML(record,event));win.document.close();
+  try {
+    const {qrSvg}=await import("./vendor/arena-qrcode.js");
+    if(win.closed)return;
+    const qr=win.document.getElementById("credential-qr-image");
+    qr.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(qrSvg(publicPanelURL(),""));
+    await qr.decode();
+    win.document.getElementById("credential-qr-enable").disabled=false;
+  } catch {
+    if(!win.closed)win.document.getElementById("credential-qr-error").textContent="QR Code indisponível nesta prévia.";
+  }
 }
 function credentialHTML(record,event,branding=state.partners,preview=false) {
   const sportLine=credentialSportLine(event,preview?"single":credentialDisplay(record.id));
@@ -5636,17 +5646,51 @@ function credentialHTML(record,event,branding=state.partners,preview=false) {
     <label>Largura (mm) <input name="width" type="number" min="40" max="180" step="0.1" value="90" required></label>
     <label>Altura (mm) <input name="height" type="number" min="40" max="180" step="0.1" value="130" required></label>
     <button type="submit">Imprimir / salvar em PDF</button>
+    <fieldset class="credential-qr-tools">
+      <legend>QR Code do painel público</legend>
+      <label><input id="credential-qr-enable" name="includeQr" type="checkbox" disabled> Incluir QR Code</label>
+      <fieldset id="credential-qr-adjust" disabled>
+        <label>Tamanho (mm) <input name="qrSize" type="range" min="15" max="36" value="22"> <output id="credential-qr-size">22 mm</output></label>
+        <label>Posição horizontal <input name="qrX" type="range" min="0" max="100" value="50"></label>
+        <label>Posição vertical <input name="qrY" type="range" min="0" max="100" value="100"></label>
+        <label>Rotação <select name="qrAngle"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></label>
+        <button type="button" id="credential-qr-reset">Restaurar posição e tamanho</button>
+      </fieldset>
+      <p id="credential-qr-error" role="status"></p>
+      <p>Arraste o QR Code com o mouse ou com o dedo. Confira se ele cobre algum texto antes de imprimir.</p>
+    </fieldset>
     <p>Meça o espaço interno da capa. Na impressão, use escala de 100%.</p>
   </form>`;
   const sizingScript = preview ? "" : `<script>
     const form=document.getElementById("badge-size"), frame=document.querySelector(".badge-size-frame"), badge=frame.firstElementChild;
-    const {orientation,width,height}=form.elements;
+    const {orientation,width,height,includeQr,qrSize,qrX,qrY,qrAngle}=form.elements;
+    const qr=document.getElementById("credential-qr"), image=document.getElementById("credential-qr-image");
+    const inset=6;
+    function qrBounds(){
+      return {x:Math.max(0,frame.clientWidth-qr.offsetWidth-2*inset),
+        y:Math.max(0,frame.clientHeight-qr.offsetHeight-2*inset)};
+    }
+    function placeQR(){
+      const bounds=qrBounds();
+      qr.style.left=inset+bounds.x*Number(qrX.value)/100+"px";
+      qr.style.top=inset+bounds.y*Number(qrY.value)/100+"px";
+    }
     function fit(){
       if(!form.checkValidity())return;
       frame.style.width=width.value+"mm";
       frame.style.height=height.value+"mm";
       badge.style.width=orientation.value==="horizontal"?"130mm":"90mm";
-      const scale=Math.min(frame.clientWidth/badge.offsetWidth,frame.clientHeight/badge.offsetHeight);badge.style.left=(frame.clientWidth-badge.offsetWidth*scale)/2+"px";badge.style.top=(frame.clientHeight-badge.offsetHeight*scale)/2+"px";badge.style.transform="scale("+scale+")";
+      qr.hidden=!includeQr.checked;
+      document.getElementById("credential-qr-adjust").disabled=qr.hidden;
+      qr.style.width=qrSize.value+"mm";
+      image.style.transform="rotate("+qrAngle.value+"deg)";
+      document.getElementById("credential-qr-size").value=qrSize.value+" mm";
+      if(!qr.hidden)placeQR();
+      const available=Math.max(1,frame.clientHeight-(qr.hidden?0:qr.offsetHeight+2*inset));
+      const scale=Math.min(frame.clientWidth/badge.offsetWidth,available/badge.offsetHeight);
+      badge.style.left=(frame.clientWidth-badge.offsetWidth*scale)/2+"px";
+      badge.style.top=(available-badge.offsetHeight*scale)/2+"px";
+      badge.style.transform="scale("+scale+")";
     }
     orientation.addEventListener("change",()=>{
       if((orientation.value==="horizontal")!==(Number(width.value)>Number(height.value))){
@@ -5656,12 +5700,30 @@ function credentialHTML(record,event,branding=state.partners,preview=false) {
     });
     form.addEventListener("input",event=>{if(event.target!==orientation)fit();});
     form.addEventListener("submit",event=>{event.preventDefault();fit();window.print();});
+    document.getElementById("credential-qr-reset").onclick=()=>{
+      qrSize.value="22";qrX.value="50";qrY.value="100";qrAngle.value="0";fit();
+    };
+    let drag=null;
+    qr.addEventListener("pointerdown",event=>{
+      if(!event.isPrimary||event.button!==0)return;
+      drag={id:event.pointerId,x:event.clientX-qr.offsetLeft,y:event.clientY-qr.offsetTop};
+      qr.setPointerCapture(event.pointerId);
+    });
+    qr.addEventListener("pointermove",event=>{
+      if(drag?.id!==event.pointerId)return;
+      const bounds=qrBounds();
+      const percent=(offset,extent)=>extent?Math.min(100,Math.max(0,100*offset/extent)):0;
+      qrX.value=percent(event.clientX-drag.x-inset,bounds.x);
+      qrY.value=percent(event.clientY-drag.y-inset,bounds.y);
+      placeQR();
+    });
+    qr.addEventListener("lostpointercapture",()=>{drag=null;});
     window.addEventListener("load",fit);
     window.addEventListener("beforeprint",fit);
     if(typeof ResizeObserver==="function")new ResizeObserver(fit).observe(badge);
     fit();
   </script>`;
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Credencial • ${esc(record.name)}</title><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font:14px Arial,sans-serif;color:#142832;background:#fff}.badge{width:90mm;min-height:130mm;border:2px solid #183e52;border-radius:5mm;padding:7mm;margin:10mm auto;text-align:center;overflow-wrap:anywhere}.logo{height:18mm;max-width:65mm;object-fit:contain}.function{margin:4mm 0;font-size:16px;font-weight:bold}.name{position:relative;isolation:isolate;margin:6mm 0 4mm;padding:4mm 3mm;font-size:24px;font-weight:bold;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}.name-band{position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}.code{font-size:10px;margin-top:7mm}.status{font-weight:bold;color:${record.status==="revogada"?"#9b1c1c":"#174f30"}}.tools{text-align:center;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;padding:8px}.tools p{flex-basis:100%;margin:0}.tools input{width:7em}.badge-size-frame{width:90mm;height:130mm;margin:10mm auto;position:relative;break-inside:avoid;border:2px solid #183e52;border-radius:5mm}.badge-size-frame>.badge{position:absolute;inset:0 auto auto 0;min-height:0;margin:0;border:0;transform-origin:top left}@media print{.tools{display:none}}${partnerPrintCSS}</style></head><body>${sizingTools}${preview?"":'<div class="badge-size-frame">'}<article class="badge">${brand("header")}${!custom&&safe?`<img class="logo" src="${esc(logo)}" alt="Logo da organização">`:""}<p>${esc(state.settings.title)}</p><h2>${esc(championshipTitle(event))}</h2>${sportLine?`<p>${esc(sportLine)}</p>`:""}<div class="name"><svg class="name-band" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect width="100" height="100" fill="#163f55"/></svg>${esc(record.name)}</div><div class="function">${esc(record.function)}</div><p>${esc(record.organization||"Organização do evento")}</p><p>Válida até ${esc(credentialValidityLabel(record.validUntil))}</p><p class="status">${record.status!=="ativa"?"CREDENCIAL REVOGADA":credentialIsExpired(record)?"CREDENCIAL VENCIDA":"CREDENCIAL ATIVA"}</p><p class="code">Código ${esc(record.id)}<br>Conferência pela organização na lista de credenciais.<br>Identificação de evento sem concessão de acesso ao sistema.</p>${brand("footer")+brand("background")}<p class="code">WagnerBIZZA • Arena</p></article>${preview?"":"</div>"}${sizingScript}</body></html>`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Credencial • ${esc(record.name)}</title><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font:14px Arial,sans-serif;color:#142832;background:#fff}.badge{width:90mm;min-height:130mm;border:2px solid #183e52;border-radius:5mm;padding:7mm;margin:10mm auto;text-align:center;overflow-wrap:anywhere}.logo{height:18mm;max-width:65mm;object-fit:contain}.function{margin:4mm 0;font-size:16px;font-weight:bold}.name{position:relative;isolation:isolate;margin:6mm 0 4mm;padding:4mm 3mm;font-size:24px;font-weight:bold;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}.name-band{position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}.code{font-size:10px;margin-top:7mm}.status{font-weight:bold;color:${record.status==="revogada"?"#9b1c1c":"#174f30"}}.tools{text-align:center;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;padding:8px}.tools p{flex-basis:100%;margin:0}.tools input{width:7em}.badge-size-frame{width:90mm;height:130mm;margin:10mm auto;position:relative;break-inside:avoid;border:2px solid #183e52;border-radius:5mm}.badge-size-frame>.badge{position:absolute;inset:0 auto auto 0;min-height:0;margin:0;border:0;transform-origin:top left}.credential-qr-tools{max-width:100%;min-width:0}.credential-qr-tools fieldset{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;border:0;margin:4px 0;padding:0;min-width:0}.credential-qr-tools input[type=checkbox]{width:auto}.credential-qr{position:absolute;z-index:5;margin:0;text-align:center;background:#fff;color:#142832;font:9px Arial;max-width:calc(100% - 12px);cursor:grab;touch-action:none;user-select:none}.credential-qr[hidden]{display:none}.credential-qr img{display:block;width:100%;aspect-ratio:1;pointer-events:none}.credential-qr figcaption{padding:1px 0 2px}@media print{.tools{display:none}}${partnerPrintCSS}</style></head><body>${sizingTools}${preview?"":'<div class="badge-size-frame">'}<article class="badge">${brand("header")}${!custom&&safe?`<img class="logo" src="${esc(logo)}" alt="Logo da organização">`:""}<p>${esc(state.settings.title)}</p><h2>${esc(championshipTitle(event))}</h2>${sportLine?`<p>${esc(sportLine)}</p>`:""}<div class="name"><svg class="name-band" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect width="100" height="100" fill="#163f55"/></svg>${esc(record.name)}</div><div class="function">${esc(record.function)}</div><p>${esc(record.organization||"Organização do evento")}</p><p>Válida até ${esc(credentialValidityLabel(record.validUntil))}</p><p class="status">${record.status!=="ativa"?"CREDENCIAL REVOGADA":credentialIsExpired(record)?"CREDENCIAL VENCIDA":"CREDENCIAL ATIVA"}</p><p class="code">Código ${esc(record.id)}<br>Conferência pela organização na lista de credenciais.<br>Identificação de evento sem concessão de acesso ao sistema.</p>${brand("footer")+brand("background")}<p class="code">WagnerBIZZA • Arena</p></article>${preview?"":'<figure id="credential-qr" class="credential-qr" hidden><img id="credential-qr-image" alt="QR Code do painel público"><figcaption>Acompanhe os jogos</figcaption></figure></div>'}${sizingScript}</body></html>`;
 }
 
 document.addEventListener("change",e=>{
@@ -5679,7 +5741,7 @@ document.addEventListener("click",async e=>{
  const b=e.target.closest("[data-credential-load],[data-credential-print],[data-credential-revoke]");if(!b||role!=="admin")return;
  try{
   if(b.hasAttribute("data-credential-load")){if(C.demo)throw Error("Use a conta administrativa real.");credentialRows=await cloud.eventCredentials();credentialLoaded=true;render();}
-  if(b.dataset.credentialPrint){const record=credentialRows.find(r=>r.id===b.dataset.credentialPrint);if(record)printEventCredential(record);}
+  if(b.dataset.credentialPrint){const record=credentialRows.find(r=>r.id===b.dataset.credentialPrint);if(record)await printEventCredential(record);}
   if(b.dataset.credentialRevoke){if(!confirm("Revogar esta credencial? Isso não bloqueia a conta da pessoa no sistema."))return;await cloud.revokeCredential(b.dataset.credentialRevoke);credentialRows=await cloud.eventCredentials();render();toast("Credencial revogada.");}
  }catch(error){toast(error.message,true);}
 });
