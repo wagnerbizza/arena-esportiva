@@ -1810,7 +1810,7 @@ function render() {
     ["certificates", "Certificados"],
     ["cleanup", "Limpeza de testes"],
     ["systemCheck", "Verificar sistema"],
-    ["testData", "Dados de teste"],
+    ["testData", "Visibilidade dos registros"],
     ["credentials", "Credenciais de eventos"],
     ["settings", "Configurações"],
     ["qrCodes", "QR codes e links"],
@@ -3798,7 +3798,7 @@ function tutorialSteps() {
     step("Auditoria geral", "Consulte alterações e pesquise nome, UID, campeonato, equipe ou acontecimento. Antes e depois ajudam a conferir o que mudou. Esses detalhes são administrativos.", "#view", "auditReports"),
     step("Certificados", "Preencha participante, participação, evento e emissão. O código identifica a emissão, mas não representa validação pública online. O sistema não mantém um arquivo permanente das emissões.", "#view", "certificates"),
     step("Identidade e documentos", "Configure título, logo, cor, capa e limites de lances. Salvar aparência publica a mudança. Os logos e preferências da ficha de inscrição são locais a este navegador.", "#view", "settings"),
-    step("Dados de teste", "Prepare os registros antigos, selecione os testes e confira os vínculos. Reservar os mantém no banco, exclusivos do administrador. Contas e senhas são preservadas. Restaurar reativa as permissões antigas dos registros.", "#view", "testData"),
+    step("Visibilidade dos registros", "Prepare os registros antigos, selecione os testes e confira os vínculos. Reservar os mantém no banco, exclusivos do administrador. Contas e senhas são preservadas. Restaurar reativa as permissões antigas dos registros.", "#view", "testData"),
     step("Credenciais de eventos", "Emita identificações por evento com pessoa, função e validade. Consulte, imprima e revogue os crachás. Eles não concedem permissões de login e não têm validação pública online.", "#view", "credentials"),
     step("Limpeza e lixeira", "A limpeza exige conferência e cópia. Partidas elegíveis podem ser recuperadas por 30 dias. A purga definitiva é separada e remove os detalhes; não use sem revisar.", "#view", "cleanup"));
   steps.push(step("Minha conta", "Confira os dados pessoais e os métodos de entrada. Vincule Google à conta existente, mantendo a identidade. Conflitos entre contas precisam ser tratados sem criar cadastros duplicados.", "#view", "account"),
@@ -4690,7 +4690,7 @@ function teamDirectoryCard(t){
  ];
  const summary=fields.map(([label,value])=>`<div><strong>${label}:</strong> ${esc(value)}</div>`).join("");
  const games=state.matches.filter(m=>[m.home,m.away].includes(t.id)).length;
- return `<article class="card team-directory-card"><div class="team-directory-title">${badge({...t,name:title})}<span class="status">${t.archived?"Arquivada":"Ativa"}</span></div><h3>${esc(title)}${t.short?.trim()?` <small class="muted">(${esc(t.short.trim())})</small>`:""}</h3><div class="muted">${summary}</div><p>${roster.length} jogador(es) • ${games} ${role==="admin"?"partida(s)":"partida(s) autorizada(s)"}</p><div class="toolbar"><button type="button" class="primary" data-team-profile="${esc(t.id)}">Ver dados da equipe</button><details style="width:100%"><summary>Mais ações</summary><div class="toolbar" style="margin-top:8px"><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="roster">Jogadores</button><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="games">Jogos</button><button type="button" data-edit-team="${esc(t.id)}">Editar cadastro</button> ${role==="admin" ? `<button type="button" data-profile-archive="${esc(t.id)}">${t.archived?"Reativar equipe":"Arquivar equipe"}</button> <button type="button" data-test-reserve-team="${esc(t.id)}">Reservar como teste</button>` : ""}</div></details></div></article>`;
+ return `<article class="card team-directory-card"><div class="team-directory-title">${badge({...t,name:title})}<span class="status">${t.archived?"Arquivada":"Ativa"}</span></div><h3>${esc(title)}${t.short?.trim()?` <small class="muted">(${esc(t.short.trim())})</small>`:""}</h3><div class="muted">${summary}</div><p>${roster.length} jogador(es) • ${games} ${role==="admin"?"partida(s)":"partida(s) autorizada(s)"}</p><div class="toolbar"><button type="button" class="primary" data-team-profile="${esc(t.id)}">Ver dados da equipe</button><details style="width:100%"><summary>Mais ações</summary><div class="toolbar" style="margin-top:8px"><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="roster">Jogadores</button><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="games">Jogos</button><button type="button" data-edit-team="${esc(t.id)}">Editar cadastro</button> ${role==="admin" ? `<button type="button" data-profile-archive="${esc(t.id)}">${t.archived?"Reativar equipe":"Arquivar equipe"}</button> <button type="button" data-test-reserve-team="${esc(t.id)}">Ocultar dos painéis</button>` : ""}</div></details></div></article>`;
 }
 const participantColumns = [
   ["team", "Equipe"], ["player", "Participante"], ["number", "Nº"], ["position", "Posição"],
@@ -4846,7 +4846,7 @@ function teamsDirectoryView(){
  return `<div class="sectionhead team-directory-heading"><div><h2>Equipes</h2><p>Escolha uma equipe abaixo. Em <strong>Ver dados da equipe</strong> você encontra técnico, modalidades, elenco e jogos.</p></div><div class="toolbar"><button type="button" class="primary" data-new-team-form>+ Nova equipe</button><button type="button" data-section="imports">Importar equipes</button></div></div>${participantDirectory()}${listPanel("teams")}`;
 }
 function locationTrail(){
- const labels={overview:"Visão geral",matches:"Acompanhar jogos",championships:"Campeonatos",standings:"Classificação",teams:"Equipes",players:"Jogadores",imports:"Importar",documentation:"Guias",matchSheets:"Súmulas",reports:"Relatórios esportivos",auditReports:"Relatório geral",certificates:"Certificados",monitor:"Operadores e partidas",users:"Usuários e permissões",settings:"Configurações",cleanup:"Limpeza de testes",testData:"Dados de teste",credentials:"Credenciais de eventos",account:"Minha conta"};
+ const labels={overview:"Visão geral",matches:"Acompanhar jogos",championships:"Campeonatos",standings:"Classificação",teams:"Equipes",players:"Jogadores",imports:"Importar",documentation:"Guias",matchSheets:"Súmulas",reports:"Relatórios esportivos",auditReports:"Relatório geral",certificates:"Certificados",monitor:"Operadores e partidas",users:"Usuários e permissões",settings:"Configurações",cleanup:"Limpeza de testes",testData:"Visibilidade dos registros",credentials:"Credenciais de eventos",account:"Minha conta"};
  if(["account","profiles","preferences","settings"].includes(section))return '<nav class="location-trail" aria-label="Localização atual"><span>Você está em:</span><strong>'+esc(labels[section]||navigationDescriptions[section]?.label||"Minha conta")+'</strong></nav>';
  const group=workspaceDefinitions.find(g=>g.sections.includes(section));
  const profile=section==="teams"&&selectedTeamId?state.teams.find(t=>t.id===selectedTeamId):null;
@@ -4984,7 +4984,7 @@ function getShortcutCatalog(){
     }
     actions.push({ id: "overview", label: "Home", detail: "Resumo geral" });
   }
-  if(role==="admin")for(const [id,label] of [["matches","Acompanhar jogos"],["standings","Classificação"],["imports","Importar"],["matchSheets","Súmulas"],["reports","Relatórios esportivos"],["auditReports","Auditoria geral"],["certificates","Certificados"],["testData","Dados de teste"],["credentials","Credenciais de eventos"],["monitor","Operadores e partidas"],["cleanup","Limpeza de testes"],["documentation","Guias e suporte"],["account","Minha conta"]])if(!actions.some(a=>a.id===id))actions.push({id,label,detail:"Abrir "+label.toLowerCase()});
+  if(role==="admin")for(const [id,label] of [["matches","Acompanhar jogos"],["standings","Classificação"],["imports","Importar"],["matchSheets","Súmulas"],["reports","Relatórios esportivos"],["auditReports","Auditoria geral"],["certificates","Certificados"],["testData","Visibilidade dos registros"],["credentials","Credenciais de eventos"],["monitor","Operadores e partidas"],["cleanup","Limpeza de testes"],["documentation","Guias e suporte"],["account","Minha conta"]])if(!actions.some(a=>a.id===id))actions.push({id,label,detail:"Abrir "+label.toLowerCase()});
   for(const [id,label] of [["qrCodes","QR codes e links"],["profiles","Trocar perfil / conta"],["preferences","Configurações pessoais"],["account","Minha conta"]])if(!actions.some(a=>a.id===id))actions.push({id,label,detail:"Abrir "+label.toLowerCase()});
   if(canPrepareRegistrationSheets())actions.push({id:"registrationSheets",label:"Fichas de inscrição",detail:"Imprimir fichas por campeonato"});
   if(role==="admin")actions.push({id:"systemCheck",label:"Verificar sistema",detail:"Monitor de diagnóstico e simulações seguras"});
@@ -5158,7 +5158,7 @@ const navigationDescriptions={
  users:{label:"Usuários e permissões",description:"Aprovar, bloquear e definir acessos dos operadores.",keywords:"usuario conta acesso permissao convite cadastro link aprovar bloquear autorizar"},
  systemCheck:{label:"Verificar sistema",description:"Diagnóstico, testes em memória e consultas ao servidor sem alterar dados.",keywords:"verificar sistema diagnostico teste automatico falha erro monitor validacao funcionamento"},
  settings:{label:"Configurações",description:"Alterar título, cor, capa, logo e identidade visual.",keywords:"logotipo logo favicon icone aba titulo nome cor imagem capa configuracao"},
- testData:{label:"Dados de teste",description:"Reservar testes ao administrador sem excluir dados ou contas.",keywords:"teste testes ocultar reservar restaurar preparar proteção"},
+ testData:{label:"Visibilidade dos registros",description:"Ocultar equipes, jogadores e partidas dos painéis ou restaurar a visibilidade.",keywords:"teste testes ocultar reservar restaurar preparar proteção"},
  credentials:{label:"Credenciais de eventos",description:"Emitir, imprimir e revogar crachás de identificação por evento.",keywords:"credencial credenciais cracha crachas identificação organização apoio operador validade"},
  cleanup:{label:"Limpeza de testes",description:"Conferir cópia e excluir partidas de teste com registro.",keywords:"limpeza teste excluir apagar exclusoes historico"},
  account:{label:"Minha conta",description:"Identificação, segurança, redefinição de senha e vínculo Google.",keywords:"email senha recuperar google vincular login conta sair"},
@@ -5361,7 +5361,7 @@ function activeSportsState(raw) {
   return next;
 }
 const testEntities={championships:"Campeonato",matches:"Partida",teams:"Equipe",players:"Jogador"};
-let testOnlyReserved=false,testSearch="",testSelection=new Set(),testPlan=null,testBackup=false,testClassBusy=false,testDetail="";
+let testOnlyReserved=false,testType="teams",testSearch="",testSelection=new Set(),testPlan=null,testBackup=false,testClassBusy=false,testDetail="";
 function testRecords(raw=testRawState||state) {
   return Object.entries(testEntities).flatMap(([entity,label])=>(raw[entity]||[]).map(data=>({entity,id:data.id,label,data})));
 }
@@ -5395,11 +5395,56 @@ function testDetailPanel() {
   const events=row.entity==="matches"?(row.data.events||[]):[];
   return `<section class="card"><h3>Detalhes privados • ${esc(testRecordName(row))}</h3><p>${row.data.testData?"Reservado ao administrador":"Disponível nas telas normais"} • ID ${esc(row.id)}</p>${row.entity==="matches"?`<p>Placar: ${esc((row.data.score||[]).join(" × "))} • Situação: ${esc(row.data.status)}</p><button type="button" data-test-history="${esc(row.id)}">Carregar histórico privado desta partida</button>${table(["Data","Acontecimento","Descrição privada","Responsável"],events.map(e=>tr([format(e.at),eventLabel(e,row.data),eventDescription(e),responsibleLabel(e)])))}`:""}<details><summary>Consultar todos os campos do registro</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(row.data,(_k,v)=>v?.toDate?v.toDate().toISOString():v,2))}</pre></details></section>`;
 }
+const visibilityTypes = [["teams","Equipes completas"],["players","Jogadores"],["matches","Partidas"],
+  ["championships","Campeonatos"],["all","Todos os tipos"]];
+function visibilityRows(rows = testRecords()) {
+  const query = searchText(testSearch);
+  const byTeam = new Map();
+  for (const row of rows) {
+    if (row.entity !== "players") continue;
+    if (!byTeam.has(row.data.team)) byTeam.set(row.data.team,[]);
+    byTeam.get(row.data.team).push(row);
+  }
+  return rows.filter(row => {
+    if ((row.data.testData === true) !== testOnlyReserved || (testType !== "all" && row.entity !== testType)) return false;
+    const team = row.entity === "teams" ? row.data : (testRawState||state).teams.find(team => team.id === row.data.team);
+    const roster = row.entity === "teams" ? (byTeam.get(row.id) || []).map(player => player.data.name).join(" ") : "";
+    const text = [row.label,testRecordName(row),team?.className,team?.school,team?.short,row.data.className,roster].join(" ");
+    return searchText(text).includes(query);
+  }).sort((a,b) => testRecordName(a).localeCompare(testRecordName(b),"pt-BR",{numeric:true}));
+}
 function testDataPanel() {
-  const rows=testRecords(),legacy=rows.filter(r=>typeof r.data.testData!=="boolean");
-  const query=testSearch.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
-  const visible=rows.filter(r=>(r.data.testData===true)===testOnlyReserved && (r.label+" "+testRecordName(r)).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().includes(query));
-  return `<section class="card"><h2>Dados de teste</h2><p>Área exclusiva do administrador. Os dados reservados deixam as telas normais, o público e o acesso dos operadores. Contas, senhas e configurações são preservadas. Os dados continuam armazenados.</p><p><strong>Ao restaurar, as autorizações antigas desses registros voltam a valer.</strong> A operação pausa gravações esportivas temporariamente.</p>${C.demo?'<p>Classificação real indisponível no treinamento.</p>':`<div class="toolbar"><button type="button" data-test-prepare ${testClassBusy||!legacy.length?"disabled":""}>Preparar proteção dos registros antigos (${legacy.length})</button><button type="button" data-test-unlock ${testClassBusy?"disabled":""}>Liberar operação após interrupção</button></div>`}<p>Prepare os registros antigos uma vez após instalar. Isso não os marca como teste. Até a preparação, algumas consultas dos operadores podem ficar vazias.</p><div class="toolbar"><button type="button" data-test-scope="normal" class="${!testOnlyReserved?"primary":""}">Disponíveis (${rows.filter(r=>!r.data.testData).length})</button><button type="button" data-test-scope="reserved" class="${testOnlyReserved?"primary":""}">Reservados ao administrador (${rows.filter(r=>r.data.testData).length})</button></div><label>Pesquisar registros<input name="test-search" type="search" value="${esc(testSearch)}"></label><p>Selecione registros e confira a prévia dos vínculos antes de confirmar. Uma equipe compartilhada pode incluir partidas reais: revise todos os itens da prévia.</p><div class="toolbar"><button type="button" data-test-select-all ${testClassBusy?"disabled":""}>Selecionar os exibidos</button><button type="button" data-test-select-clear ${testClassBusy?"disabled":""}>Limpar seleção</button></div><div class="tablewrap"><table><thead><tr><th>Selecionar</th><th>Tipo</th><th>Registro</th></tr></thead><tbody>${visible.slice(0,500).map(r=>`<tr><td><input type="checkbox" data-test-select="${esc(r.entity+"/"+r.id)}" aria-label="Selecionar ${esc(testRecordName(r))}" ${testSelection.has(r.entity+"/"+r.id)?"checked":""} ${testClassBusy?"disabled":""}></td><td>${r.label}</td><td>${esc(testRecordName(r))}<br><button type="button" data-test-detail="${esc(r.entity+"/"+r.id)}">Ver detalhes</button></td></tr>`).join("")}</tbody></table></div><p>${visible.length} registro(s). Mostrando até 500; refine a pesquisa se necessário.</p><button type="button" data-test-preview ${testClassBusy||!testSelection.size||C.demo?"disabled":""}>Conferir ${testOnlyReserved?"restauração":"reserva de testes"} e vínculos</button>${testDetailPanel()}${testPlan?`<section class="public-notice"><h3>Prévia • ${testPlan.items.length} registro(s)</h3><p>Nenhum dado será apagado. Confira todos os registros incluídos automaticamente pelos vínculos.</p><ul>${testPlan.items.map(r=>`<li>${r.label}: ${esc(testRecordName(r))}</li>`).join("")}</ul><button type="button" data-test-backup>Baixar cópia privada desta seleção</button><form id="test-classify"><label>Motivo<textarea name="reason" required minlength="5" maxlength="300"></textarea></label><label>Digite ${testPlan.hidden?"RESERVAR":"RESTAURAR"}<input name="word" autocomplete="off" required></label><button class="primary" ${testClassBusy||!testBackup?"disabled":""}>Confirmar ${testPlan.hidden?"reserva":"restauração"}</button></form><p>A cópia contém dados privados e não possui importação automática. Guarde-a em local restrito.</p></section>`:""}</section>`;
+  const rows=testRecords(), legacy=rows.filter(r=>typeof r.data.testData!=="boolean");
+  const visible=visibilityRows(rows);
+  const rosterByTeam=new Map();
+  for (const row of rows) {
+    if (row.entity !== "players") continue;
+    if (!rosterByTeam.has(row.data.team)) rosterByTeam.set(row.data.team,[]);
+    rosterByTeam.get(row.data.team).push(row.data);
+  }
+  const displayRow = r => {
+    const key=r.entity+"/"+r.id;
+    const roster=rosterByTeam.get(r.id) || [];
+    const details=r.entity==="teams" ? `<small>${esc([r.data.className,r.data.school].filter(Boolean).join(" · "))}</small>
+      <details><summary>Elenco (${roster.length})</summary>${roster.length?`<ul>${roster.slice().sort(alphabetical).map(p=>`<li>${esc(p.name)}${p.testData?" (oculto)":""}</li>`).join("")}</ul>`:"<p>Equipe sem jogadores cadastrados.</p>"}</details>` : "";
+    return `<tr><td><input type="checkbox" data-test-select="${esc(key)}" aria-label="Selecionar ${esc(testRecordName(r))}" ${testSelection.has(key)?"checked":""} ${testClassBusy?"disabled":""}></td>
+      <td>${r.label}</td><td>${esc(testRecordName(r))}<br>${details}<button type="button" data-test-detail="${esc(key)}">Ver detalhes</button></td></tr>`;
+  };
+  return `<section class="card"><h2>Visibilidade dos registros</h2>
+    <p>Registros ocultos ficam disponíveis apenas nesta área administrativa e saem do painel público, das listas e das pesquisas normais. Os dados ficam guardados.</p>
+    <p>Ao restaurar, as autorizações antigas voltam a valer. A operação pausa gravações esportivas temporariamente.</p>
+    ${C.demo?"<p>O treinamento permite consultar a tela. Use a conta administrativa real para alterar a visibilidade.</p>":`<details><summary>Manutenção</summary><div class="toolbar"><button type="button" data-test-prepare ${testClassBusy||!legacy.length?"disabled":""}>Preparar registros antigos (${legacy.length})</button><button type="button" data-test-unlock ${testClassBusy?"disabled":""}>Liberar operação após interrupção</button></div></details>`}
+    <div class="toolbar"><button type="button" data-test-scope="normal" class="${!testOnlyReserved?"primary":""}">Disponíveis (${rows.filter(r=>!r.data.testData).length})</button><button type="button" data-test-scope="reserved" class="${testOnlyReserved?"primary":""}">Ocultos (${rows.filter(r=>r.data.testData).length})</button></div>
+    <div class="formgrid">
+     <label>Tipo de registro<select name="test-type">${visibilityTypes.map(([value,label])=>`<option value="${value}" ${testType===value?"selected":""}>${label}</option>`).join("")}</select></label>
+     <label>Pesquisar por nome, equipe, turma ou escola<input name="test-search" type="search" value="${esc(testSearch)}"></label>
+    </div>
+    <p>Ao ocultar uma equipe completa, a prévia inclui o elenco e as partidas vinculadas. Para marcar atletas individualmente, escolha Jogadores.</p>
+    <div class="toolbar"><button type="button" data-test-select-all ${testClassBusy||!visible.length?"disabled":""}>Selecionar todos os resultados (${visible.length})</button><button type="button" data-test-select-clear ${testClassBusy?"disabled":""}>Limpar seleção</button>
+    <button type="button" data-test-preview ${testClassBusy||!testSelection.size||C.demo?"disabled":""}>${testOnlyReserved?"Revisar restauração":"Revisar o que será ocultado"}</button></div>
+    <p role="status">${testSelection.size} selecionado(s) · ${visible.length} resultado(s)${visible.length>500?" · Exibindo os primeiros 500.":""}</p>
+    ${visible.length?`<div class="tablewrap"><table><thead><tr><th>Selecionar</th><th>Tipo</th><th>Registro</th></tr></thead><tbody>${visible.slice(0,500).map(displayRow).join("")}</tbody></table></div>`:empty("Nenhum registro com estes filtros.")}
+    ${testDetailPanel()}${testPlan?`<section class="public-notice"><h3>Prévia • ${testPlan.items.length} registro(s)</h3><p>Nenhum dado será apagado. Confira todos os registros incluídos automaticamente pelos vínculos.</p><ul>${testPlan.items.map(r=>`<li>${r.label}: ${esc(testRecordName(r))}</li>`).join("")}</ul><button type="button" data-test-backup>Baixar cópia privada desta seleção</button><form id="test-classify"><label>Motivo<textarea name="reason" required minlength="5" maxlength="300"></textarea></label><label>Digite ${testPlan.hidden?"OCULTAR":"RESTAURAR"}<input name="word" autocomplete="off" required></label><button class="primary" ${testClassBusy||!testBackup?"disabled":""}>Confirmar ${testPlan.hidden?"ocultação":"restauração"}</button></form><p>A cópia contém dados privados e não possui importação automática. Guarde-a em local restrito.</p></section>`:""}</section>`;
 }
 async function runTestClassification(items,hidden,reason) {
   if(role!=="admin"||C.demo)throw Error("Use a conta administrativa real.");
@@ -5414,6 +5459,7 @@ async function runTestClassification(items,hidden,reason) {
 document.addEventListener("change",e=>{
  if(role!=="admin")return;
  if(e.target.name==="test-search"){testSearch=e.target.value;render();}
+ if(e.target.name==="test-type"){testType=e.target.value;render();}
  if(e.target.matches("[data-test-select]")){const key=e.target.dataset.testSelect;e.target.checked?testSelection.add(key):testSelection.delete(key);testPlan=null;testBackup=false;render();}
 });
 document.addEventListener("click",async e=>{
@@ -5422,6 +5468,7 @@ document.addEventListener("click",async e=>{
   const key="teams/"+shortcut.dataset.testReserveTeam;
   if(C.demo) return toast("Use a conta administrativa real.",true);
   testOnlyReserved=false;
+  testType="teams";
   testSearch="";
   testSelection=new Set([key]);
   testPlan={items:planTestClassification(testRecords(),testSelection,true),hidden:true};
@@ -5432,7 +5479,7 @@ document.addEventListener("click",async e=>{
  }
  const b=e.target.closest("[data-test-scope],[data-test-preview],[data-test-backup],[data-test-prepare],[data-test-unlock],[data-test-detail],[data-test-history],[data-test-select-all],[data-test-select-clear]");if(!b||role!=="admin")return;
  try{
-  if(b.hasAttribute("data-test-select-all")){for(const el of document.querySelectorAll("[data-test-select]"))testSelection.add(el.dataset.testSelect);testPlan=null;testBackup=false;render();}
+  if(b.hasAttribute("data-test-select-all")){for(const row of visibilityRows())testSelection.add(row.entity+"/"+row.id);testPlan=null;testBackup=false;render();}
   if(b.hasAttribute("data-test-select-clear")){testSelection.clear();testPlan=null;testBackup=false;render();}
   if(b.dataset.testDetail){testDetail=b.dataset.testDetail;render();}
   if(b.dataset.testHistory){await cloud.loadHistory([b.dataset.testHistory]);render();}
@@ -5445,7 +5492,7 @@ document.addEventListener("click",async e=>{
 });
 document.addEventListener("submit",async e=>{
  if(e.target.id!=="test-classify")return;e.preventDefault();
- try{if(role!=="admin"||!testPlan||!testBackup)throw Error("Confira a seleção e baixe a cópia.");const data=new FormData(e.target);if(String(data.get("word")).trim()!==(testPlan.hidden?"RESERVAR":"RESTAURAR"))throw Error("Confira a palavra de confirmação.");await runTestClassification(testPlan.items,testPlan.hidden,String(data.get("reason")));}catch(error){toast(error.message,true);}
+ try{if(role!=="admin"||!testPlan||!testBackup)throw Error("Confira a seleção e baixe a cópia.");const data=new FormData(e.target);if(String(data.get("word")).trim()!==(testPlan.hidden?"OCULTAR":"RESTAURAR"))throw Error("Confira a palavra de confirmação.");await runTestClassification(testPlan.items,testPlan.hidden,String(data.get("reason")));}catch(error){toast(error.message,true);}
 });
 
 // Preferências pessoais: não alteram a aparência global nem concedem permissões.
