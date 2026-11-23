@@ -48,12 +48,14 @@ function updateMatchNotices() {
     if (!event) continue;
     const [label, kind] = event.type === "ponto" ? ["Gol!", "goal"] :
       event.type === "cartão amarelo" ? ["Cartão amarelo", "yellow"] : ["Cartão vermelho", "red"];
-    const notice = { label, kind };
+    const notice = { label, kind, side: event.side, started: Date.now() };
     matchNotices.set(match.id, notice);
     setTimeout(() => {
       if (matchNotices.get(match.id) !== notice) return;
       matchNotices.delete(match.id);
-      document.getElementById(`match-card-${match.id}`)?.querySelector(".arena-match-notice")?.remove();
+      const card = document.getElementById(`match-card-${match.id}`);
+      card?.querySelector(".arena-match-notice")?.remove();
+      card?.querySelector(".arena-score-goal")?.classList.remove("arena-score-goal");
     }, 2600);
   }
   for (const id of previousMatchEvents.keys()) {
@@ -844,23 +846,20 @@ function refresh() {
       if (select) for (const option of select.options) option.selected = values.includes(option.value);
     }
   }
-  if ($("#event") && $("[name=side]")) {
-    const m = state.matches.find((m) => m.id === selected),
-      side = Number($("[name=side]").value),
-      saved =
-        forms
-          .find((f) => f.id === "event")
-          ?.values.find(([n]) => n === "player")?.[1] || "";
-    if (m) {
-      $("[name=player]").innerHTML =
-        '<option value="">Sem atleta</option>' +
-        options(
-          m.roster.filter((p) => p.team === [m.home, m.away][side]),
-          (p) => p.id,
-          (p) => p.number + " • " + p.name,
-        );
-      $("[name=player]").value = saved;
-      const incoming=$("#event [name=playerIn]");if(incoming){const value=incoming.value;incoming.innerHTML='<option value="">Selecione quem entra</option>'+options(m.roster.filter(p=>p.team===[m.home,m.away][side]),p=>p.id,p=>p.number+" • "+p.name);incoming.value=value;}
+  const match = state.matches.find(item => item.id === selected);
+  if (match) {
+    for (const [selector, fields] of [
+      ["#event", [["player", "Sem atleta"]]],
+      ["#match-substitution", [["outgoing", "Selecione quem sai"], ["incoming", "Selecione quem entra"]]],
+    ]) {
+      const form = $(selector);
+      if (!form) continue;
+      for (const [fieldName, placeholder] of fields) {
+        const input = form.elements[fieldName];
+        const saved = forms.find(item => item.id === form.id)?.values.find(([key]) => key === fieldName)?.[1] || "";
+        input.innerHTML = matchPlayerOptions(match, Number(form.elements.side.value), placeholder);
+        input.value = saved;
+      }
     }
   }
   if (importDraft && $("#preview")) {
@@ -1224,6 +1223,16 @@ function field(label, name, type = "text", extra = "") {
   }
   return `<label>${label}<input name="${name}" type="${type}" ${extra}></label>`;
 }
+function matchSideOptions(match) {
+  return options([0, 1], side => side, side => name([match.home, match.away][side]));
+}
+
+function matchPlayerOptions(match, side, placeholder) {
+  return '<option value="">' + placeholder + '</option>' +
+    options(match.roster.filter(player => player.team === [match.home, match.away][side]),
+      player => player.id, player => player.number + " • " + player.name);
+}
+
 function select(label, name, opts) {
   return `<label>${label}<select name="${name}" ${name === "player" ? "" : "required"}>${opts}</select></label>`;
 }
@@ -1417,11 +1426,20 @@ function matchCard(m, button = false) {
     isFinished = ["Encerrada", "Homologada"].includes(m.status);
   const notice = matchNotices.get(m.id);
   const liveBall = isLive ? '<span class="arena-live-ball" aria-hidden="true">⚽</span>' : "";
-  const liveNotice = isLive && notice
-    ? `<span class="arena-match-notice" data-notice="${notice.kind}" role="status">${notice.label}</span>` : "";
-  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score"><div>${badge(a)}<div class="name">${esc(a.name)}</div></div><div class="arena-score-center">
-  <strong>${sc[0]} <span class="muted">:</span> ${sc[1]}</strong>${liveBall}${liveNotice}
-  </div><div>${badge(b)}<div class="name">${esc(b.name)}</div></div></div>${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${timelineControl(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && admin && role === "admin" && cloud && !C.demo && finalStatuses.includes(m.status) ? `<details><summary>Mais ações</summary><button type="button" data-public-visibility="${esc(m.id)}">${m.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button></details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
+  const animationOffset = notice ? Date.now() - notice.started : 0;
+  const teamScore = (teamData, side) => {
+    const activeNotice = isLive && notice?.side === side ? notice : null;
+    const goal = activeNotice?.kind === "goal" && animationOffset < 950;
+    return `<div class="arena-score-team">${activeNotice
+      ? `<span class="arena-match-notice" data-notice="${activeNotice.kind}" role="status">${activeNotice.label}</span>` : ""}
+      ${badge(teamData)}<div class="name">${esc(teamData.name)}</div>
+      <strong class="arena-score-number${goal ? " arena-score-goal" : ""}"${goal ? ` style="--arena-goal-delay:-${animationOffset}ms"` : ""}>
+        <span class="arena-score-value">${sc[side]}</span>${goal ? '<span class="arena-goal-ball" aria-hidden="true">⚽</span>' : ""}
+      </strong></div>`;
+  };
+  const result = isFinished ? (sc[0] === sc[1] ? "Resultado final: empate" :
+    "Vencedor: " + (sc[0] > sc[1] ? a.name : b.name)) : "";
+  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(m.competition || "Partida avulsa")}</p><div class="score arena-team-scoreboard">${teamScore(a, 0)}<div class="arena-score-center"><span aria-hidden="true">×</span>${liveBall}</div>${teamScore(b, 1)}</div>${result ? `<p class="arena-match-result">${esc(result)}</p>` : ""}${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${timelineControl(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && admin && role === "admin" && cloud && !C.demo && finalStatuses.includes(m.status) ? `<details><summary>Mais ações</summary><button type="button" data-public-visibility="${esc(m.id)}">${m.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button></details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
 }
 
 function liveStatusPanel(context) {
@@ -1706,43 +1724,27 @@ function operate() {
      <button type="submit" class="primary">Publicar acréscimos</button>
      <button type="button" data-clock-command="iniciar-acrescimos" ${c.running || c.segments?.acrescimos || m.addedTime?.phase === "started" || m.addedTime?.stage !== m.stage || !m.addedTime.minutes ? "disabled" : ""}>Iniciar acréscimos</button></div>
      <button type="button" data-return-normal-clock ${!(m.addedTime?.minutes||m.addedTime?.phase==="started"||c.segments?.acrescimos)?"disabled":""}>${m.addedTime?.phase==="started"||c.segments?.acrescimos?"Voltar ao tempo normal":"Retirar anúncio de acréscimos"}</button><p class="muted">Para sair de acréscimos iniciados, use Voltar ao tempo normal, informe o tempo desejado e salve o ajuste. Para retirar apenas o anúncio, publique 0.</p></form>` : ""}<div class="toolbar"><button data-clock-command="${c.running ? "parar" : "iniciar"}" ${!c.running && !live ? "disabled" : ""}>${c.running ? "Parar somente o relógio" : "Iniciar relógio"}</button></div><details id="clockSettings"><summary>Configurar duração e ajustar cronômetro</summary><p>Escolha um atalho ou preencha os tempos abaixo conforme o regulamento do seu evento. O atalho apenas preenche; clique em Salvar ajuste para aplicar.</p><div class="toolbar">${[10,20,45].map(n=>`<button type="button" data-clock-preset="${n}" ${c.running?"disabled":""}>${n} minutos</button>`).join("")}</div><form id="clock-config"><div class="formgrid"><label>Modo<select name="clockMode"><option value="up" ${c.mode === "up" ? "selected" : ""}>Crescente (00:00 →)</option><option value="down" ${c.mode === "down" ? "selected" : ""}>Regressivo (duração → 00:00)</option></select></label>${field("Duração da etapa (min)", "durationMin", "number", `required min="0" max="360" value="${Math.floor((c.durationMs || 600000) / 60000)}"`)}${field("Tempo no visor (min)", "displayMin", "number", `required min="0" max="360" value="${Math.floor(clockDisplayMs / 60000)}"`)}${field("Tempo no visor (seg)", "displaySec", "number", `required min="0" max="59" value="${Math.floor(clockDisplayMs / 1000) % 60}"`)}${field("Motivo do ajuste", "clockReason", "text", 'required maxlength="300"')}</div><button ${c.running ? "disabled" : ""}>Salvar ajuste do cronômetro</button><p class="muted">No regressivo, informe quanto falta. No crescente, informe o tempo decorrido. Pare o relógio para ajustar. Salvar o ajuste retira os acréscimos anunciados ou iniciados; publique novamente se necessário. A troca de etapa não zera o tempo automaticamente. Ao chegar a zero, a contagem regressiva aguarda a decisão da arbitragem.</p></form></details>` : ""}</div><div id="mesa-avisos" ${operationPanel === "avisos" ? "" : "hidden"}><h3>Aviso para quem está assistindo</h3><form id="public-notice"><label>Mensagem pública<textarea name="notice" maxlength="300" ${locked ? "disabled" : ""}>${esc(m.publicNotice || "")}</textarea></label><p><button ${locked ? "disabled" : ""}>Publicar aviso</button> <button name="noticeAction" value="clear" ${locked || !m.publicNotice ? "disabled" : ""}>Retirar aviso</button></p></form></div></div></div><div class="console-actions"><div class="card quick-panel"><span class="tag">LANÇAMENTO RÁPIDO</span><h2>Marcar ponto</h2><p class="muted">Selecione o atleta, se desejar, e toque na pontuação da equipe.</p><div class="quick-grid">${quick}</div>${!live ? '<p class="public-notice">Os lançamentos ficam disponíveis quando o jogo está Ao vivo.</p>' : ""}
-    ${quickMatchControls(m,locked,live,c)}</div><div class="card"><details><summary>Cartões, faltas, substituições e outros lances</summary>${
-    locked
-      ? "<p>Partida bloqueada.</p>"
-      : `<form id="event"><div class="formgrid">${select("Equipe", "side", `<option value="0">${esc(name(m.home))}</option><option value="1">${esc(name(m.away))}</option>`)}${select(
-          "Tipo",
-          "kind",
-          options(
-            [
-              "ponto",
-              "cartão amarelo",
-              "cartão vermelho",
-              "falta",
-              "substituição",
-              "tempo",
-              "observação",
-            ],
-            (x) => x,
-            (x) => x,
-          ),
-        )}${select(
-          "Valor do ponto",
-          "value",
-          options(
-            m.sport === "Basquete" ? [3] : [1],
-            (x) => x,
-            (x) => x,
-          ),
-        )}${select(
-          "Atleta (opcional)",
-          "player",
-          '<option value="">Sem atleta</option>' +
-            options(
-              m.roster.filter((p) => p.team === m.home),
-              (x) => x.id,
-              (x) => x.number + " • " + x.name,
-            ),
-        )}<label>Quem entra (somente substituição)<select name="playerIn"><option value="">Selecione quem entra</option>${options(m.roster,p=>p.id,p=>name(p.team)+" · "+p.number+" • "+p.name)}</select></label><label><input type="checkbox" name="goalkeeper"> Substituição de goleiro</label></div><p class="muted">Para substituições, o campo Atleta indica quem sai; selecione também quem entra. Ambos devem pertencer à equipe escolhida. O registro documenta a troca, sem impor regras de retorno ou limites de substituições.</p><label>Detalhes<textarea name="text" maxlength="500"></textarea></label><p><button class="primary" ${!live ? "disabled" : ""}>Registrar lance</button></p></form>`
+    ${quickMatchControls(m,locked,live,c)}</div><div class="card"><details><summary>Cartões, faltas e outros lances</summary>${
+    locked ? "<p>Partida bloqueada.</p>" : `<form id="event"><div class="formgrid">${select("Equipe", "side", matchSideOptions(m))}
+      ${select("Tipo de lance", "kind", '<option value="">Selecione um lance</option>' +
+        options(["cartão amarelo", "cartão vermelho", "falta", "tempo", "observação"], x => x, x => x))}
+      ${select("Atleta (opcional)", "player", matchPlayerOptions(m, 0, "Sem atleta"))}
+      </div><label>Detalhes<textarea name="text" maxlength="500"></textarea></label>
+      <button class="primary" ${!live ? "disabled" : ""}>Registrar lance</button></form>`
+  }</details></div><div class="card"><details><summary>Substituições de atletas e goleiros</summary>${
+    locked ? "<p>Partida bloqueada.</p>" : `<form id="match-substitution"><div class="formgrid">
+      ${select("Equipe", "side", matchSideOptions(m))}
+      ${select("Tipo de substituição", "category", '<option value="player">Jogador de linha / atleta</option><option value="keeper">Goleiro</option>')}
+      ${select("Quem sai", "outgoing", matchPlayerOptions(m, 0, "Selecione quem sai"))}
+      ${select("Quem entra", "incoming", matchPlayerOptions(m, 0, "Selecione quem entra"))}
+      </div><button class="primary" ${!live ? "disabled" : ""}>Registrar substituição</button></form>`
+  }</details></div><div class="card"><details><summary>Troca de técnico</summary>${
+    locked ? "<p>Partida bloqueada.</p>" : `<form id="match-coach-change"><div class="formgrid">
+      ${select("Equipe", "side", matchSideOptions(m))}
+      ${field("Técnico que sai", "outgoing", "text", 'required maxlength="100"')}
+      ${field("Técnico que entra", "incoming", "text", 'required maxlength="100"')}
+      </div><p class="muted">A troca de técnico é registrada nas ocorrências da partida.</p>
+      <button class="primary" ${!live ? "disabled" : ""}>Registrar troca de técnico</button></form>`
   }</details></div><div class="card"><h3>Observações operacionais da súmula</h3>${role === "admin" ? `<form id="notes"><label>Ocorrências<textarea name="notes" maxlength="5000">${esc(m.notes)}</textarea></label><p><button>Salvar observações</button></p></form>` : `<p>${esc(m.notes || "Sem observações.")}</p><p class="muted">Edição exclusiva do administrador.</p>`}</div></div></div><div class="card"><h3>Histórico da partida</h3><details><summary>Correções e retificações</summary><p>Anule o lance incorreto com justificativa: gol/ponto, cartão, falta, substituição ou pedido de tempo. O registro original permanece no histórico. Para substituir um lançamento errado por outro, anule e registre o correto.</p><p>O operador precisa da permissão de anulações e só corrige suas partidas abertas. Após encerramento ou homologação, e para pontos de sets já fechados, a retificação é exclusiva do administrador. A situação da partida e o relógio são preservados.</p><p>Para incluir um lance que faltou após o encerramento, o administrador reabre com motivo, registra o lance e encerra/homologa novamente. Situação, relógio, etapa e vínculo ao campeonato são corrigidos pelos respectivos controles, sem apagar o histórico.</p></details>${
     m.events
       .slice()
@@ -2650,17 +2652,26 @@ document.addEventListener("submit", async (e) => {
     } else if(f.id === "operation-roster-add"){
       await dispatch({type:"matchRosterAdd",matchId:selected,playerId:d.playerId,reason:d.reason});
       toast("Jogador incluído no elenco desta partida, disponível nos lançamentos e substituições.");
-    } else if (f.id === "event")
-      await dispatch({
-        type: "event",
-        matchId: selected,
-        kind: d.kind,
-        side: Number(d.side),
-        value: Number(d.value),
-        player: d.player,
-        playerIn:d.playerIn,goalkeeper:!!d.goalkeeper,
-        text: d.text,
-      });
+    } else if (f.id === "event") {
+      if (!["cartão amarelo", "cartão vermelho", "falta", "tempo", "observação"].includes(d.kind)) {
+        throw Error("Selecione o tipo de lance.");
+      }
+      await dispatch({type: "event", matchId: selected, kind: d.kind, side: Number(d.side),
+        value: 0, player: d.player, text: d.text});
+    } else if (f.id === "match-substitution") {
+      if (!d.outgoing || !d.incoming || d.outgoing === d.incoming) {
+        throw Error("Selecione atletas diferentes para quem sai e quem entra.");
+      }
+      await dispatch({type: "event", matchId: selected, kind: "substituição", side: Number(d.side),
+        value: 0, player: d.outgoing, playerIn: d.incoming, goalkeeper: d.category === "keeper"});
+    } else if (f.id === "match-coach-change") {
+      const outgoing = d.outgoing.trim(), incoming = d.incoming.trim();
+      if (!outgoing || !incoming || outgoing.localeCompare(incoming, "pt-BR", {sensitivity: "base"}) === 0) {
+        throw Error("Informe os nomes de dois técnicos diferentes.");
+      }
+      await dispatch({type: "event", matchId: selected, kind: "observação", side: Number(d.side),
+        value: 0, text: `Troca de técnico — Sai: ${outgoing}; entra: ${incoming}.`});
+    }
     else if (f.id === "stage")
       await dispatch({ type: "stage", matchId: selected, stage: d.stage });
     else if (f.id === "notes")
@@ -3234,18 +3245,17 @@ document.addEventListener("change", async (e) => {
         }),
       );
     }
-    if (e.target.name === "side" && e.target.closest("#event")) {
-      const m = state.matches.find((m) => m.id === selected);
-      const incoming=$("#event [name=playerIn]");if(incoming)incoming.innerHTML='<option value="">Selecione quem entra</option>'+options(m.roster.filter(p=>p.team===[m.home,m.away][Number(e.target.value)]),p=>p.id,p=>p.number+" • "+p.name);
-      $("[name=player]").innerHTML =
-        '<option value="">Sem atleta</option>' +
-        options(
-          m.roster.filter(
-            (p) => p.team === [m.home, m.away][Number(e.target.value)],
-          ),
-          (x) => x.id,
-          (x) => x.number + " • " + x.name,
-        );
+    if (e.target.name === "side") {
+      const form = e.target.closest("#event, #match-substitution");
+      const match = state.matches.find(item => item.id === selected);
+      if (form && match) {
+        const side = Number(e.target.value);
+        const fields = form.id === "event" ? [["player", "Sem atleta"]] :
+          [["outgoing", "Selecione quem sai"], ["incoming", "Selecione quem entra"]];
+        for (const [fieldName, placeholder] of fields) {
+          form.elements[fieldName].innerHTML = matchPlayerOptions(match, side, placeholder);
+        }
+      }
     }
   } catch (e) {
     toast(e.message, true);

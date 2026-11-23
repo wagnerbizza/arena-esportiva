@@ -2448,24 +2448,46 @@ body:not([data-admin="true"]) .public-event-icon {
  body.arena-rail-collapsed #arenaSidebar .arena-side-search-launch {display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;padding:10px}
 }
 
-.arena-score-center { position: relative; display: grid; justify-items: center; gap: 4px; }
+.arena-team-scoreboard { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.arena-score-team { position: relative; display: grid; justify-items: center; align-self: start; min-width: 0; gap: 5px; }
+.arena-score-team .name { overflow-wrap: anywhere; }
+.arena-score-center { display: grid; justify-items: center; gap: 4px; }
 .arena-live-ball {
   display: block; width: max-content; font-size: 1.25rem; line-height: 1.2;
   animation: arena-ball-spin 2.4s linear infinite;
 }
+.arena-match-result { text-align: center; font-weight: 800; color: var(--accent); }
+.arena-team-scoreboard:has(.arena-match-notice) { padding-block-start: 44px; }
 .arena-match-notice {
-  position: absolute; inset-inline-start: 50%; inset-block-start: 100%;
-  transform: translateX(-50%); z-index: 1; pointer-events: none;
-  border-radius: 8px; padding: 4px 9px; white-space: nowrap;
+  position: absolute; inset-block-end: calc(100% + 4px); inset-inline: 0; width: max-content; margin-inline: auto;
+  border-radius: 8px; padding: 4px 9px; max-width: 100%;
   font-size: .8rem; font-weight: 800; background: #d7f9e2; color: #124826;
   animation: arena-match-notice-in .25s ease-out;
 }
 .arena-match-notice[data-notice="yellow"] { background: #ffd85a; color: #322207; }
 .arena-match-notice[data-notice="red"] { background: #a91e32; color: #fff; }
+.arena-score-number { display: inline-grid; place-items: center; position: relative; }
+.arena-score-value, .arena-goal-ball { grid-area: 1 / 1; }
+.arena-goal-ball { display: none; font-size: .7em; }
+@media (prefers-reduced-motion: no-preference) {
+  :root:not(.reduce-motion) .arena-score-goal > .arena-score-value {
+    animation: arena-goal-reveal 950ms step-end var(--arena-goal-delay, 0ms) both;
+  }
+  :root:not(.reduce-motion) .arena-score-goal > .arena-goal-ball {
+    display: block;
+    animation: arena-goal-ball 950ms ease-out var(--arena-goal-delay, 0ms) both;
+  }
+}
 @keyframes arena-ball-spin { to { transform: rotate(1turn); } }
 @keyframes arena-match-notice-in {
-  from { transform: translateX(-50%) scale(.9); opacity: .35; }
-  to { transform: translateX(-50%) scale(1); opacity: 1; }
+  from { transform: scale(.9); opacity: .35; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes arena-goal-reveal { from { opacity: 0; } to { opacity: 1; } }
+@keyframes arena-goal-ball {
+  from { transform: rotate(0turn) scale(.75); opacity: 1; }
+  75% { transform: rotate(.9turn) scale(1.1); opacity: 1; }
+  to { transform: rotate(1turn) scale(.85); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .arena-live-ball, .arena-match-notice { animation: none; }
