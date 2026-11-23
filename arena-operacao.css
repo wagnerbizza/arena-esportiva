@@ -94,3 +94,7 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 .arena-op-panel[data-op-drop="before"] { box-shadow:inset 0 3px var(--accent); }
 .arena-op-panel[data-op-drop="after"] { box-shadow:inset 0 -3px var(--accent); }
 @media print { [data-op-drag] { display:none!important; } }
+
+.arena-op-heading [data-op-lock] { min-width:44px; min-height:44px; padding:0; display:grid; place-items:center; }
+.arena-op-heading [data-op-lock][aria-pressed="true"] { color:var(--accent); background:var(--panel); }
+.arena-op-heading [data-op-drag]:disabled { opacity:.4; cursor:default; }
