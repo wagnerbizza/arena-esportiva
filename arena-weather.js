@@ -75,6 +75,7 @@
   main:has(> .arena-weather-card.is-pinned) .arena-live-pinnable.is-pinned {
     top:var(--arena-weather-sticky-height,0px);
     border-start-start-radius:0; border-start-end-radius:0; border-block-start:0;
+    box-shadow:0 -2px var(--panel,#14202b);
   }
   :is(.arena-weather-card,.arena-live-pinnable) .arena-weather-pin {
     display:grid; place-items:center; width:44px; min-height:44px; padding:0; margin-inline-start:auto;

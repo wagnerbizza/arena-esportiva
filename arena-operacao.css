@@ -12,7 +12,7 @@
 
 .arena-operation-workspace { --arena-op-stack-top: var(--arena-op-sticky-offset,6px); }
 main:has(> .arena-weather-card.is-pinned) .arena-operation-workspace {
-  --arena-op-stack-top: calc(var(--arena-op-sticky-offset,6px) + var(--arena-weather-sticky-height,0px));
+  --arena-op-stack-top: var(--arena-weather-sticky-height,0px);
 }
 .arena-op-strip.is-pinned { position:sticky; top:var(--arena-op-stack-top); z-index:6; }
 .arena-operation-workspace:not(:has(.arena-op-strip.is-pinned)) .arena-op-panel {
@@ -50,3 +50,33 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 }
 .arena-op-strip .arena-op-score-pin:hover { color:var(--accent) !important; }
 @media print { .arena-op-fold-actions, [data-op-fold] { display:none!important; } }
+
+.arena-op-strip { flex-wrap:wrap; }
+.arena-op-strip > .arena-op-back { flex:0 0 100%; min-height:44px; }
+.arena-op-strip > .arena-op-back + div {
+  display:flex; align-items:center; flex:1 1 120px; flex-wrap:wrap;
+  gap:8px 16px; min-width:0; overflow-wrap:anywhere;
+}
+.arena-op-strip > .arena-op-back + div strong { font-size:14px; }
+.arena-op-strip > .arena-op-back + div b { font-size:26px; white-space:nowrap; }
+main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
+  box-shadow:0 -2px var(--panel,#14202b), 0 3px 16px #0003;
+}
+@media (max-width:767px) {
+  body.arena-central-ready:has(#arenaMenuToggle:not([hidden])):has(main > .arena-weather-card.is-pinned) .arena-operation-workspace {
+    --arena-op-stack-top:calc(var(--arena-op-sticky-offset,80px) + var(--arena-weather-sticky-height,0px));
+  }
+}
+
+.arena-op-panel[style*="--arena-op-box-color"] {
+  border-inline-start:4px solid var(--arena-op-box-color);
+  background:color-mix(in srgb, var(--panel) 90%, var(--arena-op-box-color));
+}
+.arena-op-customize {
+  position:fixed; inset:0; margin:auto; box-sizing:border-box;
+  width:min(440px, calc(100vw - 24px)); max-height:calc(100dvh - 24px);
+  overflow:auto; color:var(--text); background:var(--panel);
+}
+.arena-op-customize::backdrop { background:#0009; }
+.arena-op-customize form { display:grid; gap:12px; }
+.arena-op-heading [data-op-customize] { min-width:44px; font-size:1.25rem; }

@@ -4177,16 +4177,18 @@ document.addEventListener("click",e=>{
   if(!match||!["Ao vivo","Pausada","Suspensa"].includes(match.status))return;
   publicArea=match.status==="Ao vivo"?"live":"active";
   render();
-  requestAnimationFrame(()=>document.getElementById(`match-card-${match.id}`)?.scrollIntoView({behavior:preferences.motion?"auto":"smooth",block:"start"}));
+  requestAnimationFrame(()=>scrollBelowPinnedCards(document.getElementById(`match-card-${match.id}`)));
   return;
  }
  const area=e.target.closest("[data-public-area]");
  if(area){
   publicArea=area.dataset.publicArea;
   render();
-  requestAnimationFrame(() => document.getElementById("publicHubContent")?.scrollIntoView({
-   behavior:preferences.motion?"auto":"smooth",block:"start"
-  }));
+  requestAnimationFrame(() => {
+   const hub=document.getElementById("publicHubContent");
+   const target=publicArea==="live"?hub?.querySelector(".match-card.is-live")||hub:hub;
+   scrollBelowPinnedCards(target);
+  });
   return;
  }
  const answer=e.target.closest("[data-sport-answer]");
@@ -4704,20 +4706,34 @@ function navigationDestination(control){
   ['data-profile-tab','.team-profile-heading + .card'],
   ['data-profile-edit','#team'],['data-profile-new-player','.team-player-editor'],
   ['data-profile-player','.team-player-editor'],['data-player-editor-cancel','.team-profile-heading'],
-  ['data-public-area','#publicHubContent'],['data-open-clock','#clockSettings']
+  ['data-open-clock','#clockSettings']
  ];
  return routes.find(([attribute])=>control.hasAttribute(attribute))?.[1]||null;
+}
+function scrollBelowPinnedCards(target, behavior=preferences.motion ||
+  matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"){
+ if(!target)return;
+ let offset=0;
+ for(const selector of [".arena-weather-card.is-pinned",".arena-live-pinnable.is-pinned",".arena-op-strip.is-pinned"]){
+  const card=document.querySelector(selector);
+  if(!card || !(card.compareDocumentPosition(target)&Node.DOCUMENT_POSITION_FOLLOWING))continue;
+  const top=parseFloat(getComputedStyle(card).top);
+  offset=Math.max(offset,(Number.isFinite(top)?top:0)+card.getBoundingClientRect().height);
+ }
+ const menu=document.querySelector("#arenaMenuToggle:not([hidden])");
+ if(menu?.getBoundingClientRect().height)offset=Math.max(offset,menu.getBoundingClientRect().bottom);
+ window.scrollTo({top:Math.max(0,window.scrollY+target.getBoundingClientRect().top-offset-12),behavior});
 }
 function revealNavigationDestination(selector){
  const container=document.querySelector(selector);if(!container)return;
  // Os diálogos abertos gerenciam seu próprio foco.
  if(document.querySelector('dialog[open]'))return;
+ const score=selector==='#view'?container.querySelector('.arena-op-strip'):null;
  const heading=container.matches('h1,h2,h3,h4')?container:container.querySelector('h1,h2,h3,h4');
- const target=heading||container;
+ const target=score||heading||container;
  target.setAttribute('tabindex','-1');
- target.style.scrollMarginTop='24px';
  target.focus({preventScroll:true});
- target.scrollIntoView({block:'start',behavior:'instant'});
+ scrollBelowPinnedCards(target,'instant');
 }
 let navigationRevealFrame=0;
 document.addEventListener('click',event=>{
