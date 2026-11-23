@@ -1,6 +1,6 @@
 /* Mesa pessoal da partida. Não altera a navegação lateral nem as preferências da Home. */
 .arena-operation-workspace{min-width:0;display:grid;gap:14px}.arena-op-score{min-width:0}.arena-op-score>.match-card{margin:0 0 12px}.arena-op-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
-.arena-op-panel{min-width:0;margin:0;scroll-margin-top:calc(var(--arena-op-stack-top) + 126px)}.arena-op-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.arena-op-heading h2{margin:0;font-size:27px}.arena-op-heading button{flex:none;font-size:13px;min-height:40px}.arena-op-panel>.quick-panel{padding:0;border:0;box-shadow:none;background:none}
+.arena-op-panel{min-width:0;margin:0;scroll-margin-top:calc(var(--arena-op-stack-top) + 126px)}.arena-op-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.arena-op-heading h2{margin:0;font-size:27px}.arena-op-heading button{flex:none;font-size:13px;min-height:40px}.arena-op-panel > [data-op-content] > .quick-panel{padding:0;border:0;box-shadow:none;background:none}
 .arena-operation-workspace .quick-score{min-height:80px;font-size:34px;padding:12px}.arena-operation-workspace .quick-team{padding:14px}.arena-operation-workspace .quick-team-title h3{font-size:22px;overflow-wrap:anywhere}.arena-op-panel .formgrid{gap:12px}.arena-op-panel [hidden]{display:none!important}
 .arena-op-strip{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:0 3px 16px #0003;min-width:0}.arena-op-strip>div:first-child{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;min-width:0}.arena-op-strip>div:first-child strong{font-size:14px;overflow-wrap:anywhere}.arena-op-strip>div:first-child b{font-size:26px;white-space:nowrap}.arena-op-strip .game-clock{border:0;padding:0;margin:0;min-width:112px;background:transparent}.arena-op-strip .game-clock>strong{font-size:24px}.arena-op-strip .clock-caption{font-size:11px}.arena-op-strip [data-clock-status]{font-size:11px}.arena-op-strip .game-clock>.tag{display:none}
 .arena-op-settings{margin:0}.arena-op-settings>summary{min-height:36px;cursor:pointer;font-weight:700}.arena-op-settings>label{display:inline-flex;align-items:center;gap:8px;margin:8px 18px 12px 0}.arena-op-settings input[type=checkbox]{width:auto;min-height:auto}.arena-op-order-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)}.arena-op-order-row>span{flex:1;font-size:14px}.arena-op-order-row>button{min-height:38px;font-size:13px}.arena-op-shortcuts{margin:0;gap:8px}.arena-op-shortcuts>button{min-height:42px}.arena-op-panel .quick-control-group{margin-top:12px}
@@ -12,7 +12,7 @@
 
 .arena-operation-workspace { --arena-op-stack-top: var(--arena-op-sticky-offset,6px); }
 main:has(> .arena-weather-card.is-pinned) .arena-operation-workspace {
-  --arena-op-stack-top: calc(var(--arena-op-sticky-offset,6px) + var(--arena-weather-sticky-height,0px) + 8px);
+  --arena-op-stack-top: calc(var(--arena-op-sticky-offset,6px) + var(--arena-weather-sticky-height,0px));
 }
 .arena-op-strip.is-pinned { position:sticky; top:var(--arena-op-stack-top); z-index:6; }
 .arena-operation-workspace:not(:has(.arena-op-strip.is-pinned)) .arena-op-panel {
@@ -31,3 +31,22 @@ main:has(> .arena-weather-card.is-pinned) .arena-operation-workspace {
   .arena-op-strip > div:first-child { flex:1 1 120px; }
   .arena-op-strip .game-clock { min-width:80px; }
 }
+
+.arena-op-heading { flex-wrap:wrap; justify-content:flex-start; }
+.arena-op-heading h2 { flex:1 1 12rem; min-width:0; }
+.arena-op-panel:has(> [data-op-content][hidden]) .arena-op-heading { margin-bottom:0; }
+.arena-op-fold-actions { margin:0; }
+.arena-operation-workspace .match-guide { margin:0; padding:8px 12px; }
+.arena-operation-workspace .match-guide h3 { font-size:1rem; margin:3px 0; }
+.arena-operation-workspace .match-guide p,
+.arena-operation-workspace .match-guide small { font-size:.85rem; margin:4px 0; }
+.arena-operation-workspace .match-guide .toolbar:empty { display:none; }
+main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
+  border-start-start-radius:0; border-start-end-radius:0; border-block-start:0;
+}
+.arena-op-strip .arena-op-score-pin[aria-pressed] {
+  background:transparent !important; color:var(--text) !important;
+  border:0; box-shadow:none;
+}
+.arena-op-strip .arena-op-score-pin:hover { color:var(--accent) !important; }
+@media print { .arena-op-fold-actions, [data-op-fold] { display:none!important; } }

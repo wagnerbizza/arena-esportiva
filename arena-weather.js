@@ -53,18 +53,8 @@
   .arena-weather-card > #arenaWeather > summary {
     min-height:56px; padding-inline-end:60px; flex-wrap:wrap; overflow-wrap:anywhere;
   }
-  main:has(.live-status-panel) { --arena-weather-stack-gap:24px; }
-  main:has(.live-status-panel) > .arena-weather-card {
-    margin-bottom:var(--arena-weather-stack-gap);
-  }
-  main:has(.live-status-panel) > .arena-weather-card::after {
-    content:""; position:absolute; inset-inline:0; bottom:calc(-1px - var(--arena-weather-stack-gap) / 2);
-    border-block-end:1px solid var(--muted,#8295a6); opacity:.45; pointer-events:none;
-  }
-  main:has(.arena-live-pinnable.is-pinned) > .arena-weather-card.is-pinned::before {
-    content:""; position:absolute; top:100%; inset-inline:-1px;
-    height:calc(var(--arena-weather-stack-gap) + 2px);
-    background:var(--bg,#0c1014); pointer-events:none;
+  main:has(.arena-live-pinnable.is-pinned, .arena-op-strip.is-pinned) > .arena-weather-card.is-pinned {
+    border-end-start-radius:0; border-end-end-radius:0;
   }
   .arena-live-pinnable.is-pinned { background:var(--panel,#14202b); }
   .arena-weather-card > .arena-weather-pin {
@@ -83,7 +73,8 @@
     max-height:40dvh; overflow:auto;
   }
   main:has(> .arena-weather-card.is-pinned) .arena-live-pinnable.is-pinned {
-    top:calc(var(--arena-weather-sticky-height,0px) + var(--arena-weather-stack-gap,24px));
+    top:var(--arena-weather-sticky-height,0px);
+    border-start-start-radius:0; border-start-end-radius:0; border-block-start:0;
   }
   :is(.arena-weather-card,.arena-live-pinnable) .arena-weather-pin {
     display:grid; place-items:center; width:44px; min-height:44px; padding:0; margin-inline-start:auto;
@@ -91,7 +82,10 @@
     background:transparent !important; color:var(--text,#eef3f6) !important;
     font-size:.85rem; text-align:end; line-height:1;
   }
-  :is(.arena-weather-card,.arena-live-pinnable) .arena-weather-pin:hover { text-decoration:underline; }
+  :is(.arena-weather-card,.arena-live-pinnable) .arena-weather-pin[aria-pressed] {
+    background:transparent !important; box-shadow:none;
+  }
+  :is(.arena-weather-card,.arena-live-pinnable) .arena-weather-pin:hover { color:var(--accent,#16c9f3) !important; }
   @media screen and (max-width:600px) {
     .arena-weather-card > #arenaWeather > summary {
       display:flex; flex-direction:column; align-items:flex-start;
