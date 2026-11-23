@@ -2492,3 +2492,20 @@ body:not([data-admin="true"]) .public-event-icon {
 @media (prefers-reduced-motion: reduce) {
   .arena-live-ball, .arena-match-notice { animation: none; }
 }
+
+/* Keep names and controls within their cards at narrow widths and large text sizes. */
+.shortcut-panel, .shortcut-header, .shortcut-primary { min-width: 0; }
+.shortcut-panel .shortcut-header { flex-wrap: wrap; }
+.shortcut-panel .shortcut-primary {
+  flex: 1 1 9rem; max-width: 100%; padding: 6px 8px; white-space: normal;
+}
+.shortcut-primary strong, .shortcut-primary small,
+.arena-score-team .name, .arena-op-heading h2 {
+  max-width: 100%; overflow-wrap: anywhere; white-space: normal;
+}
+.shortcut-tools { flex: 0 1 auto; max-width: 100%; }
+.arena-score-team .arena-match-notice { text-align: center; white-space: normal; }
+
+@media (min-width: 768px) {
+  .arena-score-center .arena-live-ball { font-size: clamp(2rem, 3vw, 3rem); }
+}
