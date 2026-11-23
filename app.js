@@ -743,6 +743,7 @@ async function qrLogoData(source) {
 document.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-share-copy],[data-share-qr],[data-registration-sheet]");
   if (!button) return;
+  let preview;
   try {
     if (button.dataset.shareCopy) {
       try {
@@ -752,16 +753,41 @@ document.addEventListener("click", async (event) => {
         prompt("Copie o link público", button.dataset.shareCopy);
       }
     } else if (button.dataset.shareQr) {
+      const form = button.hasAttribute("data-qr-pdf")
+        ? button.closest("article").querySelector("[data-qr-print-options]")
+        : null;
+      if (form && !form.reportValidity()) return;
+      const options = form ? Object.fromEntries(new FormData(form)) : null;
+      if (button.hasAttribute("data-qr-pdf-preview")) {
+        preview = window.open("", "_blank");
+        if (!preview) throw Error("Permita abrir uma nova aba para visualizar o PDF.");
+        preview.opener = null;
+        preview.document.title = "Prévia do QR Code";
+        preview.document.body.textContent = "Preparando a prévia do PDF…";
+      }
       const {qrSvg} = await import("./vendor/arena-qrcode.js");
       const logo = button.hasAttribute("data-qr-logo") ? await qrLogoData(state.settings.logo) : "";
       const filename = logo ? "arena-qr-code-com-logo.svg" : "arena-qr-code.svg";
       const svg = qrSvg(button.dataset.shareQr, logo);
-      if (button.hasAttribute("data-qr-pdf")) {
-        const form = button.closest("article").querySelector("[data-qr-print-options]");
-        if (!form.reportValidity()) return;
-        const options = Object.fromEntries(new FormData(form));
-        const { downloadCenteredQrPDF } = await import("./report-pdf.js?v=qr-centralizado-3");
-        await downloadCenteredQrPDF(svg, filename.replace(/\.svg$/, ".pdf"), options);
+      if (options) {
+        const { createCenteredQrPDF } = await import("./report-pdf.js?v=qr-centralizado-4");
+        const pdf = await createCenteredQrPDF(svg, options);
+        if (!preview) {
+          pdf.save(filename.replace(/\.svg$/, ".pdf"));
+        } else if (!preview.closed) {
+          const url = URL.createObjectURL(pdf.output("blob"));
+          try {
+            preview.location.replace(url);
+          } catch (error) {
+            URL.revokeObjectURL(url);
+            throw error;
+          }
+          const checkClosed = window.setInterval(() => {
+            if (!preview.closed) return;
+            window.clearInterval(checkClosed);
+            URL.revokeObjectURL(url);
+          }, 1000);
+        }
       } else {
         download(filename, svg, "image/svg+xml");
       }
@@ -770,6 +796,7 @@ document.addEventListener("click", async (event) => {
       if (championship) printRegistrationSheet(championship);
     }
   } catch (error) {
+    preview?.close();
     toast(error.message, true);
   }
 });
@@ -4009,7 +4036,7 @@ function publicPanelURL(edition="") {
  if(edition)url.searchParams.set("campeonato",edition);
  return url.href;
 }
-function qrPrintOptions(title) {
+function qrPrintOptions(title, url) {
  return `<details>
   <summary>Ajustar PDF do QR Code</summary>
   <form data-qr-print-options onsubmit="return false">
@@ -4023,7 +4050,11 @@ function qrPrintOptions(title) {
    <label>Instruções<textarea name="instructions" maxlength="320" rows="3">Abra a câmera do celular e aponte para o QR Code.
 Toque no link que aparecer para acompanhar os jogos.</textarea></label>
    <p class="muted">Deixe o título ou as instruções em branco para ocultá-los. Para manter o tamanho na impressão, use escala de 100%.</p>
-   <button type="reset">Restaurar padrão</button>
+   <div class="toolbar">
+    <button type="button" data-share-qr="${esc(url)}" data-qr-pdf data-qr-pdf-preview>Prévia do PDF</button>
+    ${state.settings.logo ? `<button type="button" data-share-qr="${esc(url)}" data-qr-pdf data-qr-pdf-preview data-qr-logo>Prévia com logo</button>` : ""}
+    <button type="reset">Restaurar padrão</button>
+   </div>
   </form>
  </details>`;
 }
@@ -4032,7 +4063,7 @@ function qrCodesView() {
  for(const c of state.championships||[])if(!c.testData)editions.set(championshipTitle(c),c.sport||"");
  for(const match of state.matches)if(!match.testData&&!match.publicHidden&&match.competition)editions.set(match.competition,match.sport||"");
  const cards=[["Painel Público do Arena",publicPanelURL(),"Todos os jogos publicados"],...[...editions].sort((a,b)=>a[0].localeCompare(b[0],"pt-BR")).map(([title,sport])=>[title,publicPanelURL(title),sport])];
- return `<section class="card"><h2>Central de QR codes e links</h2><p>Compartilhe o painel público ou a página de um campeonato. Os links não concedem acesso à operação.</p><p class="muted">A prévia usa QR code sem logo. O botão Com logo incorpora o logo principal configurado no Arena.</p></section><div class="grid arena-qr-grid">${cards.map(([title,url,detail])=>`<article class="card"><h3>${esc(title)}</h3><p class="muted">${esc(detail)}</p><div class="arena-qr-preview" data-qr-preview="${esc(url)}"><span>Preparando QR code…</span></div><label>Link público<input readonly value="${esc(url)}" aria-label="Link de ${esc(title)}"></label>${qrPrintOptions(title)}<div class="toolbar"><button type="button" data-share-copy="${esc(url)}">Copiar link</button><a class="button" href="${esc(url)}" target="_blank" rel="noopener">Abrir página</a><button type="button" class="primary" data-share-qr="${esc(url)}" data-qr-pdf>Baixar PDF centralizado</button>${state.settings.logo?`<button type="button" data-share-qr="${esc(url)}" data-qr-pdf data-qr-logo>Baixar PDF com logo</button>`:""}<button type="button" data-share-qr="${esc(url)}">Baixar QR code</button>${state.settings.logo?`<button type="button" data-share-qr="${esc(url)}" data-qr-logo>Baixar com logo</button>`:""}</div></article>`).join("")}</div>`;
+ return `<section class="card"><h2>Central de QR codes e links</h2><p>Compartilhe o painel público ou a página de um campeonato. Os links não concedem acesso à operação.</p><p class="muted">A prévia usa QR code sem logo. O botão Com logo incorpora o logo principal configurado no Arena.</p></section><div class="grid arena-qr-grid">${cards.map(([title,url,detail])=>`<article class="card"><h3>${esc(title)}</h3><p class="muted">${esc(detail)}</p><div class="arena-qr-preview" data-qr-preview="${esc(url)}"><span>Preparando QR code…</span></div><label>Link público<input readonly value="${esc(url)}" aria-label="Link de ${esc(title)}"></label>${qrPrintOptions(title, url)}<div class="toolbar"><button type="button" data-share-copy="${esc(url)}">Copiar link</button><a class="button" href="${esc(url)}" target="_blank" rel="noopener">Abrir página</a><button type="button" class="primary" data-share-qr="${esc(url)}" data-qr-pdf>Baixar PDF centralizado</button>${state.settings.logo?`<button type="button" data-share-qr="${esc(url)}" data-qr-pdf data-qr-logo>Baixar PDF com logo</button>`:""}<button type="button" data-share-qr="${esc(url)}">Baixar QR code</button>${state.settings.logo?`<button type="button" data-share-qr="${esc(url)}" data-qr-logo>Baixar com logo</button>`:""}</div></article>`).join("")}</div>`;
 }
 async function renderQRPreviews() {
  const nodes=[...app.querySelectorAll("[data-qr-preview]")];

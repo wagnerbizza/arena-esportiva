@@ -37,6 +37,10 @@ async function libraries() {
   return loading;
 }
 export async function downloadCenteredQrPDF(svg, filename, options) {
+  const doc = await createCenteredQrPDF(svg, options);
+  doc.save(filename);
+}
+export async function createCenteredQrPDF(svg, options) {
   const source = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
   const canvas = document.createElement("canvas");
   try {
@@ -92,7 +96,7 @@ export async function downloadCenteredQrPDF(svg, filename, options) {
     doc.setFontSize(instructionsSize);
     doc.text(directions, centerX, directionsY, { align: "center" });
   }
-  doc.save(filename);
+  return doc;
 }
 async function logoPNG(src) {
   if (!src) return null;
