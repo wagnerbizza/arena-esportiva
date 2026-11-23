@@ -109,7 +109,7 @@ service cloud.firestore {
    return meta(d,id) && d.get('testData',false) is bool && d.keys().hasOnly(['testData','id','name','team','number','position','reserve','className','_revision','_audit','_updatedAt','_updatedBy'])
     && nonempty(d.name,150) && nonempty(d.team,100) && exists(/databases/$(database)/documents/teams/$(d.team))
     && get(/databases/$(database)/documents/teams/$(d.team)).data.get('archived',false) == false
-    && bounded(d.number,8) && bounded(d.position,50) && bounded(d.get('className',''),150) && d.reserve is bool;
+    && bounded(d.number,8) && bounded(d.position,50) && bounded(d.get('className',''),150) && (d.reserve is bool || d.reserve == null);
   }
   function settingsSchema(d) {
    return meta(d,'main') && d.keys().hasOnly(['id','title','subtitle','color','banner','logo','summaryLimit','historyPageSize','_revision','_audit','_updatedAt','_updatedBy'])
@@ -341,20 +341,34 @@ service cloud.firestore {
   }
   function matchRosterAddition(d,b,e) {
    let p=get(/databases/$(database)/documents/players/$(e.from)).data;
-   let player={'id':p.id,'name':p.name,'team':p.team,'number':p.get('number',''),'position':p.get('position',''),'reserve':p.get('reserve',false)};
+   let player={'id':p.id,'name':p.name,'team':e.to,'number':p.get('number',''),'position':p.get('position',''),'reserve':p.get('reserve',false)};
+   let added=d.roster[b.roster.size()];
+   let guest=p.team != e.to;
    return rosterManager() && unlocked(b) && e.type == 'elenco' && e.correctionOf == '' && e.value == 0 && nonempty(e.reason,500)
-    && p.id == e.from && e.player == p.id && e.to == p.team && p.team in [b.home,b.away]
-    && e.side == (p.team == b.home ? 0 : 1) && activeRef('players',p.id) && activeRef('teams',p.team)
+    && p.get('archived',false) == false && p.id == e.from && e.player == p.id && e.to in [b.home,b.away]
+    && (!guest || (!(p.team in [b.home,b.away]) && activeRef('teams',e.to)
+      && get(/databases/$(database)/documents/teams/$(e.to)).data.get('archived',false) == false))
+    && e.side == (e.to == b.home ? 0 : 1) && activeRef('players',p.id) && activeRef('teams',p.team)
     && get(/databases/$(database)/documents/teams/$(p.team)).data.get('archived',false) == false
     && !(p.id in b.rosterTeams) && changedOnly(d,b,['roster','rosterTeams'])
-    && d.roster == b.roster.concat([player]) && d.roster.size() <= 80
+    && (guest ? added.diff(player).affectedKeys().hasOnly(['originTeam','rosterNote'])
+      && added.originTeam == p.team && added.rosterNote == e.reason : added == player)
+    && d.roster == b.roster.concat([added]) && d.roster.size() <= 80
     && d.rosterTeams.size() == b.rosterTeams.size()+1 && d.rosterTeams.diff(b.rosterTeams).affectedKeys().hasOnly([p.id])
-    && d.rosterTeams[p.id] == p.team;
+    && d.rosterTeams[p.id] == e.to;
+  }
+  function matchRosterNote(d,b,e) {
+   let notes=d.get('rosterNotes',{});
+   return rosterManager() && unlocked(b) && e.type == 'observação de elenco' && e.correctionOf == '' && e.value == 0
+    && e.player != '' && athlete(e,b) && nonempty(e.reason,500)
+    && changedOnly(d,b,['rosterNotes']) && notes is map && notes.size() <= 80
+    && notes.diff(b.get('rosterNotes',{})).affectedKeys().hasOnly([e.player])
+    && notes[e.player] == e.reason;
   }
   function validMatchUpdate(d,b) {
    let e = logData(d).detail;
    return stageDetail(e,b) && (e.type == 'visibilidade pública' ? visibilityChange(d,b,e) : d.get('publicHidden',false) == b.get('publicHidden',false)
-    && (e.type == 'elenco' ? matchRosterAddition(d,b,e) : e.correctionOf != '' ? reversal(d,b,e)
+    && (e.type == 'elenco' ? matchRosterAddition(d,b,e) : e.type == 'observação de elenco' ? matchRosterNote(d,b,e) : e.correctionOf != '' ? reversal(d,b,e)
      : e.type == 'súmula' ? admin() && changedOnly(d,b,['notes']) && d.notes == e.text && bounded(d.notes,5000)
      : e.type == 'visibilidade pública' ? visibilityChange(d,b,e)
      : e.type == 'publicação de lances' ? publishPublicEvents(d,b,e)
@@ -383,9 +397,9 @@ service cloud.firestore {
     && d.id == uid && nonempty(d.name,100) && bounded(d.email,254)
     && d.role in ['pending','operator'] && d.enabled is bool && d.matches is list && d.matches.size() <= 100
     && d.matches.toSet().size() == d.matches.size()
-    && d.get('permissions',[]) is list && d.get('permissions',[]).size() <= 5
+    && d.get('permissions',[]) is list && d.get('permissions',[]).size() <= 6
     && d.get('permissions',[]).toSet().size() == d.get('permissions',[]).size()
-    && d.get('permissions',[]).hasOnly(['rosters','matchesCreate','championships','gamesView','historyCorrections'])
+    && d.get('permissions',[]).hasOnly(['rosters','matchesCreate','championships','gamesView','historyCorrections','editMatchPhases'])
     && d.get('followedEditions',[]) is list && d.get('followedEditions',[]).size() <= 20
     && d.get('followedEditions',[]).toSet().size() == d.get('followedEditions',[]).size()
     && ((d.role == 'operator' && d.enabled) || d.get('followedEditions',[]) == [])
@@ -502,6 +516,8 @@ service cloud.firestore {
   }
   match /championships/{id} {
    allow read: if owner() || (championshipManager() && resource.data.testData == false);
+   // A transação de cadastro verifica se o ID ainda está livre.
+   allow get: if championshipManager() && !exists(/databases/$(database)/documents/championships/$(id));
    allow create: if sportsAvailable() && activeSports(request.resource.data) && championshipManager() && championshipSchema(request.resource.data,id) && request.resource.data._revision == 1 && pair(request.resource.data,'championships',id,null);
    allow update: if sportsAvailable() && stableSports(request.resource.data,resource.data) && championshipManager() && championshipSchema(request.resource.data,id) && request.resource.data.sport == resource.data.sport
     && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'championships',id,resource.data);
@@ -510,6 +526,8 @@ service cloud.firestore {
   }
   match /teams/{id} {
    allow read: if owner() || (rosterManager() && resource.data.testData == false);
+   // A transação de cadastro verifica se o ID ainda está livre.
+   allow get: if rosterManager() && !exists(/databases/$(database)/documents/teams/$(id));
    allow create: if sportsAvailable() && activeSports(request.resource.data) && rosterManager() && teamSchema(request.resource.data,id) && request.resource.data.get('archived',false) == false && request.resource.data._revision == 1 && pair(request.resource.data,'teams',id,null) && publishedTeam(request.resource.data,id);
    allow update: if sportsAvailable() && stableSports(request.resource.data,resource.data) && rosterManager() && teamSchema(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1
     && (request.resource.data.get('archived',false) == resource.data.get('archived',false) || (owner() && logData(request.resource.data).detail.type in ['arquivamento','reativação'] && nonempty(logData(request.resource.data).detail.reason,500) && logData(request.resource.data).detail.reason.size() >= 5))
@@ -519,9 +537,21 @@ service cloud.firestore {
   }
   match /players/{id} {
    allow read: if owner() || (rosterManager() && resource.data.testData == false);
+   // A transação de cadastro verifica se o ID ainda está livre.
+   allow get: if rosterManager() && !exists(/databases/$(database)/documents/players/$(id));
    allow create: if sportsAvailable() && activeSports(request.resource.data) && rosterManager() && playerSchema(request.resource.data,id) && activeRef('teams',request.resource.data.team) && request.resource.data._revision == 1 && pair(request.resource.data,'players',id,null);
-   allow update: if sportsAvailable() && stableSports(request.resource.data,resource.data) && rosterManager() && playerSchema(request.resource.data,id) && activeRef('teams',request.resource.data.team) && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'players',id,resource.data);
+   allow update: if sportsAvailable() && stableSports(request.resource.data,resource.data) && resource.data.get('archived',false) == false && rosterManager() && playerSchema(request.resource.data,id) && activeRef('teams',request.resource.data.team) && request.resource.data._revision == resource.data._revision+1 && pair(request.resource.data,'players',id,resource.data);
    allow delete: if false;
+   allow update: if owner() && sportsAvailable() && activeSports(resource.data)
+    && activeRef('teams',resource.data.team)
+    && get(/databases/$(database)/documents/teams/$(resource.data.team)).data.get('archived',false) == false
+    && resource.data.get('archived',false) == false && request.resource.data.archived == true
+    && meta(request.resource.data,id) && request.resource.data._revision == resource.data._revision+1
+    && changedOnly(request.resource.data,resource.data,['archived'])
+    && pair(request.resource.data,'players',id,resource.data)
+    && logData(request.resource.data).detail.type == 'arquivamento'
+    && nonempty(logData(request.resource.data).detail.reason,500)
+    && logData(request.resource.data).detail.reason.size() >= 5;
    allow update: if testClassify(request.resource.data,resource.data,id,'players');
   }
   // 17 — Apenas o titular remove partidas, com registro completo e publicação removida.
@@ -776,6 +806,49 @@ service cloud.firestore {
    allow get: if true;
    allow create,update: if owner() && brandingSchema(request.resource.data);
    allow delete: if false;
+  }
+  // Preferencias da mesa de operacao, privadas por conta.
+  match /arenaOperationLayouts/{uid} {
+    allow get: if request.auth != null && request.auth.uid == uid;
+    allow create, update: if request.auth != null && request.auth.uid == uid
+      && request.resource.data.keys().hasOnly(['payload', 'updatedAt'])
+      && request.resource.data.payload is string
+      && request.resource.data.payload.size() <= 8192
+      && request.resource.data.updatedAt == request.time;
+  }
+  // Metadados de fases e histórico separados dos documentos de partida.
+  match /arenaMatchPhases/{matchId} {
+   function canEditEdition(id) {
+    return championshipOperator(id)
+      && 'editMatchPhases' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions',[]);
+   }
+   function canAccessPhaseMatch() {
+    let game = get(/databases/$(database)/documents/matches/$(matchId)).data;
+    return game.get('testData',false) == false && canEditEdition(game.get('championshipId',''));
+   }
+   allow get: if owner() || (canAccessPhaseMatch() &&
+     (!exists(/databases/$(database)/documents/arenaMatchPhases/$(matchId)) || canEditEdition(resource.data.championshipId)));
+   allow list: if owner() || canEditEdition(resource.data.championshipId);
+   function validPhase(d) {
+    let game = get(/databases/$(database)/documents/matches/$(matchId)).data;
+    return d.keys().hasOnly(['championshipId','phase','group','round','actor','auditId','updatedAt'])
+      && nonempty(d.championshipId,128) && d.championshipId == game.championshipId
+      && game.get('testData',false) == false
+      && d.phase in ['','Grupos','Oitavas de final','Quartas de final','Semifinal','Disputa de terceiro lugar','Final']
+      && bounded(d.group,40) && bounded(d.round,40)
+      && (d.phase != '' || (d.group == '' && d.round == ''))
+      && d.actor == request.auth.uid && nonempty(d.auditId,128)
+      && d.updatedAt == request.time;
+   }
+   allow create,update: if (owner() || canAccessPhaseMatch()) && validPhase(request.resource.data)
+      && !exists(/databases/$(database)/documents/arenaMatchPhases/$(matchId)/history/$(request.resource.data.auditId))
+      && getAfter(/databases/$(database)/documents/arenaMatchPhases/$(matchId)/history/$(request.resource.data.auditId)).data == request.resource.data;
+   match /history/{id} {
+    allow read: if owner() || (canAccessPhaseMatch() && canEditEdition(resource.data.championshipId));
+    allow create: if (owner() || canAccessPhaseMatch()) && request.resource.data.auditId == id
+      && request.resource.data.updatedAt == request.time
+      && getAfter(/databases/$(database)/documents/arenaMatchPhases/$(matchId)).data == request.resource.data;
+   }
   }
   match /{document=**} { allow read, write: if false; }
  }

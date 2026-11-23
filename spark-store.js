@@ -599,7 +599,7 @@ export async function connectSpark({
       target,
       prepared = null;
     if (["team", "player", "settings", "match", "championship"].includes(action.type)) {
-      const activeState={...state};for(const entity of ["matches","teams","players","championships"])activeState[entity]=(state[entity]||[]).filter(r=>!r.testData);
+      const activeState={...state};for(const entity of ["matches","teams","players","championships"])activeState[entity]=(state[entity]||[]).filter(r=>!r.testData && (entity!=="players" || r.archived!==true));
       const checked = D.reduce(activeState, action, session.uid);
       entity = {
         championship: "championships",
@@ -628,6 +628,11 @@ export async function connectSpark({
         );
         delete prepared.events;
       }
+    } else if(action.type==="playerArchive"){
+      if(!isOwner())throw Error("Somente o administrador pode remover jogadores.");
+      const reason=String(action.reason||"").trim();
+      if(reason.length<5||reason.length>500)throw Error("Informe o motivo (5 a 500 caracteres).");
+      entity="players";target=action.playerId;
     } else if(action.type==="teamArchive"){
       if(!isOwner())throw Error("Somente o administrador principal arquiva ou reativa equipes.");
       if(typeof action.archived!=="boolean"||String(action.reason||"").trim().length<5||String(action.reason||"").trim().length>500)throw Error("Informe o motivo (5 a 500 caracteres).");
@@ -693,7 +698,7 @@ export async function connectSpark({
         if(action.type==="matchRosterAdd"){
           if(typeof action.playerId!=="string"||!action.playerId||action.playerId.includes("/"))throw Error("Selecione um jogador cadastrado.");
           const snap=await tx.get(F.doc(database,"players",action.playerId));
-          if(!snap.exists()||snap.data().testData===true)throw Error("Jogador indisponível.");
+          if(!snap.exists()||snap.data().testData===true||snap.data().archived===true)throw Error("Jogador indisponível.");
           rosterPlayer={...snap.data(),id:snap.id};
           const team=await tx.get(F.doc(database,"teams",rosterPlayer.team));
           if(!team.exists()||team.data().archived===true||team.data().testData===true)throw Error("Equipe indisponível para novas inclusões.");
@@ -739,6 +744,11 @@ export async function connectSpark({
             0,
             500,
           );
+        } else if(action.type==="playerArchive"){
+          if(!before||before.team!==action.teamId||before.archived===true||before.testData===true)throw Error("Jogador indisponível nesta equipe.");
+          next={...before,archived:true};
+          detail=M.detail("arquivamento");detail.reason=String(action.reason).trim();
+          detail.text="Jogador removido do elenco atual";
         } else if(action.type==="teamArchive"){
           if(!before)throw Error("Equipe não encontrada.");
           if((before.archived||false)===action.archived)throw Error("A equipe já está nesta situação.");
