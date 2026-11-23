@@ -36,6 +36,26 @@ async function libraries() {
     });
   return loading;
 }
+export async function downloadCenteredQrPDF(svg, filename) {
+  const source = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  const canvas = document.createElement("canvas");
+  try {
+    const image = new Image();
+    image.src = source;
+    await image.decode();
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    canvas.getContext("2d").drawImage(image, 0, 0);
+  } finally {
+    URL.revokeObjectURL(source);
+  }
+  await libraries();
+  const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  const side = 130;
+  const page = doc.internal.pageSize;
+  doc.addImage(canvas, "PNG", (page.getWidth() - side) / 2, (page.getHeight() - side) / 2, side, side);
+  doc.save(filename);
+}
 async function logoPNG(src) {
   if (!src) return null;
   return new Promise((resolve) => {
