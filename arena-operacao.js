@@ -82,19 +82,37 @@
    handle.setAttribute('aria-label','Reordenar '+title);
    handle.setAttribute('aria-keyshortcuts','Alt+ArrowUp Alt+ArrowDown');
    const locked=prefs.locked.includes(id),lock=section.querySelector('[data-op-lock]');
-   handle.setAttribute('aria-disabled',String(locked));
+
    lock.innerHTML=icon('<path d="M9 3h6v6l4 4v2H5v-2l4-4V3Zm3 12v6"/>'+
      (locked?'':'<path d="M3 3l18 18"/>'));
    lock.setAttribute('aria-pressed',String(locked));
-   lock.title=(locked?'Destravar posição de ':'Travar posição de ')+title;
+   lock.title=(locked?'Desafixar ':'Fixar no topo: ')+title;
    lock.setAttribute('aria-label',lock.title);
    fold.innerHTML=chevron;fold.setAttribute('aria-expanded',String(!closed));
    fold.setAttribute('aria-label',(closed?'Expandir':'Recolher')+' '+title);section.querySelector('[data-op-content]').hidden=closed;
    const favorite=prefs.favorites.includes(id),button=section.querySelector('[data-op-favorite]');button.setAttribute('aria-pressed',String(favorite));button.innerHTML=star;button.title=(favorite?'Remover dos favoritos: ':'Favoritar: ')+title;button.setAttribute('aria-label',button.title);if(favorite){const jump=document.createElement('button');jump.type='button';jump.dataset.opJump=id;jump.textContent=title;nav.append(jump);}}
   if(!nav.children.length)nav.textContent='Marque uma estrela para adicionar um atalho.';
-  const list=root.querySelector('[data-op-order]');list.innerHTML=panels.map((section,i)=>{const id=section.dataset.opPanel,locked=prefs.locked.includes(id);return '<div class="arena-op-order-row"><span>'+escape(panelTitle(prefs,id))+'</span><button type="button" data-op-favorite="'+id+'" aria-pressed="'+prefs.favorites.includes(id)+'">'+(prefs.favorites.includes(id)?'Favorito':'Favoritar')+'</button><button type="button" data-op-move="'+id+'" data-op-direction="first" '+(locked||i===0?'disabled':'')+'>Colocar primeiro</button><button type="button" data-op-move="'+id+'" data-op-direction="last" '+(locked||i===panels.length-1?'disabled':'')+'>Colocar por último</button><button type="button" data-op-move="'+id+'" data-op-direction="up" '+(locked||i===0?'disabled':'')+' aria-label="Subir '+labels[id]+'">Subir</button><button type="button" data-op-move="'+id+'" data-op-direction="down" '+(locked||i===panels.length-1?'disabled':'')+' aria-label="Descer '+labels[id]+'">Descer</button></div>';}).join('');
+  const list=root.querySelector('[data-op-order]');list.innerHTML=panels.map(section=>{const id=section.dataset.opPanel,siblings=[...section.parentElement.children],i=siblings.indexOf(section);return '<div class="arena-op-order-row"><span>'+escape(panelTitle(prefs,id))+'</span><button type="button" data-op-favorite="'+id+'" aria-pressed="'+prefs.favorites.includes(id)+'">'+(prefs.favorites.includes(id)?'Favorito':'Favoritar')+'</button><button type="button" data-op-move="'+id+'" data-op-direction="first" '+(i===0?'disabled':'')+'>Colocar primeiro</button><button type="button" data-op-move="'+id+'" data-op-direction="last" '+(i===siblings.length-1?'disabled':'')+'>Colocar por último</button><button type="button" data-op-move="'+id+'" data-op-direction="up" '+(i===0?'disabled':'')+' aria-label="Subir '+labels[id]+'">Subir</button><button type="button" data-op-move="'+id+'" data-op-direction="down" '+(i===siblings.length-1?'disabled':'')+' aria-label="Descer '+labels[id]+'">Descer</button></div>';}).join('');
  }
- function apply(root,prefs){root.classList.toggle('arena-op-compact',prefs.compact);root.classList.toggle('arena-op-columns',prefs.columns);const grid=root.querySelector('[data-op-grid]');for(const id of prefs.order){const p=grid.querySelector('[data-op-panel="'+id+'"]');if(p && p!==grid.lastElementChild)grid.append(p);}toolbar(root,prefs);}
+ function apply(root,prefs){
+  root.classList.toggle('arena-op-compact',prefs.compact);
+  root.classList.toggle('arena-op-columns',prefs.columns);
+  const grid=root.querySelector('[data-op-grid]');
+  for(const [group,pinned] of [['pinned',true],['regular',false]]){
+   const destination=grid.querySelector('[data-op-group="'+group+'"]');
+   let next=destination.firstElementChild;
+   for(const id of prefs.order){
+    if(prefs.locked.includes(id)!==pinned)continue;
+    const panel=grid.querySelector('[data-op-panel="'+id+'"]');
+    if(!panel)continue;
+    if(panel!==next)destination.insertBefore(panel,next);
+    next=panel.nextElementSibling;
+   }
+   destination.hidden=!destination.childElementCount;
+  }
+  toolbar(root,prefs);
+ }
+
  // Reserva a altura real do Menu, inclusive com texto ampliado ou tela girada.
  let observedMenu=null;
  const menuObserver=typeof window.ResizeObserver==='function'?new window.ResizeObserver(updateStickyOffset):null;
@@ -135,6 +153,10 @@
   const timeline=score.querySelector('.match-timeline');if(timeline)timeline.remove();const scoreWrap=document.createElement('section');scoreWrap.className='arena-op-score';scoreWrap.append(score);const guide=old.querySelector('.match-guide');root.append(scoreWrap);
   const settings=document.createElement('details');settings.className='card arena-op-settings';settings.innerHTML='<summary>Minha mesa de operação: atalhos e organização</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
   const nav=document.createElement('nav');nav.className='toolbar arena-op-shortcuts';nav.dataset.opShortcuts='';nav.setAttribute('aria-label','Meus atalhos da operação');root.append(nav);const grid=document.createElement('div');grid.className='arena-op-grid';grid.dataset.opGrid='';root.append(grid);
+  for(const [group,label] of [['pinned','Caixas fixadas no topo'],['regular','Caixas desafixadas']]){
+   const lane=document.createElement('div');lane.dataset.opGroup=group;
+   lane.setAttribute('role','group');lane.setAttribute('aria-label',label);grid.append(lane);
+  }
   const foldActions=document.createElement('div');foldActions.className='card arena-op-fold-actions';
   foldActions.innerHTML='<h2>Ajustes das caixas</h2><p>Clique com o botão direito ou mantenha o dedo pressionado sobre a caixa para personalizar. Use a alça para arrastar.</p><div class="toolbar"><button type="button" data-op-fold-all="open">Expandir todas</button><button type="button" data-op-fold-all="close">Recolher todas</button></div>';
   strip.before(settings,nav);grid.before(foldActions);
@@ -171,9 +193,9 @@
   for(const [id,node]of Object.entries({points:quick,time,substitutions:substitution,coach,events:eventsWrap,pauses,roster,notices,history,notes,championship})){const section=panel(id,node);if(section)grid.append(section);}
   root.querySelector('[data-op-compact]').checked=prefs.compact;root.querySelector('[data-op-columns]').checked=prefs.columns;apply(root,prefs);return root.outerHTML;
  }
- function storePanelOrder(root,grid){
+ function storePanelOrder(root){
   const prefs=read(root.dataset.opKey);
-  const order=[...grid.children].map(panel=>panel.dataset.opPanel);
+  const order=[...root.querySelectorAll("[data-op-panel]")].map(panel=>panel.dataset.opPanel);
   prefs.order=[...order,...prefs.order.filter(id=>!order.includes(id))];
   toolbar(root,prefs);save(root,prefs);
  }
@@ -216,13 +238,13 @@
   if(grid.hasPointerCapture?.(pointer))grid.releasePointerCapture(pointer);
   panel.removeAttribute('data-op-dragging');ghost?.remove();
   if(!grid.isConnected)return;
-  if(commit)storePanelOrder(root,grid);
+  if(commit)storePanelOrder(root);
   else for(const item of initialOrder)if(item.parentElement===grid)grid.append(item);
  }
 
  document.addEventListener('pointerdown',event=>{
   const handle=event.target.closest('[data-op-drag]');
-  if(!handle||handle.getAttribute('aria-disabled')==='true'||event.button!==0||!event.isPrimary||drag)return;
+  if(!handle||event.button!==0||!event.isPrimary||drag)return;
   const panel=handle.closest('[data-op-panel]'),root=panel.closest('.arena-operation-workspace');
   drag={panel,root,grid:panel.parentElement,initialOrder:[...panel.parentElement.children],handle,pointer:event.pointerId,x:event.clientX,y:event.clientY,
    startX:event.clientX,startY:event.clientY,started:false};
@@ -256,13 +278,13 @@
   if(handle && (event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')){
    event.preventDefault();customizePanel(contextualPanel(handle));return;
   }
-  if(!handle||handle.getAttribute('aria-disabled')==='true'||!event.altKey||!['ArrowUp','ArrowDown'].includes(event.key))return;
+  if(!handle||!event.altKey||!['ArrowUp','ArrowDown'].includes(event.key))return;
   event.preventDefault();
   const panel=handle.closest('[data-op-panel]'),grid=panel.parentElement;
   const neighbor=event.key==='ArrowUp'?panel.previousElementSibling:panel.nextElementSibling;
   if(!neighbor)return;
   if(event.key==='ArrowUp')neighbor.before(panel);else neighbor.after(panel);
-  storePanelOrder(panel.closest('.arena-operation-workspace'),grid);
+  storePanelOrder(panel.closest('.arena-operation-workspace'));
   handle.focus({preventScroll:true});
  });
  function customizePanel(section){
@@ -283,21 +305,25 @@
   for(const [color,[title]] of Object.entries(panelColors))form.elements.color.add(new Option(title,color));
   form.elements.color.value=prefs.colors[id]||'';
   const visibleOrder=workspace=>[...workspace.querySelectorAll('[data-op-panel]')].map(panel=>panel.dataset.opPanel);
-  const order=visibleOrder(root);
+  const pinned=prefs.locked.includes(id);
+  const order=visibleOrder(root).filter(item=>prefs.locked.includes(item)===pinned);
   for(const [index,panelId] of order.entries()){
    form.elements.position.add(new Option((index+1)+' — '+panelTitle(prefs,panelId),String(index)));
   }
   form.elements.position.value=String(order.indexOf(id));
-  form.elements.position.disabled=prefs.locked.includes(id);
+
   const opener=section.querySelector('[data-op-fold]');
   dialog.addEventListener('close',()=>{dialog.remove();if(opener.isConnected)opener.focus({preventScroll:true});});
   dialog.querySelector('[data-op-customize-close]').onclick=()=>dialog.close();
   form.addEventListener('submit',event=>{
    event.preventDefault();
    const active=[...document.querySelectorAll('.arena-operation-workspace')].find(workspace=>workspace.dataset.opKey===key);
-   const current=active?visibleOrder(active):order;
+   if(!active){dialog.close();return;}
+   const next=read(key);
+   if(next.locked.includes(id)!==pinned){dialog.close();return;}
+   const current=visibleOrder(active).filter(item=>next.locked.includes(item)===pinned);
    if(!current.includes(id)){dialog.close();return;}
-   const next=read(key),position=next.locked.includes(id)?current.indexOf(id):Math.min(Number(form.elements.position.value),current.length-1);
+   const position=Math.min(Number(form.elements.position.value),current.length-1);
    if(!Number.isInteger(position)||position<0)return;
    current.splice(current.indexOf(id),1);
    current.splice(position,0,id);
@@ -346,7 +372,7 @@
   if(button.dataset.opLock){
    const id=button.dataset.opLock;
    prefs.locked=prefs.locked.includes(id)?prefs.locked.filter(key=>key!==id):[...prefs.locked,id];
-   toolbar(root,prefs);save(root,prefs);return;
+   apply(root,prefs);save(root,prefs);return;
   }
   if(button.hasAttribute('data-op-pin-score')){
    prefs.scorePinned=!prefs.scorePinned;
@@ -373,8 +399,7 @@
   if(button.dataset.opFavorite){const id=button.dataset.opFavorite;prefs.favorites=prefs.favorites.includes(id)?prefs.favorites.filter(v=>v!==id):[...prefs.favorites,id];}
   if(button.dataset.opMove){
    const id=button.dataset.opMove;
-   if(prefs.locked.includes(id))return;
-   const visible=[...root.querySelectorAll('[data-op-panel]')].map(panel=>panel.dataset.opPanel);
+   const visible=[...root.querySelectorAll('[data-op-panel]')].map(panel=>panel.dataset.opPanel).filter(key=>prefs.locked.includes(key)===prefs.locked.includes(id));
    const index=visible.indexOf(id);
    if(index<0)return;
    const direction=button.dataset.opDirection;

@@ -6,7 +6,7 @@
 .arena-op-settings{margin:0}.arena-op-settings>summary{min-height:36px;cursor:pointer;font-weight:700}.arena-op-settings>label{display:inline-flex;align-items:center;gap:8px;margin:8px 18px 12px 0}.arena-op-settings input[type=checkbox]{width:auto;min-height:auto}.arena-op-order-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)}.arena-op-order-row>span{flex:1;font-size:14px}.arena-op-order-row>button{min-height:38px;font-size:13px}.arena-op-shortcuts{margin:0;gap:8px}.arena-op-shortcuts>button{min-height:42px}.arena-op-panel .quick-control-group{margin-top:12px}
 .arena-op-compact .quick-score{min-height:64px;font-size:30px}.arena-op-compact .quick-team{padding:10px}.arena-op-compact .arena-op-panel{padding:16px}.arena-op-compact .arena-op-panel button:not(.quick-score){min-height:40px;padding:8px 12px}
 .arena-op-roster-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}.arena-op-roster-list ul{padding-left:20px;margin:6px 0}.arena-op-roster-list li{margin:6px 0}
-@media(min-width:1200px){.arena-op-columns .arena-op-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.arena-op-columns [data-op-panel=history]{grid-column:1/-1}}
+@media(min-width:1200px){.arena-op-columns [data-op-group]{grid-template-columns:repeat(2,minmax(0,1fr))}.arena-op-columns [data-op-panel=history]{grid-column:1/-1}}
 @media(max-width:480px){.arena-op-strip{padding:8px;gap:6px}.arena-op-strip>div:first-child strong{font-size:12px}.arena-op-heading{flex-wrap:wrap}.arena-op-heading h2{font-size:24px}.arena-op-order-row{flex-wrap:wrap}.arena-op-order-row>span{min-width:100%}}
 @media print{.arena-op-strip,.arena-op-settings,.arena-op-shortcuts,.arena-op-heading>button{display:none!important}}
 
@@ -97,14 +97,12 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 
 .arena-op-heading [data-op-lock] { min-width:44px; min-height:44px; padding:0; display:grid; place-items:center; }
 .arena-op-heading [data-op-lock][aria-pressed="true"] { color:var(--accent); background:var(--panel); }
-.arena-op-heading [data-op-drag]:disabled { opacity:.4; cursor:default; }
 
 .arena-op-fold-actions { margin:0; padding:12px 16px; }
 .arena-op-fold-actions h2 { margin:0 0 4px; font-size:1.15rem; }
 .arena-op-fold-actions p { margin:0 0 10px; color:var(--muted); }
 .arena-op-fold-actions .toolbar { margin:0; }
 [data-op-score-anchor] { height:0; margin-block-end:-14px; }
-.arena-op-heading [data-op-drag][aria-disabled="true"] { opacity:.4; cursor:default; }
 .arena-op-drag-preview {
   position:fixed; inset:0 auto auto 0; z-index:900; pointer-events:none;
   box-sizing:border-box; margin:0; padding:12px 16px; background:var(--panel);
@@ -112,3 +110,9 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
   overflow-wrap:anywhere;
 }
 @media (prefers-reduced-motion: reduce) { .arena-op-drag-preview { box-shadow:none; } }
+
+[data-op-group] { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; min-width:0; }
+[data-op-group][hidden] { display:none; }
+[data-op-group="pinned"]:not([hidden]) + [data-op-group="regular"]:not([hidden]) {
+  margin-block-start:8px;
+}
