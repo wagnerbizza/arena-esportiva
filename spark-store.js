@@ -558,7 +558,7 @@ export async function connectSpark({
     if (action.type === "notes" && !isOwner()) {
       throw Error("Somente o administrador pode editar as observações da súmula.");
     }
-    if(action.type==="matchRosterAdd"&&!canManageRosters())throw Error("A organização precisa incluir o novo jogador no elenco desta partida.");
+    if(["matchRosterAdd","matchRosterNote"].includes(action.type)&&!canManageRosters())throw Error("A organização precisa incluir o novo jogador no elenco desta partida.");
     const rosterAction=canManageRosters()&&(["team","player"].includes(action.type)||(action.type==="import"&&["team","player"].includes(action.kind)));
     const matchCreation = action.type === "match" && !action.data?.id && canCreateMatches();
     const championshipAction = action.type === "championship" && canManageChampionships();
@@ -697,6 +697,12 @@ export async function connectSpark({
           rosterPlayer={...snap.data(),id:snap.id};
           const team=await tx.get(F.doc(database,"teams",rosterPlayer.team));
           if(!team.exists()||team.data().archived===true||team.data().testData===true)throw Error("Equipe indisponível para novas inclusões.");
+          if (action.targetTeam && action.targetTeam !== rosterPlayer.team) {
+            if (!before || ![before.home,before.away].includes(action.targetTeam)) throw Error("Escolha uma equipe desta partida.");
+            const destination = await tx.get(F.doc(database,"teams",action.targetTeam));
+            if (!destination.exists() || destination.data().archived === true || destination.data().testData === true)
+              throw Error("Equipe de destino indisponível.");
+          }
         }
         // Releitura na transação evita usar uma edição desatualizada do campeonato.
         const championshipId = prepared?.championshipId || (action.type === "championshipLink" ? action.championshipId : "");

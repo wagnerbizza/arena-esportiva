@@ -1537,7 +1537,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=arena-participantes-1");
+    const { connectSpark } = await import("./spark-store.js?v=arena-reforcos-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -1578,7 +1578,7 @@ async function dispatch(a) {
       throw Error("Tempo esgotado. Ajuste o relógio ou decida a próxima etapa antes de iniciar.");
   }
   if (busy) throw Error("Aguarde a operação anterior.");
-  if(a.type==="matchRosterAdd"&&!canManageRosters())throw Error("A organização precisa incluir o jogador no elenco da partida.");
+  if(["matchRosterAdd","matchRosterNote"].includes(a.type)&&!canManageRosters())throw Error("A organização precisa incluir o jogador no elenco da partida.");
   if (a.type === "notes" && role !== "admin") {
     throw Error("Somente o administrador pode editar as observações da súmula.");
   }
@@ -1902,10 +1902,41 @@ function quickMatchControls(m,locked,live,c) {
       </div><p class="muted">Os avisos aparecem ao público. Para interromper a partida, use Pausar jogo.</p></section>`;
 }
 let operationPanel = "tempo";
-function operationRosterPanel(m){
- const members=m.roster||[],ids=new Set(members.map(p=>p.id)),candidates=state.players.filter(p=>[m.home,m.away].includes(p.team)&&!ids.has(p.id)&&!p.testData);
- const lists=[m.home,m.away].map(team=>`<section><h3>${esc(name(team))}</h3><ul>${members.filter(p=>p.team===team).map(p=>`<li>${esc(p.number||"—")} · ${esc(p.name)}${p.reserve?" · Reserva":""}</li>`).join("")||"<li>Nenhum jogador convocado.</li>"}</ul></section>`).join("");
- return `<p>A partida mantém uma cópia do elenco da data da criação. Cadastrar na equipe não inclui automaticamente na partida. A inclusão abaixo acrescenta jogadores sem alterar os antigos ou seus lances.</p><div class="arena-op-roster-list">${lists}</div>${canManageRosters()&&!finalStatuses.includes(m.status)?`<form id="operation-roster-add"><label>Jogador cadastrado que ainda não está nesta partida<select name="playerId" required><option value="">Selecione</option>${candidates.map(p=>`<option value="${esc(p.id)}">${esc(name(p.team)+" · "+(p.number||"—")+" · "+p.name)}</option>`).join("")}</select></label><label>Motivo da inclusão<input name="reason" required minlength="5" maxlength="500" placeholder="Ex.: reserva incluído pela organização"></label><button ${!candidates.length?"disabled":""}>Incluir jogador nesta partida</button>${!candidates.length?"<p>Nenhum jogador novo disponível nas equipes desta partida.</p>":""}</form>`:finalStatuses.includes(m.status)?"<p>Partida encerrada: reabra com justificativa antes de acrescentar jogadores.</p>":"<p>Peça ao administrador para incluir os novos jogadores nesta partida. Depois da inclusão, eles aparecerão nas substituições e nos lançamentos.</p>"}`;
+function operationRosterPanel(m) {
+ const members = m.roster || [];
+ const ids = new Set(members.map(player => player.id));
+ const sides = [m.home,m.away];
+ const eligibleTeams = new Set(state.teams.filter(team => !team.testData && !team.archived).map(team => team.id));
+ const available = state.players.filter(player => !ids.has(player.id) && !player.testData && eligibleTeams.has(player.team)).sort(alphabetical);
+ const candidates = available.filter(player => sides.includes(player.team));
+ const guests = available.filter(player => !sides.includes(player.team));
+ const optionsFor = players => '<option value="">Selecione</option>'+players.map(player =>
+   `<option value="${esc(player.id)}">${esc(name(player.team)+" · "+(player.number||"—")+" · "+player.name)}</option>`).join("");
+ const lists = sides.map(team => `<section><h3>${esc(name(team))}</h3><ul>${members.filter(player=>player.team===team).map(player => {
+   const guest = player.originTeam ? `<br><strong>Reforço de outra equipe</strong> · Origem: ${esc(name(player.originTeam))}<br>${esc(player.rosterNote || "")}` : "";
+   const note = m.rosterNotes?.[player.id];
+   return `<li>${esc(player.number||"—")} · ${esc(player.name)}${player.reserve===true?" · Reserva":""}${guest}${note?`<br><strong>Observação interna:</strong> ${esc(note)}`:""}</li>`;
+ }).join("")||"<li>Nenhum jogador convocado.</li>"}</ul></section>`).join("");
+ const roster = `<div class="arena-op-roster-list">${lists}</div>`;
+ if (finalStatuses.includes(m.status)) return roster + "<p>Partida encerrada. Reabra a partida para alterar o elenco.</p>";
+ if (!canManageRosters()) return roster + "<p>Peça à organização para atualizar o elenco desta partida.</p>";
+ return `${roster}
+   <form id="operation-roster-add"><label>Jogador da própria equipe<select name="playerId" required>${optionsFor(candidates)}</select></label>
+    <label>Motivo da inclusão<input name="reason" required maxlength="500" placeholder="Ex.: reserva incluído pela organização"></label><button ${!candidates.length?"disabled":""}>Incluir jogador nesta partida</button></form>
+   <details><summary>Adicionar reforço de outra equipe</summary>
+    <form id="operation-roster-guest">
+     <label>Jogador e equipe de origem<select name="playerId" required>${optionsFor(guests)}</select></label>
+     <label>Equipe que ele vai representar<select name="targetTeam" required><option value="">Selecione</option>${sides.map(id=>`<option value="${esc(id)}">${esc(name(id))}</option>`).join("")}</select></label>
+     <label>Motivo ou autorização<input name="reason" required maxlength="500" placeholder="Ex.: reforço autorizado pela organização"></label>
+     <button ${!guests.length?"disabled":""}>Registrar reforço nesta partida</button>
+    </form>${!guests.length?"<p>Nenhum jogador de outra equipe disponível.</p>":""}
+   </details>
+   <details><summary>Registrar observação interna</summary>
+    <form id="operation-roster-note"><label>Jogador da partida<select name="playerId" required>${optionsFor(members)}</select></label>
+     <label>Observação<textarea name="note" required maxlength="500" placeholder="Ex.: troca de camisa ou mudança de posição"></textarea></label>
+     <p class="muted">O texto substitui a observação anterior deste jogador na partida.</p>
+     <button ${!members.length?"disabled":""}>Salvar observação</button></form>
+   </details>`;
 }
 function operate() {
   const m = state.matches.find((m) => m.id === selected);
@@ -2924,7 +2955,13 @@ document.addEventListener("submit", async (e) => {
       await dispatch({ type: "notice", matchId: selected, notice: e.submitter?.value === "clear" ? "" : d.notice });
     } else if(f.id === "operation-roster-add"){
       await dispatch({type:"matchRosterAdd",matchId:selected,playerId:d.playerId,reason:d.reason});
-      toast("Jogador incluído no elenco desta partida, disponível nos lançamentos e substituições.");
+      toast("Jogador incluído no elenco desta partida.");
+    } else if(f.id === "operation-roster-guest"){
+      await dispatch({type:"matchRosterAdd",matchId:selected,playerId:d.playerId,targetTeam:d.targetTeam,reason:d.reason});
+      toast("Reforço incluído no elenco desta partida.");
+    } else if(f.id === "operation-roster-note"){
+      await dispatch({type:"matchRosterNote",matchId:selected,playerId:d.playerId,note:d.note});
+      toast("Observação interna salva.");
     } else if (f.id === "event") {
       if (!["cartão amarelo", "cartão vermelho", "falta", "tempo", "observação"].includes(d.kind)) {
         throw Error("Selecione o tipo de lance.");

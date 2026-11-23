@@ -237,14 +237,31 @@
         e.type = "aviso";
         e.text = m.publicNotice;
       } else if(a.type === "matchRosterAdd") {
-        const p=a.rosterPlayer;
-        need(p && [m.home,m.away].includes(p.team),"Jogador não pertence às equipes desta partida.");
-        need(text(a.reason),"Informe o motivo da inclusão no elenco.");
+        const p = a.rosterPlayer;
+        const teams = [m.home,m.away];
+        const destination = a.targetTeam || p?.team;
+        const guest = p && p.team !== destination;
+        need(p && teams.includes(destination) && (!guest || !teams.includes(p.team)),
+          "Jogador não pertence à equipe selecionada ou já pertence à outra equipe desta partida.");
+        const reason = text(a.reason,500);
+        need(reason, "Informe o motivo da inclusão no elenco.");
         need(!m.roster.some(row=>row.id===p.id) && !Object.hasOwn(m.rosterTeams,p.id),"Este jogador já está no elenco da partida.");
         need(m.roster.length<80,"O elenco da partida já atingiu a capacidade existente de 80 jogadores.");
-        const player={id:p.id,name:p.name,team:p.team,number:p.number||"",position:p.position||"",reserve:p.reserve===null?null:p.reserve===true};
-        m.roster.push(player);m.rosterTeams[p.id]=p.team;
-        Object.assign(e,{type:"elenco",side:p.team===m.home?0:1,player:p.id,from:p.id,to:p.team,reason:text(a.reason,500),text:"Inclusão no elenco da partida: "+p.name});
+        const player = {id:p.id,name:p.name,team:destination,number:p.number||"",position:p.position||"",
+          reserve:p.reserve===null?null:p.reserve===true};
+        if (guest) Object.assign(player,{originTeam:p.team,rosterNote:reason});
+        m.roster.push(player);
+        m.rosterTeams[p.id] = destination;
+        Object.assign(e,{type:"elenco",side:destination===m.home?0:1,player:p.id,from:p.id,to:destination,
+          reason,text:(guest?"Reforço de outra equipe: ":"Inclusão no elenco da partida: ")+p.name});
+      } else if (a.type === "matchRosterNote") {
+        const p = m.roster.find(player => player.id === a.playerId);
+        const note = text(a.note,500);
+        need(p && Object.hasOwn(m.rosterTeams,p.id),"Selecione um jogador do elenco desta partida.");
+        need(note,"Digite a observação interna.");
+        m.rosterNotes = {...m.rosterNotes,[p.id]:note};
+        Object.assign(e,{type:"observação de elenco",side:p.team===m.home?0:1,player:p.id,
+          reason:note,text:"Observação interna do elenco: "+p.name});
       } else if (a.type === "event") {
         need(m.status === "Ao vivo", "Inicie ou retome a partida.");
         need(
