@@ -66,7 +66,7 @@ function updateMatchNotices() {
 }
 
 let state = D.fresh(),
-  section = "overview",
+  section = admin && trainingMode && new URLSearchParams(location.search).get("inicio") === "operacao" ? "operation" : "overview",
   selected = "",
   user = null,
   role = "",
@@ -1213,7 +1213,12 @@ function floatingGameClock() {
   const matches = state.matches.filter(item => canUseCabin(item));
   const match = followed || matches.find(item => item.status === "Ao vivo") ||
     matches.find(item => ["Pausada","Suspensa"].includes(item.status));
-  if (!match) return "";
+  if (!match) return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock arena-monitor-waiting noprint" aria-label="Monitor da partida">
+    <div><strong>Aguardando partida</strong><p>O placar e o relógio aparecem quando houver jogo em andamento autorizado.</p></div>
+    <div class="toolbar">${section !== "operation" ? '<button type="button" data-section="operation">Abrir operação</button>' : ""}
+    ${canCreateMatches() ? '<button type="button" data-section="createMatch">Agendar partida</button>' : ""}
+    ${trainingMode ? "" : '<a class="button" href="./painel.html?demonstracao=1&amp;inicio=operacao">Simular partida</a>'}</div>
+  </aside>`;
   const lastEvent = monitorLastEvent(match);
   return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock noprint ${followed ? "is-pinned" : ""}" aria-label="Monitor da partida">
     <strong>${esc(name(match.home))} × ${esc(name(match.away))}</strong>

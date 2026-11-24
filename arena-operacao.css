@@ -157,3 +157,7 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 .arena-op-monitor-event { margin:0; overflow-wrap:anywhere; font-size:.875rem; color:var(--muted,var(--text)); }
 .arena-followed-score { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:4px 0; }
 .arena-followed-score b { font-size:1.3rem; }
+
+.arena-followed-clock.arena-monitor-waiting { grid-template-columns:minmax(0,1fr); }
+.arena-monitor-waiting p { margin:4px 0 0; overflow-wrap:anywhere; }
+.arena-monitor-waiting .toolbar .button { min-block-size:44px; }
