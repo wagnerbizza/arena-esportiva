@@ -1208,11 +1208,12 @@ function monitorLastEvent(match) {
   return [eventLabel(event,match),team,athlete].filter(Boolean).join(" · ");
 }
 const unpinnedGameBars = new Set();
-function gameBarPinContents(pinned) {
-  return arenaIcon(pinned ? "unpin" : "pin") + "<span>" + (pinned ? "Desafixar barra" : "Fixar barra") + "</span>";
+function gameBarPinLabel(pinned) {
+  return pinned ? "Desafixar barra" : "Fixar barra";
 }
 function gameBarPinButton(pinned) {
-  return `<button type="button" class="arena-icon-action" data-game-bar-pin aria-pressed="${pinned}">${gameBarPinContents(pinned)}</button>`;
+  const label = gameBarPinLabel(pinned);
+  return `<button type="button" class="arena-game-bar-pin" data-game-bar-pin aria-pressed="${pinned}" aria-label="${label}" title="${label}">${arenaIcon(pinned ? "pin" : "unpin")}</button>`;
 }
 function floatingGameClock() {
   if (isOperationSection() && selected) return "";
@@ -1225,7 +1226,7 @@ function floatingGameClock() {
     <div><strong class="arena-icon-action">${arenaIcon("games")} Barra de jogos</strong><p>Aguardando partida</p></div>
     <div class="toolbar">${section !== "operation" ? `<button type="button" class="arena-icon-action" data-section="operation">${arenaIcon("live")}<span>Abrir operação</span></button>` : ""}
     ${canCreateMatches() ? `<button type="button" class="arena-icon-action" data-section="createMatch">${arenaIcon("calendar")}<span>Agendar partida</span></button>` : ""}
-    ${trainingMode ? "" : `<a class="button arena-icon-action" href="./painel.html?demonstracao=1&amp;inicio=operacao">${arenaIcon("training")}<span>Simular partida</span></a>`}${gameBarPinButton(pinned)}</div>
+    ${trainingMode ? "" : `<a class="button arena-icon-action" href="./painel.html?demonstracao=1&amp;inicio=operacao">${arenaIcon("training")}<span>Simular partida</span></a>`}</div>${gameBarPinButton(pinned)}
   </aside>`;
   const lastEvent = monitorLastEvent(match);
   return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock noprint ${pinned ? "is-pinned" : ""}" aria-label="Barra de jogos">
@@ -1233,7 +1234,7 @@ function floatingGameClock() {
     <p class="arena-followed-score"><b>${esc(gameResult(match).join(" × "))}</b> <span>${esc(match.status)}</span></p>
     ${lastEvent ? `<p class="arena-op-monitor-event">Último lance: ${esc(lastEvent)}</p>` : ""}
     ${clockMarkup(match)}
-    <div class="toolbar"><button type="button" class="arena-icon-action" data-open="${esc(match.id)}" ${finalStatuses.includes(match.status)?"":"data-cabin-match"}>${arenaIcon(finalStatuses.includes(match.status)?"results":"live")}<span>${finalStatuses.includes(match.status)?"Ver partida":"Abrir operação"}</span></button>${gameBarPinButton(pinned)}</div>
+    <div class="toolbar"><button type="button" class="arena-icon-action" data-open="${esc(match.id)}" ${finalStatuses.includes(match.status)?"":"data-cabin-match"}>${arenaIcon(finalStatuses.includes(match.status)?"results":"live")}<span>${finalStatuses.includes(match.status)?"Ver partida":"Abrir operação"}</span></button></div>${gameBarPinButton(pinned)}
   </aside>`;
 }
 document.addEventListener("click", event => {
@@ -1247,7 +1248,9 @@ document.addEventListener("click", event => {
     const pinned = !unpinnedGameBars.has(key);
     bar.classList.toggle("is-pinned", pinned);
     toggle.setAttribute("aria-pressed", String(pinned));
-    toggle.innerHTML = gameBarPinContents(pinned);
+    toggle.title = gameBarPinLabel(pinned);
+    toggle.setAttribute("aria-label", toggle.title);
+    toggle.innerHTML = arenaIcon(pinned ? "pin" : "unpin");
     return;
   }
   const button = event.target.closest("[data-clock-follow]");

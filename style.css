@@ -2605,3 +2605,16 @@ label.arena-icon-action,.navigation-search-results .arena-icon-action { justify-
   inline-size:18px; block-size:18px; flex:none; vertical-align:middle;
 }
 #arenaPersonalTools [data-personal-toggle="favorites"][aria-pressed="true"] .arena-icon { fill:currentColor; }
+
+#arenaTopMatchMonitor { padding-inline-end:56px; }
+#arenaTopMatchMonitor .arena-game-bar-pin {
+  position:absolute; inset-block-start:50%; inset-inline-end:5px;
+  transform:translateY(-50%); display:grid; place-items:center;
+  inline-size:44px; min-block-size:44px; padding:0;
+  border:1px solid transparent; background:transparent; color:var(--text);
+}
+#arenaTopMatchMonitor .arena-game-bar-pin:hover,
+#arenaTopMatchMonitor .arena-game-bar-pin:focus-visible {
+  color:var(--accent); border-color:var(--line);
+}
+#arenaTopMatchMonitor .arena-game-bar-pin .arena-icon { width:20px; height:20px; }
