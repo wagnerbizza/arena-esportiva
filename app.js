@@ -2046,8 +2046,8 @@ function cabinStandby() {
   const blankMatch = {id:"", home:"", away:"", date:"", sport:"", status:"Aguardando partida",
     stage:"—", score:[0,0], sets:[], roster:[], events:[], clock:M.emptyClock()};
   return `<section class="arena-cabin-standby">
-    <p class="public-notice"><strong>Mesa em espera.</strong> Agende uma partida ou escolha um jogo autorizado acima.</p>
-    <fieldset class="arena-cabin-disabled" disabled inert aria-label="Mesa de operação em espera">${operate(blankMatch, true)}</fieldset>
+    <p class="public-notice"><strong>Mesa em espera.</strong> Organize a mesa enquanto espera. Escolha uma partida autorizada para liberar os comandos de jogo.</p>
+    <div aria-label="Mesa de operação em espera">${operate(blankMatch, true)}</div>
   </section>`;
 }
 function cabinView() {
@@ -2191,7 +2191,7 @@ function operate(m = state.matches.find(item => item.id === selected), standby =
       )
       .join("") || empty("Use Ver lances anteriores nesta seção para consultar o histórico operacional. A auditoria completa permanece com o administrador.")
   }</div>`;
-  return window.ArenaOperation?.build?window.ArenaOperation.build(m,markup,{account:C.demo?"treinamento-"+role:user?.uid||role,standby,rosterHTML:standby?"<p>Nenhum elenco selecionado.</p>":operationRosterPanel(m),monitorEvent:monitorLastEvent(m),followClock:canUseCabin(m)&&(!locked||followedGameClock()?.id===m.id),clockFollowed:followedGameClock()?.id===m.id,layoutRemote:!standby&&!C.demo&&user?cloud?.operationLayout?.(user.uid):null}):markup;
+  return window.ArenaOperation?.build?window.ArenaOperation.build(m,markup,{account:C.demo?"treinamento-"+role:user?.uid||role,standby,rosterHTML:standby?"<p>Nenhum elenco selecionado.</p>":operationRosterPanel(m),monitorEvent:monitorLastEvent(m),followClock:canUseCabin(m)&&(!locked||followedGameClock()?.id===m.id),clockFollowed:followedGameClock()?.id===m.id,layoutRemote:!C.demo&&user?cloud?.operationLayout?.(user.uid):null}):standby?`<fieldset disabled inert>${markup}</fieldset>`:markup;
 }
 document.addEventListener("click",async event=>{
  const button=event.target.closest("[data-return-normal-clock]");if(!button||!admin||!selected)return;

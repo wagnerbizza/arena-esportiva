@@ -178,7 +178,7 @@
   const root=document.createElement('div');root.className='arena-operation-workspace';root.dataset.opKey='arena-operation-layout-v1:'+encodeURIComponent(config.account||'sem-conta');
   const back=old.querySelector('[data-back]');
   const prefs=read(root.dataset.opKey);
-  if(config.standby){prefs.collapsed=[];prefs.locked=[];prefs.scorePinned=false;back?.remove();}
+  if(config.standby){root.dataset.opStandby='';back?.remove();}
   if(config.layoutRemote)connectLayout(root.dataset.opKey,config.layoutRemote);
   const strip=document.createElement('div');
   strip.className='arena-op-strip';
@@ -254,6 +254,13 @@
   const noteForm=old.querySelector('#notes'),notes=noteForm?.closest('.card')||[...old.querySelectorAll('.console-actions>.card')].find(card=>card.querySelector('h3')?.textContent==='Observações operacionais da súmula');
   const championship=old.querySelector('#championship-link')?.closest('.card');
   for(const [id,node]of Object.entries({points:quick,time,substitutions:substitution,coach,events:eventsWrap,pauses,roster,notices,history,notes,championship})){const section=panel(id,node);if(section)grid.append(section);}
+  if(config.standby){
+   for(const area of root.querySelectorAll('[data-op-content], .match-guide, .arena-op-score')){
+    for(const control of area.querySelectorAll('button, input, select, textarea, fieldset')){
+     if(!control.hasAttribute('data-op-jump'))control.disabled=true;
+    }
+   }
+  }
   root.querySelector('[data-op-compact]').checked=prefs.compact;root.querySelector('[data-op-columns]').checked=prefs.columns;apply(root,prefs);return root.outerHTML;
  }
  function storePanelOrder(root){
@@ -489,7 +496,7 @@
   }
   const command=monitorCommands[button.dataset.opMonitorRun];
   const source=command?.[1]&&root.querySelector(command[1]);
-  if(source&&!source.disabled)source.click();
+  if(!root.hasAttribute('data-op-standby')&&source&&!source.disabled)source.click();
  });
  document.addEventListener('change',event=>{
   const input=event.target.closest('[data-op-monitor-choice]');if(!input)return;
