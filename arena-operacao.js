@@ -178,6 +178,7 @@
   const root=document.createElement('div');root.className='arena-operation-workspace';root.dataset.opKey='arena-operation-layout-v1:'+encodeURIComponent(config.account||'sem-conta');
   const back=old.querySelector('[data-back]');
   const prefs=read(root.dataset.opKey);
+  if(config.standby){prefs.collapsed=[];prefs.locked=[];prefs.scorePinned=false;back?.remove();}
   if(config.layoutRemote)connectLayout(root.dataset.opKey,config.layoutRemote);
   const strip=document.createElement('div');
   strip.className='arena-op-strip';
@@ -193,7 +194,7 @@
   pin.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6v6l4 4v2H5v-2l4-4V3Zm3 12v6"/><path data-op-pin-slash d="M3 3l18 18"/></svg>';
   describeScorePin(pin,prefs.scorePinned);strip.append(pin);
   const anchor=document.createElement('div');anchor.dataset.opScoreAnchor='';anchor.setAttribute('aria-hidden','true');
-  if(back){back.classList.add('primary','arena-op-back');strip.prepend(back);}
+  if(back&&!config.standby){back.classList.add('primary','arena-op-back');strip.prepend(back);}
   const monitor=document.createElement('nav');
   monitor.className='arena-op-monitor';monitor.dataset.opMonitor='';monitor.setAttribute('aria-label','Atalhos do placar');
   const editMonitor=document.createElement('button');

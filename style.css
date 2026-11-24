@@ -2587,3 +2587,6 @@ body:not([data-admin="true"]) .public-event-icon {
 .arena-cabin-standby .toolbar { flex-wrap:wrap; gap:8px; margin-block:12px; }
 .arena-cabin-preview { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; }
 .arena-cabin-preview b { font-size:1.4rem; }
+
+.arena-cabin-disabled { min-inline-size:0; margin:0; padding:0; border:0; }
+.arena-cabin-disabled .arena-op-panel,.arena-cabin-disabled .arena-op-strip { position:relative; top:auto; }

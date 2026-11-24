@@ -66,7 +66,7 @@ function updateMatchNotices() {
 }
 
 let state = D.fresh(),
-  section = admin && new URLSearchParams(location.search).get("tela") === "operacao" ? "operation" : "overview",
+  section = "overview",
   selected = "",
   user = null,
   role = "",
@@ -1768,11 +1768,11 @@ document.addEventListener("click", async (event) => {
     control.disabled = false;
   }
 });
-function matchCard(m, button = false) {
+function matchCard(m, button = false, standby = false) {
   const points = D.score(m),
     sc = gameResult(m),
-    a = team(m.home),
-    b = team(m.away),
+    a = standby ? {name:"Sem equipe",short:"—"} : team(m.home),
+    b = standby ? a : team(m.away),
     isLive = m.status === "Ao vivo",
     isFinished = ["Encerrada", "Homologada"].includes(m.status);
   const notice = matchNotices.get(m.id);
@@ -1790,7 +1790,7 @@ function matchCard(m, button = false) {
   };
   const result = isFinished ? (sc[0] === sc[1] ? "Resultado final: empate" :
     "Vencedor: " + (sc[0] > sc[1] ? a.name : b.name)) : "";
-  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(matchCompetitionLabel(m))}</p><div class="score arena-team-scoreboard">${teamScore(a, 0)}<div class="arena-score-center"><span aria-hidden="true">×</span>${liveBall}</div>${teamScore(b, 1)}</div>${result ? `<p class="arena-match-result">${esc(result)}</p>` : ""}${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${timelineControl(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && admin && role === "admin" && cloud && !C.demo && finalStatuses.includes(m.status) ? `<details><summary>Mais ações</summary><button type="button" data-public-visibility="${esc(m.id)}">${m.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button></details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
+  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(matchCompetitionLabel(m))}</p><div class="score arena-team-scoreboard">${teamScore(a, 0)}<div class="arena-score-center"><span aria-hidden="true">×</span>${liveBall}</div>${teamScore(b, 1)}</div>${result ? `<p class="arena-match-result">${esc(result)}</p>` : ""}${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${standby?"":timelineControl(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${standby?"Data e local a definir":`${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}`}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && admin && role === "admin" && cloud && !C.demo && finalStatuses.includes(m.status) ? `<details><summary>Mais ações</summary><button type="button" data-public-visibility="${esc(m.id)}">${m.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button></details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
 }
 
 function liveStatusPanel(context) {
@@ -2042,22 +2042,12 @@ function canUseCabin(match) {
     (role === "admin" || (role === "operator" &&
       ((trainingMode && !canViewAllGames()) || cloud?.canOperate(match.id))));
 }
-function cabinOpenURL() {
-  const url = new URL("painel.html", location.href);
-  url.searchParams.set("tela", "operacao");
-  if (trainingMode) url.searchParams.set("demonstracao", "1");
-  return url.href;
-}
 function cabinStandby() {
-  const account = C.demo ? "treinamento-" + role : user?.uid || role;
-  return `<section class="card arena-cabin-standby">
-    <h2>Prévia da mesa de operação</h2>
-    <p>Escolha uma partida agendada ou em andamento que sua conta possa operar para liberar os comandos.</p>
-    <div class="arena-cabin-preview">
-      <strong>Equipe 1 × Equipe 2</strong><b>0 × 0</b><span>Relógio parado · 00:00</span>
-    </div>
-    <div class="toolbar">${["Iniciar","Continuar","Encerrar","Avisos","+1"].map(label=>`<button type="button" disabled>${label}</button>`).join("")}</div>
-    ${window.ArenaOperation?.preview?.(account) || ""}
+  const blankMatch = {id:"", home:"", away:"", date:"", sport:"", status:"Aguardando partida",
+    stage:"—", score:[0,0], sets:[], roster:[], events:[], clock:M.emptyClock()};
+  return `<section class="arena-cabin-standby">
+    <p class="public-notice"><strong>Mesa em espera.</strong> Agende uma partida ou escolha um jogo autorizado acima.</p>
+    <fieldset class="arena-cabin-disabled" disabled inert aria-label="Mesa de operação em espera">${operate(blankMatch, true)}</fieldset>
   </section>`;
 }
 function cabinView() {
@@ -2068,8 +2058,7 @@ function cabinView() {
   }
   const games = state.matches.filter(item => canUseCabin(item) && !finalStatuses.includes(item.status))
     .sort((a,b) => Number(b.status === "Ao vivo") - Number(a.status === "Ao vivo") || String(a.date).localeCompare(String(b.date)));
-  const open = new URLSearchParams(location.search).get("tela") === "operacao" ? "" : `<a class="button" href="${esc(cabinOpenURL())}" target="_blank" rel="noopener">Abrir Operação em outra aba</a>`;
-  return `<section class="card"><h2>Escolha um jogo para operar</h2><div class="toolbar"><button type="button" data-section="matches">Ver jogos</button>${canCreateMatches()?'<button type="button" data-section="createMatch">Agendar partida</button>':""}${open}</div><div class="grid cabin-games">${games.map(item => `<button type="button" class="shortcut-primary" data-open="${esc(item.id)}" data-cabin-match><strong>${esc(name(item.home))} × ${esc(name(item.away))}</strong><small>${esc(item.sport)} · ${esc(item.status)} · ${esc(format(item.date))}</small></button>`).join("") || empty("Nenhum jogo em aberto autorizado para esta conta.")}</div></section>${games.length ? "" : cabinStandby()}`;
+  return `<section class="card"><h2>Escolha um jogo para operar</h2><div class="toolbar"><button type="button" data-section="matches">Ver jogos</button>${canCreateMatches()?'<button type="button" data-section="createMatch">Agendar partida</button>':""}</div><div class="grid cabin-games">${games.map(item => `<button type="button" class="shortcut-primary" data-open="${esc(item.id)}" data-cabin-match><strong>${esc(name(item.home))} × ${esc(name(item.away))}</strong><small>${esc(item.sport)} · ${esc(item.status)} · ${esc(format(item.date))}</small></button>`).join("") || empty("Nenhum jogo em aberto autorizado para esta conta.")}</div></section>${cabinStandby()}`;
 }
 document.addEventListener("click", event => {
   const button = event.target.closest("[data-cabin-keyboard]");
@@ -2092,8 +2081,7 @@ document.addEventListener("keydown", event => {
   event.preventDefault();
   button.click();
 });
-function operate() {
-  const m = state.matches.find((m) => m.id === selected);
+function operate(m = state.matches.find(item => item.id === selected), standby = false) {
   if (!m) {
     selected = "";
     return view();
@@ -2134,7 +2122,7 @@ function operate() {
     Homologada: [["Ao vivo", "Reabrir com motivo"]],
     Cancelada: [["Agendada", "Reativar com motivo"]],
   };
-  const buttons = (moves[m.status] || [])
+  const buttons = (standby ? [["Pausada","Pausar jogo"],["Encerrada","Encerrar"]] : (moves[m.status] || []))
     .filter(
       ([status]) =>
         (status !== "Ao vivo" || locked) && (role === "admin" ||
@@ -2147,7 +2135,7 @@ function operate() {
     .join("");
   const quick = [0, 1]
     .map((side) => {
-      const t = team([m.home, m.away][side]);
+      const t = standby ? {id:"",name:"Sem equipe",short:"—"} : team([m.home, m.away][side]);
       return `<section class="quick-team"><div class="quick-team-title">${badge(t)}<h3>${esc(t.name)}</h3></div><label>Atleta (opcional)<select data-quick-player="${side}" aria-label="Atleta ${esc(t.name)}"><option value="">Sem atleta</option>${m.roster
         .filter((p) => p.team === t.id)
         .map(
@@ -2157,7 +2145,7 @@ function operate() {
         .join(
           "",
         )}</select></label><div class="quick-buttons">${(m.sport === "Basquete" ? [1, 2, 3] : [1]).map((v) => `<button class="quick-score primary" data-quick="${v}" data-side="${side}" ${!live ? "disabled" : ""}>+${v}<small>${m.sport === "Futebol" || m.sport === "Futsal" ? "GOL" : v > 1 ? "PONTOS" : "PONTO"}</small></button>`).join("")}</div><div class="quick-event-buttons">
-        ${["Futebol","Futsal","Handebol","Vôlei","Vôlei de praia"].includes(m.sport) ? `
+        ${standby || ["Futebol","Futsal","Handebol","Vôlei","Vôlei de praia"].includes(m.sport) ? `
           <button type="button" class="quick-yellow" data-fast-event="cartão amarelo" data-side="${side}" ${!live ? "disabled" : ""}>Amarelo</button>
           <button type="button" class="quick-red" data-fast-event="cartão vermelho" data-side="${side}" ${!live ? "disabled" : ""}>Vermelho</button>` : ""}
         <button type="button" data-fast-event="falta" data-side="${side}" ${!live ? "disabled" : ""}>Falta</button>
@@ -2166,7 +2154,7 @@ function operate() {
     .join("");
   const elapsedMs = M.elapsed(m);
   const clockDisplayMs = c.mode === "down" ? Math.max(0, c.durationMs - elapsedMs) : elapsedMs;
-  const markup=`<button data-back>← Voltar às partidas</button><div class="live-console"><div class="console-score">${matchCard(m)}${matchStartGuide(m)}${role === "admin" ? championshipLinkForm(m) : ""}<div class="card"><h3>Jogo e interrupções</h3><form id="interruption"><div class="formgrid"><label>Motivo de pausa / suspensão<select name="pauseReason"><option>Intervalo</option><option>Atendimento em quadra</option><option>Chuva ou condições do local</option><option>Problema técnico</option><option>Decisão da arbitragem</option><option>Outro motivo</option></select></label><label>Detalhes para o público<input name="pauseDetails" maxlength="220" placeholder="Ex.: retorno previsto em 10 minutos"></label></div><div class="toolbar">${buttons}</div></form><p class="muted">Pausar ou suspender o jogo para o cronômetro e informa o motivo ao público. O placar é preservado.</p>${!locked ? `<form id="stage" class="row"><input name="stage" aria-label="Etapa" value="${esc(m.stage)}" required style="max-width:180px"><button>Atualizar etapa</button></form>${m.sport.startsWith("Vôlei") ? "<p><button data-set>Fechar set e iniciar próximo</button></p>" : ""}</div><div class="card"><div class="toolbar" aria-label="Controles da mesa"><button type="button" data-operation-panel="tempo" aria-pressed="${operationPanel === "tempo"}" class="${operationPanel === "tempo" ? "primary" : ""}">Tempo</button><button type="button" data-operation-panel="avisos" aria-pressed="${operationPanel === "avisos"}" class="${operationPanel === "avisos" ? "primary" : ""}">Avisos</button></div><div id="mesa-tempo" ${operationPanel === "tempo" ? "" : "hidden"}><h3>Cronômetro</h3>${m.sport === "Futebol" && live ? `<form id="added-time"><label>Acréscimos da etapa (minutos)
+  const markup=`<button data-back>← Voltar às partidas</button><div class="live-console"><div class="console-score">${matchCard(m,false,standby)}${matchStartGuide(m)}${role === "admin" && !standby ? championshipLinkForm(m) : ""}<div class="card"><h3>Jogo e interrupções</h3><form id="interruption"><div class="formgrid"><label>Motivo de pausa / suspensão<select name="pauseReason"><option>Intervalo</option><option>Atendimento em quadra</option><option>Chuva ou condições do local</option><option>Problema técnico</option><option>Decisão da arbitragem</option><option>Outro motivo</option></select></label><label>Detalhes para o público<input name="pauseDetails" maxlength="220" placeholder="Ex.: retorno previsto em 10 minutos"></label></div><div class="toolbar">${buttons}</div></form><p class="muted">Pausar ou suspender o jogo para o cronômetro e informa o motivo ao público. O placar é preservado.</p>${!locked ? `<form id="stage" class="row"><input name="stage" aria-label="Etapa" value="${esc(m.stage)}" required style="max-width:180px"><button>Atualizar etapa</button></form>${m.sport.startsWith("Vôlei") ? "<p><button data-set>Fechar set e iniciar próximo</button></p>" : ""}</div><div class="card"><div class="toolbar" aria-label="Controles da mesa"><button type="button" data-operation-panel="tempo" aria-pressed="${operationPanel === "tempo"}" class="${operationPanel === "tempo" ? "primary" : ""}">Tempo</button><button type="button" data-operation-panel="avisos" aria-pressed="${operationPanel === "avisos"}" class="${operationPanel === "avisos" ? "primary" : ""}">Avisos</button></div><div id="mesa-tempo" ${operationPanel === "tempo" ? "" : "hidden"}><h3>Cronômetro</h3>${m.sport === "Futebol" && live ? `<form id="added-time"><label>Acréscimos da etapa (minutos)
      <input name="addedMinutes" type="number" min="0" max="30" step="1" required value="${m.addedTime?.stage === m.stage ? esc(m.addedTime.minutes) : 0}">
      </label><div class="toolbar">${[1, 2, 3].map(minutes => `<button type="button" data-added-minutes="${minutes}">+${minutes} min</button>`).join("")}
      <button type="submit" class="primary">Publicar acréscimos</button>
@@ -2203,7 +2191,7 @@ function operate() {
       )
       .join("") || empty("Use Ver lances anteriores nesta seção para consultar o histórico operacional. A auditoria completa permanece com o administrador.")
   }</div>`;
-  return window.ArenaOperation?.build?window.ArenaOperation.build(m,markup,{account:C.demo?"treinamento-"+role:user?.uid||role,rosterHTML:operationRosterPanel(m),monitorEvent:monitorLastEvent(m),followClock:canUseCabin(m)&&(!locked||followedGameClock()?.id===m.id),clockFollowed:followedGameClock()?.id===m.id,layoutRemote:!C.demo&&user?cloud?.operationLayout?.(user.uid):null}):markup;
+  return window.ArenaOperation?.build?window.ArenaOperation.build(m,markup,{account:C.demo?"treinamento-"+role:user?.uid||role,standby,rosterHTML:standby?"<p>Nenhum elenco selecionado.</p>":operationRosterPanel(m),monitorEvent:monitorLastEvent(m),followClock:canUseCabin(m)&&(!locked||followedGameClock()?.id===m.id),clockFollowed:followedGameClock()?.id===m.id,layoutRemote:!standby&&!C.demo&&user?cloud?.operationLayout?.(user.uid):null}):markup;
 }
 document.addEventListener("click",async event=>{
  const button=event.target.closest("[data-return-normal-clock]");if(!button||!admin||!selected)return;
