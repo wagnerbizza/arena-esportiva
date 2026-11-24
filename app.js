@@ -1796,7 +1796,7 @@ function render() {
     return;
   }
   // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
-  if (role !== "admin" && !["overview", "matches", "operation", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canPrepareRegistrationSheets()?["registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[])].includes(section)) {
+  if (role !== "admin" && !["overview", "matches", "operation", "reportCenter", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canPrepareRegistrationSheets()?["registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[])].includes(section)) {
     section = "overview";
     selected = "";
   }
@@ -1811,6 +1811,7 @@ function render() {
     ["matches", "Jogos"],
     ["operation", "Cabine de Operação"],
     ["matchSheets", "Súmulas"],
+    ["reportCenter", "Central de Relatórios"],
     ["reports", "Relatórios esportivos"],
     ["auditReports", "Relatório geral"],
     ["certificates", "Certificados"],
@@ -1871,6 +1872,7 @@ function publicMatches(filter) {
 }
 function view() {
   if(section==="operation")return cabinView();
+  if(section==="reportCenter")return reportCenter();
   if(section==="systemCheck")return role==="admin"?systemDiagnosticsView():empty("Verificação exclusiva do administrador.");
   if(section==="qrCodes")return qrCodesView();
   if(section==="profiles")return profilesView();
@@ -2460,6 +2462,104 @@ function sportsReportPreview(){
  if(!matches.length)return `<section class="card">${documentReportHeader("Relatório esportivo","reports")}${empty("Nenhuma partida corresponde à seleção.")}${partnerMarkup("reports")}</section>`;
  return `<section class="card">${documentReportHeader("Relatório esportivo","reports")}<h3>Resultados das partidas • ${matches.length}</h3>${table(["Modalidade","Campeonato","Partida","Placar","Data","Local","Situação"],matches.map(m=>tr([m.sport,matchCompetitionLabel(m),name(m.home)+" × "+name(m.away),gameResult(m).join(" × "),format(m.date),m.place||"Não informado",m.status])))}${partnerMarkup("reports")}</section>`;
 }
+const reportCenterSections = {
+  games: { title: "Jogos e resultados", columns: ["Jogo", "Esporte", "Data", "Situação", "Placar"] },
+  teams: { title: "Equipes nos jogos", columns: ["Equipe", "Jogos na seleção"] },
+  cards: { title: "Cartões recentes", columns: ["Jogo", "Equipe", "Cartão", "Jogador"] },
+};
+const reportCenterOrder = Object.keys(reportCenterSections);
+let reportCenterView = "games";
+let reportCenterMatch = "";
+let reportCenterSelected = new Set(reportCenterOrder);
+
+function reportCenterRows() {
+  const games = state.matches.filter(m => m.testData !== true && (!reportCenterMatch || m.id === reportCenterMatch));
+  const teamCounts = new Map();
+  const cards = [];
+  for (const match of games) {
+    for (const id of new Set([match.home, match.away])) {
+      teamCounts.set(id, (teamCounts.get(id) || 0) + 1);
+    }
+    const label = name(match.home) + " × " + name(match.away);
+    const events = match.publicEvents || [];
+    const corrected = new Set(events.map(event => event.correctionOf).filter(Boolean));
+    for (const event of events) {
+      if (!["cartão amarelo", "cartão vermelho"].includes(event.type) ||
+          ![0, 1].includes(event.side) || event.correctionOf || corrected.has(event.id)) continue;
+      cards.push([label, name([match.home, match.away][event.side]), event.type, event.playerName || "—"]);
+    }
+  }
+  return {
+    games: games.map(m => [name(m.home) + " × " + name(m.away), m.sport, format(m.date), m.status, gameResult(m).join(" × ")]),
+    teams: [...teamCounts].map(([id, count]) => [name(id), count]).sort((a,b) => a[0].localeCompare(b[0], "pt-BR")),
+    cards,
+  };
+}
+
+function reportCenterIDs() {
+  return reportCenterView === "total"
+    ? reportCenterOrder.filter(id => reportCenterSelected.has(id))
+    : [reportCenterView];
+}
+function reportCenterMarkup(ids, rows) {
+  return ids.map(id => {
+    const {title, columns} = reportCenterSections[id];
+    return `<section class="card"><h3>${title}</h3>${id === "cards" ? '<p>Mostra somente os cartões entre os lances recentes publicados de cada jogo.</p>' : ""}${rows[id].length ? table(columns, rows[id].map(tr), false) : empty("Nenhum registro na seleção.")}</section>`;
+  }).join("") || empty("Escolha ao menos uma seção.");
+}
+function reportCenter() {
+  const tabs = [...Object.entries(reportCenterSections).map(([id, item]) => [id, item.title]), ...(role === "admin" ? [["total","Montar relatório"]] : [])];
+  if (!tabs.some(([id]) => id === reportCenterView)) reportCenterView = "games";
+  if (!state.matches.some(m => m.id === reportCenterMatch)) reportCenterMatch = "";
+  const choices = state.matches.map(m => `<option value="${esc(m.id)}" ${m.id === reportCenterMatch ? "selected" : ""}>${esc(name(m.home) + " × " + name(m.away) + " · " + m.sport + " · " + format(m.date))}</option>`).join("");
+  const ids = reportCenterIDs();
+  const order = reportCenterOrder.map((id, index) => `<li><label><input type="checkbox" data-center-include="${id}" ${reportCenterSelected.has(id) ? "checked" : ""}> ${reportCenterSections[id].title}</label><div class="toolbar"><button type="button" data-center-move="-1" data-center-id="${id}" aria-label="Subir ${reportCenterSections[id].title}" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-center-move="1" data-center-id="${id}" aria-label="Descer ${reportCenterSections[id].title}" ${index === reportCenterOrder.length - 1 ? "disabled" : ""}>↓</button></div></li>`).join("");
+  return `<section class="card noprint report-center-controls"><label>Partida<select data-center-match><option value="">Todas as partidas disponíveis</option>${choices}</select></label>
+    <div class="toolbar" aria-label="Seções do relatório">${tabs.map(([id,label]) => `<button type="button" data-center-view="${id}" aria-pressed="${id===reportCenterView}">${label}</button>`).join("")}</div>
+    ${role === "admin" ? '<div class="toolbar" aria-label="Documentos detalhados"><button type="button" data-section="matchSheets">Súmulas</button><button type="button" data-section="reports">Relatórios detalhados</button><button type="button" data-section="auditReports">Histórico administrativo</button></div>' : ""}
+    ${reportCenterView === "total" ? `<h3>Escolha as seções e a ordem</h3><ol class="report-center-order">${order}</ol>` : ""}
+    ${role === "admin" ? `<div class="toolbar"><button type="button" data-center-print ${ids.length ? "" : "disabled"}>Imprimir ou salvar PDF</button><button type="button" data-center-download ${ids.length ? "" : "disabled"}>Baixar dados (JSON)</button></div>` : ""}</section>
+    <div id="reportCenterPreview"><h2>Prévia do relatório</h2>${reportCenterMarkup(ids, reportCenterRows())}</div>`;
+}
+document.addEventListener("change", event => {
+  const control = event.target;
+  if (!admin || section !== "reportCenter") return;
+  if (control.hasAttribute("data-center-match")) reportCenterMatch = control.value;
+  else if (role === "admin" && Object.hasOwn(reportCenterSections, control.dataset.centerInclude)) {
+    if (control.checked) reportCenterSelected.add(control.dataset.centerInclude);
+    else reportCenterSelected.delete(control.dataset.centerInclude);
+  } else return;
+  render();
+});
+document.addEventListener("click", event => {
+  if (!admin || section !== "reportCenter") return;
+  const button = event.target.closest("[data-center-view],[data-center-move],[data-center-print],[data-center-download]");
+  if (!button || button.disabled) return;
+  const view = button.dataset.centerView;
+  if (Object.hasOwn(reportCenterSections, view) || (view === "total" && role === "admin")) {
+    reportCenterView = view;
+    render();
+    app.querySelector(`[data-center-view="${view}"]`)?.focus({preventScroll:true});
+    return;
+  }
+  if (role !== "admin") return;
+  if (button.dataset.centerMove) {
+    const index = reportCenterOrder.indexOf(button.dataset.centerId);
+    const next = index + Number(button.dataset.centerMove);
+    if (index < 0 || ![-1,1].includes(Number(button.dataset.centerMove)) || next < 0 || next >= reportCenterOrder.length) return;
+    [reportCenterOrder[index], reportCenterOrder[next]] = [reportCenterOrder[next], reportCenterOrder[index]];
+    render();
+    app.querySelector(`[data-center-id="${button.dataset.centerId}"][data-center-move="${button.dataset.centerMove}"]:not(:disabled)`)?.focus({preventScroll:true});
+  } else if (reportCenterIDs().length) {
+    if (button.hasAttribute("data-center-print")) window.print();
+    else {
+      const rows = reportCenterRows();
+      download("arena-resumo-dos-jogos.json", JSON.stringify(reportCenterIDs().map(id =>
+        ({titulo:reportCenterSections[id].title, colunas:reportCenterSections[id].columns, linhas:rows[id]})), null, 2));
+    }
+  }
+});
+
 function reports() {
  return `<section class="card noprint"><h2>Relatórios esportivos</h2><p>Visualize resultados das partidas e exporte os dados selecionados. O Excel detalhado contém resultados, elencos, eventos e parciais.</p>${reportMatchSelector()}<div class="toolbar"><button type="button" data-sports-report-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-report-excel class="primary">Baixar relatório (Excel)</button><button type="button" data-sports-report-json>Baixar relatório (JSON)</button></div></section><div id="reportOutput">${sportsReportPreview()}</div>`;
 }
@@ -4316,14 +4416,14 @@ const workspaceDefinitions=[
  {id:"games",title:"Jogos",intro:"Operação, agenda e resultados",sections:["overview","operation","matches","createMatch","standings"]},
  {id:"records",title:"Cadastros",intro:"Equipes, jogadores e importação",sections:["teams","players","imports"]},
  {id:"championships",title:"Campeonatos",intro:"Temporadas e inscrições",sections:["championships","registrationSheets"]},
- {id:"reports",title:"Relatórios",intro:"Súmulas, resultados e auditoria",sections:["matchSheets","reports","auditReports","accessHistory"]},
+ {id:"reports",title:"Relatórios",intro:"Súmulas, resultados e auditoria",sections:["reportCenter","matchSheets","reports","auditReports","accessHistory"]},
  {id:"documents",title:"Certificados",intro:"Certificados",sections:["certificates"]},
  {id:"sharing",title:"QR codes e links",intro:"Compartilhar o painel e os eventos",sections:["qrCodes"]},
  {id:"credentials",title:"Credenciais",intro:"Identificação da organização e dos eventos",sections:["credentials"]},
  {id:"administration",title:"Acessos",intro:"Permissões e operadores",sections:["users","monitor"]},
  {id:"maintenance",title:"Backups e suporte",intro:"Guias, testes e recuperação",sections:["systemCheck","documentation","testData","cleanup"]}
 ];
-function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","operation","matches","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
+function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","operation","matches","reportCenter","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
 function publicPanelURL(edition="") {
  const url=new URL("./index.html",location.href);
  if(trainingMode)url.searchParams.set("demonstracao","1");
@@ -5239,6 +5339,7 @@ document.addEventListener("click",e=>{
 let navigationQuery="";
 const expandedNavigation=new Set();
 const navigationDescriptions={
+ reportCenter:{label:"Central de Relatórios",description:"Veja jogos, equipes e cartões recentes.",keywords:"placar resumo jogos equipes cartões relatório pdf"},
  operation:{label:"Cabine de Operação",description:"Escolha um jogo autorizado e use os atalhos de placar e tempo.",keywords:"operacao cabine ao vivo pontos goles cronometro"},
  qrCodes:{label:"QR codes e links",description:"Copiar links e baixar QR codes públicos do Arena e dos campeonatos.",keywords:"qr qrcode qr code compartilhar link publico logo svg"},
  profiles:{label:"Trocar perfil / conta",description:"Conferir o perfil autorizado, trocar de conta ou praticar no treinamento.",keywords:"perfil conta trocar administrador operador treinamento login sair"},

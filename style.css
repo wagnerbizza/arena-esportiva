@@ -2541,3 +2541,19 @@ body:not([data-admin="true"]) .public-event-icon {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+.report-center-controls .toolbar { flex-wrap:wrap; margin-block-start:12px; }
+.report-center-controls button { min-block-size:44px; }
+.report-center-controls select { max-inline-size:100%; }
+.report-center-order li { margin-block:8px; }
+.report-center-order li .toolbar { display:inline-flex; margin:0 0 0 8px; }
+#reportCenterPreview .tablewrap { overflow-x:auto; }
+@media print {
+  body:has(#reportCenterPreview) { background:#fff; color:#111; }
+  body:has(#reportCenterPreview) :is(header, footer, #arenaWeather, .arena-weather-card) { display:none !important; }
+  body:has(#reportCenterPreview) main { margin:0 !important; padding:0 !important; width:auto !important; }
+  #reportCenterPreview .card { background:white; color:#111; border:0; box-shadow:none; break-inside:auto; }
+  #reportCenterPreview .tablewrap { overflow:visible; }
+  #reportCenterPreview table { min-width:0; width:100%; }
+  #reportCenterPreview th, #reportCenterPreview td { color:#111; white-space:normal; }
+}
