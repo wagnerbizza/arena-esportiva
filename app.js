@@ -1208,14 +1208,19 @@ function monitorLastEvent(match) {
   return [eventLabel(event,match),team,athlete].filter(Boolean).join(" · ");
 }
 function floatingGameClock() {
-  const match = followedGameClock();
-  if (!match || (isOperationSection() && selected === match.id)) return "";
-  return `<aside class="arena-followed-clock noprint" aria-label="Monitor da partida fixado">
+  if (isOperationSection() && selected) return "";
+  const followed = followedGameClock();
+  const matches = state.matches.filter(item => canUseCabin(item));
+  const match = followed || matches.find(item => item.status === "Ao vivo") ||
+    matches.find(item => ["Pausada","Suspensa"].includes(item.status));
+  if (!match) return "";
+  const lastEvent = monitorLastEvent(match);
+  return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock noprint ${followed ? "is-pinned" : ""}" aria-label="Monitor da partida">
     <strong>${esc(name(match.home))} × ${esc(name(match.away))}</strong>
     <p class="arena-followed-score"><b>${esc(gameResult(match).join(" × "))}</b> <span>${esc(match.status)}</span></p>
-    ${monitorLastEvent(match) ? `<p class="arena-op-monitor-event">Último lance: ${esc(monitorLastEvent(match))}</p>` : ""}
+    ${lastEvent ? `<p class="arena-op-monitor-event">Último lance: ${esc(lastEvent)}</p>` : ""}
     ${clockMarkup(match)}
-    <div class="toolbar"><button type="button" data-open="${esc(match.id)}" ${finalStatuses.includes(match.status)?"":"data-cabin-match"}>Voltar ao jogo</button><button type="button" data-clock-follow="${esc(match.id)}">Desafixar monitor</button></div>
+    <div class="toolbar"><button type="button" data-open="${esc(match.id)}" ${finalStatuses.includes(match.status)?"":"data-cabin-match"}>${finalStatuses.includes(match.status)?"Ver partida":"Abrir operação"}</button><button type="button" data-clock-follow="${esc(match.id)}" aria-pressed="${!!followed}">${followed ? "Desafixar" : "Fixar monitor"}</button></div>
   </aside>`;
 }
 document.addEventListener("click", event => {
@@ -1226,7 +1231,9 @@ document.addEventListener("click", event => {
   if (!key || !canUseCabin(match)) return;
   if (followedGameClocks.get(key) === match.id) followedGameClocks.delete(key);
   else if (!finalStatuses.includes(match.status)) followedGameClocks.set(key, match.id);
-  render();
+  const monitor = button.closest("#arenaTopMatchMonitor");
+  if (monitor) monitor.outerHTML = floatingGameClock();
+  else render();
   (app.querySelector("[data-clock-follow]") || app.querySelector(".admin-heading h1"))?.focus({preventScroll:true});
 });
 function clockMarkup(m) {
@@ -1887,7 +1894,7 @@ function render() {
     ["imports", "Importar"],
   ];
   const pageControls = arenaPageControls();
-  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div>${pageControls}<span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>${relatedArenaScreens()}${floatingGameClock()}`;
+  app.innerHTML = `${floatingGameClock()}<div class="sectionhead admin-heading noprint"><div>${pageControls}<span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>${relatedArenaScreens()}`;
   const permissionsForm = app.querySelector("#access-user");
   if (permissionsForm) updateOperationSummary(permissionsForm);
   stopInvisibleTimeline();
@@ -5633,7 +5640,7 @@ function scrollBelowPinnedCards(target, behavior=preferences.motion ||
   matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"){
  if(!target)return;
  let offset=0;
- for(const selector of [".arena-weather-card.is-pinned",".arena-live-pinnable.is-pinned",".arena-op-strip.is-pinned"]){
+ for(const selector of [".arena-weather-card.is-pinned",".arena-live-pinnable.is-pinned","#arenaTopMatchMonitor.is-pinned",".arena-op-strip.is-pinned"]){
   const card=document.querySelector(selector);
   if(!card || !(card.compareDocumentPosition(target)&Node.DOCUMENT_POSITION_FOLLOWING))continue;
   const top=parseFloat(getComputedStyle(card).top);
