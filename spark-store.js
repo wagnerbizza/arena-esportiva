@@ -28,6 +28,7 @@ export async function connectSpark({
     (profile?.permissions || []).includes("editMatchPhases") &&
     (profile?.operatedChampionships || []).includes(championshipId));
   const canCorrectMatch = id => canOperateMatch(id) && (isOwner() || (profile?.permissions || []).includes("historyCorrections"));
+  const canCorrectMatchSport = id => canOperateMatch(id) && (isOwner() || (profile?.permissions || []).includes("correctMatchSport"));
   const canManageRosters = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("rosters"));
   const canCreateMatches = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("matchesCreate"));
   const canManageChampionships = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("championships"));
@@ -554,6 +555,7 @@ export async function connectSpark({
       : F.doc(F.collection(database, "audit")).id;
   async function send(action) {
     if (!session || !authorized()) throw Error("Faça login com uma conta autorizada.");
+    if (action.type === "correctMatchSport" && !canCorrectMatchSport(action.matchId)) throw Error("Esta conta precisa de autorização para corrigir a modalidade desta partida.");
     if(action.type==="correct" && !canCorrectMatch(action.matchId))throw Error("O administrador precisa autorizar anulações de lances para esta conta e esta partida.");
     if (action.type === "notes" && !isOwner()) {
       throw Error("Somente o administrador pode editar as observações da súmula.");
@@ -719,13 +721,13 @@ export async function connectSpark({
           }
         }
         // Releitura na transação evita usar uma edição desatualizada do campeonato.
-        const championshipId = prepared?.championshipId || (action.type === "championshipLink" ? action.championshipId : "");
+        const championshipId = prepared?.championshipId || (["championshipLink","correctMatchSport"].includes(action.type) ? action.championshipId : "");
         let championship = null;
         if (championshipId) {
           const snap = await tx.get(F.doc(database, "championships", championshipId));
           if (!snap.exists()) throw Error("Campeonato não encontrado.");
           championship = { ...snap.data(), id: snap.id };
-          const sport = prepared?.sport || before?.sport;
+          const sport = action.type === "correctMatchSport" ? "Futsal" : prepared?.sport || before?.sport;
           if (championship.sport !== sport) throw Error("Modalidades diferentes.");
           if (prepared && championship.status === "Encerrado") throw Error("O campeonato está encerrado para novas partidas.");
         }
@@ -778,7 +780,7 @@ export async function connectSpark({
           if (!before) throw Error("Partida não encontrada.");
           const result = M.applyMatch(
             before,
-            { ...action, rosterPlayer, administrative:isOwner(), publicId: actionId, championship },
+            { ...action, rosterPlayer, administrative:isOwner(), sportCorrectionAllowed: action.type === "correctMatchSport" && canCorrectMatchSport(target), publicId: actionId, championship },
             original,
             F.serverTimestamp(),
           );
@@ -1078,7 +1080,7 @@ export async function connectSpark({
       const before = snap.data();
       if (before.deleted === true) throw Error("Este operador foi removido e está disponível apenas para consulta.");
       const granted=access==="active"?[...new Set(permissions===undefined?(before.permissions||[]):permissions)]:[];
-      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView","historyCorrections","editMatchPhases"].includes(p)))throw Error("Permissão específica inválida.");
+      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView","historyCorrections","editMatchPhases","correctMatchSport"].includes(p)))throw Error("Permissão específica inválida.");
       const editions = access === "active"
         ? [...new Set(followedEditions ?? before.followedEditions ?? [])] : [];
       const known = new Set(state.championships.map((c) => c.name + " • " + c.season));
@@ -1343,6 +1345,7 @@ export async function connectSpark({
     },
     canOperate: canOperateMatch,
     canCorrect: canCorrectMatch,
+    canCorrectSport: canCorrectMatchSport,
     close: () => {
       stop();
       profileStop();

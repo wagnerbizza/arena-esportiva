@@ -112,7 +112,20 @@
     e.stage = m.stage;
     e.setIndex = m.sets.length;
     const locked = ["Encerrada", "Homologada", "Cancelada"].includes(m.status);
-    if (a.type === "championshipLink") {
+    if (a.type === "correctMatchSport") {
+      const reason = text(a.reason, 300);
+      need(a.administrative === true || a.sportCorrectionAllowed === true, "Esta conta precisa de autorização para corrigir a modalidade.");
+      need(m.status === "Encerrada" && !m.clock?.running && m.sport === "Futebol", "A correção exige uma partida de Futebol encerrada.");
+      need(reason.length >= 5, "Informe o motivo da correção.");
+      need(!m.championshipId || a.championshipId, "Selecione a edição de Futsal.");
+      need(!a.championshipId || (a.championship?.id === a.championshipId && a.championship.sport === "Futsal" && !a.championship.testData), "Selecione uma edição ativa na lista de Futsal.");
+      m.sport = "Futsal";
+      if (a.championship) {
+        m.championshipId = a.championship.id;
+        m.competition = a.championship.name + " • " + a.championship.season;
+      }
+      Object.assign(e, {type:"modalidade", from:"Futebol", to:"Futsal", reason, text:"Modalidade corrigida de Futebol para Futsal"});
+    } else if (a.type === "championshipLink") {
       need(text(a.reason), "Informe a justificativa do vínculo.");
       need(!a.championshipId || a.championship?.id === a.championshipId, "Campeonato não encontrado.");
       need(!a.championship || a.championship.sport === m.sport, "Modalidades diferentes.");

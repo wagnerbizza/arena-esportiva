@@ -936,9 +936,27 @@ function updateChampionshipList() {
   if ($("#championship-results")) $("#championship-results").innerHTML = championshipCards();
   if ($("#championship-count")) $("#championship-count").textContent = championshipCount();
 }
+const canCorrectMatchSport = id => !C.demo && (role === "admin" || (role === "operator" && cloud?.canCorrectSport(id)));
+function correctMatchSportForm(m) {
+  if (!canCorrectMatchSport(m.id) || m.status !== "Encerrada" || m.sport !== "Futebol" || m.clock?.running) return "";
+  const editions = (state.championships || []).filter(item => item.sport === "Futsal" && !item.testData).sort(alphabetical);
+  return `<details><summary>Corrigir modalidade para Futsal</summary>
+    <p>A correção mantém placar, lances e escalações. Se o jogo está vinculado a um campeonato, selecione sua edição de Futsal.</p>
+    <form id="arena-correct-match-sport" data-match-id="${esc(m.id)}">
+      <label>Edição de Futsal<select name="championshipId" ${m.championshipId ? "required" : ""}>
+        <option value="">${m.championshipId ? "Escolha a edição correta" : "Manter sem vínculo"}</option>
+        ${options(editions,item=>item.id,item=>championshipTitle(item)+(item.category ? " · "+item.category : ""))}
+      </select></label>
+      ${m.championshipId && !editions.length ? '<p>É preciso ter acesso a uma edição de Futsal antes de corrigir.</p>' : ""}
+      ${field("Motivo da correção","reason","text",'required minlength="5" maxlength="300"')}
+      <button type="submit" ${m.championshipId && !editions.length ? "disabled" : ""}>Corrigir para Futsal</button>
+    </form></details>`;
+}
 function championshipLinkForm(m) {
+  const correction = correctMatchSportForm(m);
+  if (role !== "admin") return correction ? `<div class="card">${correction}</div>` : "";
   const rows = (state.championships || []).filter((c) => c.sport === m.sport).sort(alphabetical);
-  return `<div class="card"><details><summary>Campeonato / temporada desta partida</summary><p class="muted">Vínculo atual: ${esc(m.championshipId ? ((state.championships || []).find((c) => c.id === m.championshipId) ? championshipTitle(state.championships.find((c) => c.id === m.championshipId)) : m.competition) : "Sem vínculo")}. O vínculo não altera placar, elenco ou cronômetro. Remover mantém o nome histórico da competição.</p><form id="championship-link"><label>Campeonato de ${esc(m.sport)}<select name="championshipId"><option value="">Sem vínculo</option>${rows.map((c) => `<option value="${esc(c.id)}" ${m.championshipId === c.id ? "selected" : ""}>${esc(championshipTitle(c) + (c.category ? " • " + c.category : "") + " — " + c.status)}</option>`).join("")}</select></label>${field("Justificativa (registrada no histórico)", "reason", "text", 'required maxlength="500"')}<p><button>Salvar vínculo com justificativa</button></p></form></details></div>`;
+  return `<div class="card"><details><summary>Campeonato / temporada desta partida</summary><p class="muted">Vínculo atual: ${esc(m.championshipId ? ((state.championships || []).find((c) => c.id === m.championshipId) ? championshipTitle(state.championships.find((c) => c.id === m.championshipId)) : m.competition) : "Sem vínculo")}. O vínculo não altera placar, elenco ou cronômetro. Remover mantém o nome histórico da competição.</p><form id="championship-link"><label>Campeonato de ${esc(m.sport)}<select name="championshipId"><option value="">Sem vínculo</option>${rows.map((c) => `<option value="${esc(c.id)}" ${m.championshipId === c.id ? "selected" : ""}>${esc(championshipTitle(c) + (c.category ? " • " + c.category : "") + " — " + c.status)}</option>`).join("")}</select></label>${field("Justificativa (registrada no histórico)", "reason", "text", 'required maxlength="500"')}<p><button>Salvar vínculo com justificativa</button></p></form></details>${correction}</div>`;
 }
 function rememberChampionshipDraft(event) {
   const form=event.target.closest?.("#championship");
@@ -1647,7 +1665,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=arena-encerrar-partida-1");
+    const { connectSpark } = await import("./spark-store.js?v=arena-corrigir-modalidade-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -2192,7 +2210,7 @@ function operate(m = state.matches.find(item => item.id === selected), standby =
     .join("");
   const elapsedMs = M.elapsed(m);
   const clockDisplayMs = c.mode === "down" ? Math.max(0, c.durationMs - elapsedMs) : elapsedMs;
-  const markup=`<button data-back>← Voltar às partidas</button><div class="live-console"><div class="console-score">${matchCard(m,false,standby)}${matchStartGuide(m)}${role === "admin" && !standby ? championshipLinkForm(m) : ""}<div class="card"><h3>Jogo e interrupções</h3><form id="interruption"><div class="formgrid"><label>Motivo de pausa / suspensão<select name="pauseReason"><option>Intervalo</option><option>Atendimento em quadra</option><option>Chuva ou condições do local</option><option>Problema técnico</option><option>Decisão da arbitragem</option><option>Outro motivo</option></select></label><label>Detalhes para o público<input name="pauseDetails" maxlength="220" placeholder="Ex.: retorno previsto em 10 minutos"></label></div><div class="toolbar">${buttons}</div></form><p class="muted">Pausar ou suspender o jogo para o cronômetro e informa o motivo ao público. O placar é preservado.</p>${!locked ? `<form id="stage" class="row"><input name="stage" aria-label="Etapa" value="${esc(m.stage)}" required style="max-width:180px"><button>Atualizar etapa</button></form>${m.sport.startsWith("Vôlei") ? "<p><button data-set>Encerrar set</button></p>" : ""}</div><div class="card"><div class="toolbar" aria-label="Controles da mesa"><button type="button" data-operation-panel="tempo" aria-pressed="${operationPanel === "tempo"}" class="${operationPanel === "tempo" ? "primary" : ""}">Tempo</button><button type="button" data-operation-panel="avisos" aria-pressed="${operationPanel === "avisos"}" class="${operationPanel === "avisos" ? "primary" : ""}">Avisos</button></div><div id="mesa-tempo" ${operationPanel === "tempo" ? "" : "hidden"}><h3>Cronômetro</h3>${m.sport === "Futebol" && live ? `<form id="added-time"><label>Acréscimos da etapa (minutos)
+  const markup=`<button data-back>← Voltar às partidas</button><div class="live-console"><div class="console-score">${matchCard(m,false,standby)}${matchStartGuide(m)}${!standby ? championshipLinkForm(m) : ""}<div class="card"><h3>Jogo e interrupções</h3><form id="interruption"><div class="formgrid"><label>Motivo de pausa / suspensão<select name="pauseReason"><option>Intervalo</option><option>Atendimento em quadra</option><option>Chuva ou condições do local</option><option>Problema técnico</option><option>Decisão da arbitragem</option><option>Outro motivo</option></select></label><label>Detalhes para o público<input name="pauseDetails" maxlength="220" placeholder="Ex.: retorno previsto em 10 minutos"></label></div><div class="toolbar">${buttons}</div></form><p class="muted">Pausar ou suspender o jogo para o cronômetro e informa o motivo ao público. O placar é preservado.</p>${!locked ? `<form id="stage" class="row"><input name="stage" aria-label="Etapa" value="${esc(m.stage)}" required style="max-width:180px"><button>Atualizar etapa</button></form>${m.sport.startsWith("Vôlei") ? "<p><button data-set>Encerrar set</button></p>" : ""}</div><div class="card"><div class="toolbar" aria-label="Controles da mesa"><button type="button" data-operation-panel="tempo" aria-pressed="${operationPanel === "tempo"}" class="${operationPanel === "tempo" ? "primary" : ""}">Tempo</button><button type="button" data-operation-panel="avisos" aria-pressed="${operationPanel === "avisos"}" class="${operationPanel === "avisos" ? "primary" : ""}">Avisos</button></div><div id="mesa-tempo" ${operationPanel === "tempo" ? "" : "hidden"}><h3>Cronômetro</h3>${m.sport === "Futebol" && live ? `<form id="added-time"><label>Acréscimos da etapa (minutos)
      <input name="addedMinutes" type="number" min="0" max="30" step="1" required value="${m.addedTime?.stage === m.stage ? esc(m.addedTime.minutes) : 0}">
      </label><div class="toolbar">${[1, 2, 3].map(minutes => `<button type="button" data-added-minutes="${minutes}">+${minutes} min</button>`).join("")}
      <button type="submit" class="primary">Publicar acréscimos</button>
@@ -3031,6 +3049,7 @@ function updateOperationSummary(form) {
     ["gamesViewPermission", "Consultar todos os jogos publicados"],
     ["historyCorrectPermission", "Anular lances nos jogos liberados"],
     ["phaseEditPermission", "Editar grupos e chaves nos campeonatos liberados"],
+    ["matchSportCorrectionPermission", "Corrigir modalidade dos jogos liberados"],
   ];
   const chosen = options.filter(([name]) => form.elements[name]?.checked).map(([, label]) => label);
   const followed = form.querySelectorAll('input[name="followedEditions"]:checked').length;
@@ -3133,11 +3152,12 @@ function operatorAuthorizationGroups(operator,editionOptions) {
  const operations=authorizationSection("championships","Operar campeonatos","Marque as categorias em que o operador pode mudar placar, controlar o tempo e registrar lances. Inclui novos jogos dessas categorias.",championshipOperationPicker(operator),(operator.operatedChampionships||[]).length,true);
  const matches=authorizationSection("matches","Operar jogos avulsos","Marque aqui os jogos que quer liberar um a um. Um jogo já liberado pelo campeonato dispensa outra marcação.",operatorMatchPicker(operator),(operator.matches||[]).length);
  const history=authorizationSection("history","Anular lances","Libera anulações com motivo em jogos abertos que o operador já pode operar. O lance original continua no histórico.",`<label class="confirmation-check"><input type="checkbox" name="historyCorrectPermission" ${checked("historyCorrections")}><span>Anular gols, pontos, cartões, faltas, substituições e pedidos de tempo.</span></label>`,permissions.includes("historyCorrections")?1:0);
+ const sportCorrection=authorizationSection("matchSportCorrection","Corrigir modalidade","Libera corrigir de Futebol para Futsal em partidas encerradas que o operador já pode operar. Exige informar o motivo.",`<label class="confirmation-check"><input type="checkbox" name="matchSportCorrectionPermission" ${checked("correctMatchSport")}><span>Corrigir modalidade dos jogos liberados.</span></label>`,permissions.includes("correctMatchSport")?1:0);
  const phases=authorizationSection("phases","Editar grupos e chaves","Vale para as categorias marcadas em Operar campeonatos.",
   `<label class="confirmation-check"><input type="checkbox" name="phaseEditPermission" ${checked("editMatchPhases")}><span>Mudar fase, grupo, chave ou rodada.</span></label>`,permissions.includes("editMatchPhases")?1:0);
  const registrations=authorizationSection("records","Fazer cadastros","Cada caixa libera um cadastro. Para operar um jogo criado, marque o jogo ou seu campeonato nas opções acima.",`<label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${checked("rosters")}><span>Criar, editar e importar equipes e jogadores.</span></label><label class="confirmation-check"><input type="checkbox" name="championshipPermission" ${checked("championships")}><span>Criar e editar campeonatos e temporadas.</span></label><label class="confirmation-check"><input type="checkbox" name="matchCreatePermission" ${checked("matchesCreate")}><span>Criar novos jogos.</span></label>`,permissions.filter(id=>["rosters","championships","matchesCreate"].includes(id)).length);
  const viewing=authorizationSection("view","Só consultar jogos","As opções abaixo liberam consulta. Para registrar lances, use Operar campeonatos ou Operar jogos avulsos.",`<fieldset><legend>Campeonatos para consultar</legend>${editionOptions}<label class="confirmation-check"><input type="checkbox" name="gamesViewPermission" ${checked("gamesView")}><span>Consultar todos os jogos publicados.</span></label></fieldset>`,(operator.followedEditions||[]).length+(permissions.includes("gamesView")?1:0));
- return `<div class="toolbar"><button type="button" data-permissions-expand="true">Expandir autorizações</button><button type="button" data-permissions-expand="false">Recolher autorizações</button></div>${operations}${matches}${history}${phases}${registrations}${viewing}`;
+ return `<div class="toolbar"><button type="button" data-permissions-expand="true">Expandir autorizações</button><button type="button" data-permissions-expand="false">Recolher autorizações</button></div>${operations}${matches}${history}${sportCorrection}${phases}${registrations}${viewing}`;
 }
 document.addEventListener("click",event=>{
  const button=event.target.closest("[data-permissions-expand]");if(!button||role!=="admin")return;
@@ -3173,7 +3193,7 @@ function usersView() {
     permissions.includes("championships") && "Campeonatos",
     permissions.includes("matchesCreate") && "Novas partidas",
   ].filter(Boolean).join(", ") || "Nenhum";
-  const permissionNames={rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos",historyCorrections:"Anular lances com justificativa",editMatchPhases:"Editar grupos e chaves"};
+  const permissionNames={rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos",historyCorrections:"Anular lances com justificativa",editMatchPhases:"Editar grupos e chaves",correctMatchSport:"Corrigir modalidade dos jogos liberados"};
   const accessAuditRows=(state.accessAudit||[]).slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
   const accessAuditDate=value=>value?.toDate?.().toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})||"Aguardando confirmação do servidor";
   const accessAuditValue=(key,value)=>{
@@ -3259,7 +3279,7 @@ document.addEventListener("submit", async (e) => {
           toast(user?.emailVerified ? "Solicitação registrada. Aguarde a aprovação do administrador principal." : "Solicitação registrada. Confira a confirmação enviada ao seu e-mail.");
         } else {
           await cloud.manageUser({userId:d.userId, access:d.access,
-            matches: new FormData(f).getAll("assignedMatches"), followedEditions: new FormData(f).getAll("followedEditions"), operatedChampionships: new FormData(f).getAll("operatedChampionships"), permissions:[...(f.elements.rosterPermission.checked?["rosters"]:[]),...(f.elements.matchCreatePermission.checked?["matchesCreate"]:[]),...(f.elements.championshipPermission.checked?["championships"]:[]),...(f.elements.gamesViewPermission.checked?["gamesView"]:[]),...(f.elements.historyCorrectPermission.checked?["historyCorrections"]:[]),...(f.elements.phaseEditPermission.checked?["editMatchPhases"]:[])], reason:d.reason});
+            matches: new FormData(f).getAll("assignedMatches"), followedEditions: new FormData(f).getAll("followedEditions"), operatedChampionships: new FormData(f).getAll("operatedChampionships"), permissions:[...(f.elements.rosterPermission.checked?["rosters"]:[]),...(f.elements.matchCreatePermission.checked?["matchesCreate"]:[]),...(f.elements.championshipPermission.checked?["championships"]:[]),...(f.elements.gamesViewPermission.checked?["gamesView"]:[]),...(f.elements.historyCorrectPermission.checked?["historyCorrections"]:[]),...(f.elements.phaseEditPermission.checked?["editMatchPhases"]:[]),...(f.elements.matchSportCorrectionPermission.checked?["correctMatchSport"]:[])], reason:d.reason});
           managedUserId = "";
           toast("Permissões salvas e registradas no histórico.");
         }
@@ -3300,6 +3320,10 @@ document.addEventListener("submit", async (e) => {
       if(d.phase&&!phaseOptions.includes(d.phase))throw Error("Fase inválida.");
       await cloud.saveMatchPhase(d.matchId,phaseEdition,d);
       toast("Fase salva.");
+    } else if (f.id === "arena-correct-match-sport") {
+      if (!selected || selected !== f.dataset.matchId || !canCorrectMatchSport(selected)) throw Error("Esta conta precisa de autorização para corrigir a modalidade desta partida.");
+      if (!confirm("Corrigir a modalidade desta partida encerrada de Futebol para Futsal?")) return;
+      await dispatch({type:"correctMatchSport",matchId:selected,championshipId:d.championshipId,reason:d.reason});
     } else if (f.id === "championship-link") {
       await dispatch({type:"championshipLink", matchId:selected, championshipId:d.championshipId, reason:d.reason});
     } else if (f.id === "clock-config") {
