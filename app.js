@@ -1568,7 +1568,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=arena-remover-jogador-1");
+    const { connectSpark } = await import("./spark-store.js?v=arena-encerrar-partida-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -1676,6 +1676,17 @@ async function dispatch(a) {
     } else {
       if (!cloud) throw Error("Aguarde a conexão com o Firebase.");
       const savedClock = await cloud.send(a);
+      if (savedClock?.endedMatch) {
+        const ended = savedClock.endedMatch;
+        const match = state.matches.find(item => item.id === a.matchId);
+        if (match && (match._revision ?? 0) <= ended._revision) {
+          Object.assign(match, {status:ended.status, clock:ended.clock,
+            publicNotice:ended.publicNotice, score:ended.score, sets:ended.sets,
+            stage:ended.stage, _revision:ended._revision});
+        }
+        toast(savedClock.alreadyEnded ? "A partida já estava encerrada no servidor." : "Partida encerrada.");
+        return;
+      }
       if (a.type === "clock" && a.command === "ajustar" && savedClock) {
         const match = state.matches.find((item) => item.id === a.matchId);
         if (match && (match._revision ?? 0) < savedClock.revision) {

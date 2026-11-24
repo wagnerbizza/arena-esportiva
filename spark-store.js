@@ -686,6 +686,15 @@ export async function connectSpark({
         const beforeSnap = await tx.get(reference);
         const before = beforeSnap.exists() ? beforeSnap.data() : null;
         attemptedRevision = before?._revision || 0;
+        if (action.type === "status" && action.status === "Encerrada") {
+          if (!before) throw Error("Partida não encontrada.");
+          if (["Encerrada", "Homologada"].includes(before.status)) {
+            return {endedMatch: before, alreadyEnded: true};
+          }
+          if (!["Ao vivo", "Pausada", "Suspensa"].includes(before.status)) {
+            throw Error("A situação no servidor é " + before.status + ". Atualize o painel antes de tentar encerrar.");
+          }
+        }
         let original = null;
         if (originalRef) {
           const o = await tx.get(originalRef),
@@ -826,6 +835,9 @@ export async function connectSpark({
             actor: session.uid,
             at: F.serverTimestamp(),
           });
+        if (action.type === "status" && action.status === "Encerrada") {
+          return {endedMatch: next, alreadyEnded: false};
+        }
         if (action.type === "clock" && action.command === "ajustar") {
           return { clock: next.clock, addedTime:next.addedTime||null, revision: next._revision };
         }
