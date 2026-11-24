@@ -1796,7 +1796,7 @@ function render() {
     return;
   }
   // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
-  if (role !== "admin" && !["overview", "matches", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canPrepareRegistrationSheets()?["registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[])].includes(section)) {
+  if (role !== "admin" && !["overview", "matches", "operation", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canPrepareRegistrationSheets()?["registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[])].includes(section)) {
     section = "overview";
     selected = "";
   }
@@ -1809,6 +1809,7 @@ function render() {
     ["players", "Jogadores"],
     ["createMatch", "Cadastrar partida"],
     ["matches", "Jogos"],
+    ["operation", "Cabine de Operação"],
     ["matchSheets", "Súmulas"],
     ["reports", "Relatórios esportivos"],
     ["auditReports", "Relatório geral"],
@@ -1830,7 +1831,7 @@ function render() {
     ["imports", "Importar"],
   ];
   const pageControls = arenaPageControls();
-  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div>${pageControls}<span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && section==="matches" ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>`;
+  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div>${pageControls}<span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${accountPendingBanner()}${section==="operation"?"":`<div class="noprint">${liveStatusPanel("admin")}</div>`}${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>`;
   const permissionsForm = app.querySelector("#access-user");
   if (permissionsForm) updateOperationSummary(permissionsForm);
   stopInvisibleTimeline();
@@ -1869,6 +1870,7 @@ function publicMatches(filter) {
       : empty("Nenhuma partida publicada para esta seleção.");
 }
 function view() {
+  if(section==="operation")return cabinView();
   if(section==="systemCheck")return role==="admin"?systemDiagnosticsView():empty("Verificação exclusiva do administrador.");
   if(section==="qrCodes")return qrCodesView();
   if(section==="profiles")return profilesView();
@@ -1974,6 +1976,46 @@ function operationRosterPanel(m) {
      <button ${!members.length?"disabled":""}>Salvar observação</button></form>
    </details>`;
 }
+let cabinKeyboardMatch = "";
+function isOperationSection() {
+  return section === "matches" || section === "operation";
+}
+function canUseCabin(match) {
+  return !!match && match.testData !== true &&
+    (role === "admin" || (role === "operator" &&
+      ((trainingMode && !canViewAllGames()) || cloud?.canOperate(match.id))));
+}
+function cabinView() {
+  const match = state.matches.find(item => item.id === selected);
+  if (canUseCabin(match) && !finalStatuses.includes(match.status)) {
+    const keyboard = cabinKeyboardMatch === match.id;
+    return `<div class="toolbar noprint"><button type="button" data-cabin-keyboard aria-pressed="${keyboard}">${keyboard ? "Desligar atalhos de teclado" : "Ligar atalhos de teclado"}</button>${keyboard ? "<span>A: +1 para a primeira equipe · L: +1 para a segunda</span>" : ""}</div>${operate()}`;
+  }
+  const games = state.matches.filter(item => canUseCabin(item) && !finalStatuses.includes(item.status))
+    .sort((a,b) => Number(b.status === "Ao vivo") - Number(a.status === "Ao vivo") || String(a.date).localeCompare(String(b.date)));
+  return `<section class="card"><h2>Escolha um jogo para operar</h2><div class="grid cabin-games">${games.map(item => `<button type="button" class="shortcut-primary" data-open="${esc(item.id)}" data-cabin-match><strong>${esc(name(item.home))} × ${esc(name(item.away))}</strong><small>${esc(item.sport)} · ${esc(item.status)} · ${esc(format(item.date))}</small></button>`).join("") || empty("Nenhum jogo em aberto autorizado para esta conta.")}</div></section>`;
+}
+document.addEventListener("click", event => {
+  const button = event.target.closest("[data-cabin-keyboard]");
+  if (!button || section !== "operation" || !selected || busy) return;
+  cabinKeyboardMatch = cabinKeyboardMatch === selected ? "" : selected;
+  button.setAttribute("aria-pressed", String(!!cabinKeyboardMatch));
+  render();
+  app.querySelector(cabinKeyboardMatch ? ".admin-heading h1" : "[data-cabin-keyboard]")?.focus({preventScroll:true});
+});
+document.addEventListener("keydown", event => {
+  if (section !== "operation" || !selected || cabinKeyboardMatch !== selected || busy ||
+      event.defaultPrevented || event.repeat || event.isComposing || event.ctrlKey ||
+      event.altKey || event.metaKey || event.shiftKey || arenaDrawerOpen ||
+      document.querySelector("dialog[open]") ||
+      event.target.closest?.("input, textarea, select, button, a, [contenteditable]")) return;
+  const side = {a:0, l:1}[event.key];
+  if (side === undefined) return;
+  const button = app.querySelector(`button[data-quick="1"][data-side="${side}"]:not(:disabled)`);
+  if (!button) return;
+  event.preventDefault();
+  button.click();
+});
 function operate() {
   const m = state.matches.find((m) => m.id === selected);
   if (!m) {
@@ -3239,7 +3281,7 @@ document.addEventListener("click", async (e) => {
       XLSX.writeFile(wb,"historico-permissoes.xlsx");return;
     }
     if (b.dataset.fastEvent || b.dataset.fastAdded || b.dataset.fastNotice) {
-      if (!admin || section !== "matches" || !selected || !["admin","operator"].includes(role))
+      if (!admin || !isOperationSection() || !selected || !["admin","operator"].includes(role))
         throw Error("Abra uma partida autorizada para usar os atalhos.");
       const match = state.matches.find(item => item.id === selected);
       if (!match) throw Error("Partida não encontrada.");
@@ -3321,12 +3363,18 @@ document.addEventListener("click", async (e) => {
         }
       }
     } else if (b.dataset.open) {
+      if (b.hasAttribute("data-cabin-match")) {
+        const match = state.matches.find(item => item.id === b.dataset.open);
+        if (!canUseCabin(match) || finalStatuses.includes(match.status)) throw Error("Este jogo não está disponível para operação.");
+      }
       selected = b.dataset.open;
+      cabinKeyboardMatch = "";
       quickPlayers = ["", ""];
-      section = "matches";
+      section = b.hasAttribute("data-cabin-match") ? "operation" : "matches";
       render();
       if (!C.demo && role === "admin") await cloud.loadHistory([selected], { live: true });
     } else if (b.hasAttribute("data-back")) {
+      cabinKeyboardMatch = "";
       cloud?.stopHistory();
       selected = "";
       render();
@@ -4265,7 +4313,7 @@ document.addEventListener("click",async event=>{
 
 // 21 — Organização da central. Permissões continuam validadas pelo Firebase.
 const workspaceDefinitions=[
- {id:"games",title:"Jogos",intro:"Operação, agenda e resultados",sections:["overview","matches","createMatch","standings"]},
+ {id:"games",title:"Jogos",intro:"Operação, agenda e resultados",sections:["overview","operation","matches","createMatch","standings"]},
  {id:"records",title:"Cadastros",intro:"Equipes, jogadores e importação",sections:["teams","players","imports"]},
  {id:"championships",title:"Campeonatos",intro:"Temporadas e inscrições",sections:["championships","registrationSheets"]},
  {id:"reports",title:"Relatórios",intro:"Súmulas, resultados e auditoria",sections:["matchSheets","reports","auditReports","accessHistory"]},
@@ -4275,7 +4323,7 @@ const workspaceDefinitions=[
  {id:"administration",title:"Acessos",intro:"Permissões e operadores",sections:["users","monitor"]},
  {id:"maintenance",title:"Backups e suporte",intro:"Guias, testes e recuperação",sections:["systemCheck","documentation","testData","cleanup"]}
 ];
-function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
+function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","operation","matches","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
 function publicPanelURL(edition="") {
  const url=new URL("./index.html",location.href);
  if(trainingMode)url.searchParams.set("demonstracao","1");
@@ -4377,7 +4425,7 @@ function arenaSectionIcon(id) {
 function workspaceNavigation(sections){
  const labels=Object.fromEntries(sections),visible=workspaceDefinitions.filter(g=>allowedWorkspaceSections(g).length);
  const personal=readPersonalTools();
- const seen=new Set(["overview","account"]);
+ const seen=new Set(["overview","account","operation"]);
  const brand=$("#systemBrand")?.innerHTML||esc(systemDisplayName());
  const publicHref=trainingMode?"./index.html?demonstracao=1":"./index.html";
  const footerItem=(id,label,icon)=>`<button type="button" data-section="${id}" title="${esc(label)}" aria-label="${esc(label)}" class="${section===id?"is-current":""}" ${section===id?'aria-current="page"':""}>${arenaIcon(icon)}<span>${esc(label)}</span></button>`;
@@ -4386,7 +4434,7 @@ function workspaceNavigation(sections){
    const active=ids.includes(section),open=arenaOpenGroups.has(group.id)?arenaOpenGroups.get(group.id):active;
    return `<details class="arena-side-group" data-layout-group="${group.id}" ${open?"open":""}><summary title="${esc(group.title)}" aria-label="${esc(group.title)}">${arenaIcon(group.id)}<span>${esc(group.title)}</span></summary><nav aria-label="${esc(group.title)}">${ids.map(id=>`<button type="button" data-section="${id}" title="${esc(labels[id]||id)}" class="arena-side-item ${section===id?"is-current":""}" ${personal.disabled.includes(id)?'aria-disabled="true"':""} ${section===id?'aria-current="page"':""}>${arenaSectionIcon(id)}<span>${esc(labels[id]||id)}</span></button>${id==="matches"?`<div class="arena-side-scopes" aria-label="Filtrar jogos"><button type="button" data-games-shortcut="live">${arenaIcon("live")}<span>Ao vivo</span></button><button type="button" data-games-shortcut="scheduled">${arenaIcon("calendar")}<span>Agenda</span></button><button type="button" data-games-shortcut="finished">${arenaIcon("results")}<span>Resultados</span></button></div>`:""}`).join("")}</nav></details>`;
  }).join("");
- return `<aside id="arenaSidebar" class="arena-sidebar noprint ${navigationQuery.trim()?"arena-search-active":""}" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link" aria-label="${esc(systemDisplayName())}" title="${esc(systemDisplayName())}">${brand}</a><button type="button" data-layout-rail aria-label="Recolher barra lateral" title="Recolher barra lateral" aria-expanded="true" aria-controls="arenaSidebar">${arenaIcon("collapse")}</button><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><div class="arena-sidebar-pinbar"><button type="button" class="arena-side-pin" data-layout-pin aria-label="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}" aria-pressed="${arenaSidebarPinned}" title="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}">${arenaIcon("pin")}<span>${arenaSidebarPinned?"Barra fixada":"Fixar barra aberta"}</span></button></div><div class="arena-side-search"><button type="button" class="arena-side-search-launch" data-side-search-open aria-label="Pesquisar funções" title="Pesquisar funções (Ctrl+K)">${arenaIcon("search")}</button><label for="sideFunctionSearch">Pesquisar no menu</label><div class="arena-side-search-field"><input id="sideFunctionSearch" type="search" value="${esc(navigationQuery)}" placeholder="Buscar função…" autocomplete="off" aria-controls="arenaSideSearchResults" aria-keyshortcuts="Control+k Meta+k"><button type="button" data-clear-navigation-search data-side-clear aria-label="Limpar pesquisa do menu" title="Limpar pesquisa">${arenaIcon("close")}</button></div></div><div class="arena-sidebar-nav"><div id="arenaSideSearchResults" aria-live="polite">${navigationSearchResults()}</div><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" title="Início" aria-label="Início" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Início</span></button>${groups}</div><div class="arena-sidebar-footer">${footerItem("account","Minha conta","account")}${footerItem(role==="admin"?"settings":"preferences","Configurações","maintenance")}${footerItem("profiles","Trocar perfil / conta","profiles")}<button type="button" data-account-guide title="Demonstração e ajuda" aria-label="Demonstração e ajuda">${arenaIcon("help")}<span>Demonstração e ajuda</span></button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener" title="Abrir painel público" aria-label="Abrir painel público">${arenaIcon("games")}<span>Abrir painel público</span></a><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><div class="arena-toolbar noprint"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button></div>${personalTopShortcuts()}<section class="navigation-finder arena-function-search noprint" aria-label="Encontrar função"><label for="functionSearch">Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
+ return `<aside id="arenaSidebar" class="arena-sidebar noprint ${navigationQuery.trim()?"arena-search-active":""}" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link" aria-label="${esc(systemDisplayName())}" title="${esc(systemDisplayName())}">${brand}</a><button type="button" data-layout-rail aria-label="Recolher barra lateral" title="Recolher barra lateral" aria-expanded="true" aria-controls="arenaSidebar">${arenaIcon("collapse")}</button><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><div class="arena-sidebar-pinbar"><button type="button" class="arena-side-pin" data-layout-pin aria-label="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}" aria-pressed="${arenaSidebarPinned}" title="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}">${arenaIcon("pin")}<span>${arenaSidebarPinned?"Barra fixada":"Fixar barra aberta"}</span></button></div><div class="arena-side-search"><button type="button" class="arena-side-search-launch" data-side-search-open aria-label="Pesquisar funções" title="Pesquisar funções (Ctrl+K)">${arenaIcon("search")}</button><label for="sideFunctionSearch">Pesquisar no menu</label><div class="arena-side-search-field"><input id="sideFunctionSearch" type="search" value="${esc(navigationQuery)}" placeholder="Buscar função…" autocomplete="off" aria-controls="arenaSideSearchResults" aria-keyshortcuts="Control+k Meta+k"><button type="button" data-clear-navigation-search data-side-clear aria-label="Limpar pesquisa do menu" title="Limpar pesquisa">${arenaIcon("close")}</button></div></div><div class="arena-sidebar-nav"><div id="arenaSideSearchResults" aria-live="polite">${navigationSearchResults()}</div><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" title="Início" aria-label="Início" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Início</span></button>${personal.hidden.includes("operation")?"":`<button type="button" class="arena-side-item ${section==="operation"?"is-current":""}" data-section="operation" title="Cabine de Operação" ${section==="operation"?'aria-current="page"':""} ${personal.disabled.includes("operation")?'aria-disabled="true"':""}>${arenaIcon("live")}<span>Cabine de Operação</span></button>`}${groups}</div><div class="arena-sidebar-footer">${footerItem("account","Minha conta","account")}${footerItem(role==="admin"?"settings":"preferences","Configurações","maintenance")}${footerItem("profiles","Trocar perfil / conta","profiles")}<button type="button" data-account-guide title="Demonstração e ajuda" aria-label="Demonstração e ajuda">${arenaIcon("help")}<span>Demonstração e ajuda</span></button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener" title="Abrir painel público" aria-label="Abrir painel público">${arenaIcon("games")}<span>Abrir painel público</span></a><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><div class="arena-toolbar noprint"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button></div>${personalTopShortcuts()}<section class="navigation-finder arena-function-search noprint" aria-label="Encontrar função"><label for="functionSearch">Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
 }
 function openSideFunctionSearch() {
  arenaRailCollapsed=false;
@@ -4411,7 +4459,7 @@ function syncArenaLayout() {
  document.body.classList.add("arena-layout-v2");
  const ready=admin && (C.demo || (user && role));
  document.body.classList.toggle("arena-central-ready",Boolean(ready));
- document.body.classList.toggle("arena-operation-page",Boolean(ready&&section==="matches"&&selected));
+ document.body.classList.toggle("arena-operation-page",Boolean(ready&&isOperationSection()&&selected));
  let toggle=$("#arenaMenuToggle");
  if(admin&&!toggle){toggle=document.createElement("button");toggle.id="arenaMenuToggle";toggle.type="button";toggle.dataset.layoutMenu="";toggle.className="arena-menu-toggle noprint";toggle.setAttribute("aria-controls","arenaSidebar");document.querySelector("header")?.prepend(toggle);}
  if(toggle){toggle.hidden=!ready;toggle.setAttribute("aria-label","Abrir menu da central");toggle.setAttribute("aria-expanded",String(arenaDrawerOpen));toggle.innerHTML=arenaIcon("menu")+"<span>Menu</span>";}
@@ -4892,7 +4940,7 @@ function arenaPageControls() {
   arenaPreviousPage = arenaCurrentPage;
   arenaCurrentPage = section;
  }
- const detailBack = section === "matches" && selected ? "data-back"
+ const detailBack = isOperationSection() && selected ? "data-back"
   : section === "teams" && (teamFormVisible || selectedTeamId) ? "data-profile-back" : "";
  return `<nav class="toolbar arena-page-actions" aria-label="Atalhos da tela">
   ${section !== "overview" ? `<button type="button" ${detailBack || `data-section="${arenaPreviousPage}"`}>Voltar</button><button type="button" data-section="overview">Início</button>` : ""}
@@ -5191,6 +5239,7 @@ document.addEventListener("click",e=>{
 let navigationQuery="";
 const expandedNavigation=new Set();
 const navigationDescriptions={
+ operation:{label:"Cabine de Operação",description:"Escolha um jogo autorizado e use os atalhos de placar e tempo.",keywords:"operacao cabine ao vivo pontos goles cronometro"},
  qrCodes:{label:"QR codes e links",description:"Copiar links e baixar QR codes públicos do Arena e dos campeonatos.",keywords:"qr qrcode qr code compartilhar link publico logo svg"},
  profiles:{label:"Trocar perfil / conta",description:"Conferir o perfil autorizado, trocar de conta ou praticar no treinamento.",keywords:"perfil conta trocar administrador operador treinamento login sair"},
  preferences:{label:"Configurações pessoais",description:"Aparência, leitura e atalhos deste navegador.",keywords:"preferencias configuracoes tema leitura atalhos favoritos"},
@@ -5597,7 +5646,7 @@ function showPersonalTools(id=null) {
   const colors=[["#145678","Azul"],["#216b43","Verde"],["#75419b","Roxo"],["#923b41","Vermelho"],["#f0bc42","Amarelo"],["#cf6b28","Laranja"]];
   const sidebarOptions=item && admin && id!=="overview" && workspaceDefinitions.some(group=>group.sections.includes(id))
     ? `<div class="toolbar"><button type="button" data-personal-toggle="hidden" data-personal-id="${esc(id)}">${data.hidden.includes(id)?"Mostrar no menu":"Ocultar do menu"}</button><button type="button" data-personal-toggle="disabled" data-personal-id="${esc(id)}">${data.disabled.includes(id)?"Ativar botão do menu":"Desativar botão do menu"}</button></div>` : "";
-  dialog.innerHTML=`<h2 id="personalToolsTitle">${item?esc(item.label):"Atalhos e favoritos"}</h2><p>Os ajustes do menu valem para esta conta neste navegador.</p>${item?`${sidebarOptions}<div class="toolbar"><button type="button" data-personal-toggle="pins" data-personal-id="${esc(id)}">${data.pins.includes(id)?"Desafixar":"Fixar no topo"}</button><button type="button" data-personal-toggle="favorites" data-personal-id="${esc(id)}">${data.favorites.includes(id)?"Retirar dos favoritos":"Adicionar aos favoritos"}</button></div><h3>Cor desta aba</h3><div class="toolbar">${colors.map(([color,label])=>`<button type="button" data-personal-color="${color}" data-personal-id="${esc(id)}" style="border-bottom:5px solid ${color}">${label}</button>`).join("")}<button type="button" data-personal-color="default" data-personal-id="${esc(id)}">Cor padrão</button></div>`:`<div class="tablewrap"><table><thead><tr><th>Função</th><th>Atalho no topo</th><th>Favorito</th><th>Ordem dos atalhos</th><th>Opções</th></tr></thead><tbody>${[...catalog].sort((a,b)=>{const rank=x=>data.pins.includes(x)?data.pins.indexOf(x):999;return rank(a.id)-rank(b.id);}).map(i=>`<tr><td>${esc(i.label)}</td><td><button type="button" data-personal-toggle="pins" data-personal-id="${esc(i.id)}" aria-pressed="${data.pins.includes(i.id)}">${data.pins.includes(i.id)?"Retirar":"Adicionar"}</button></td><td><button type="button" data-personal-toggle="favorites" data-personal-id="${esc(i.id)}" aria-pressed="${data.favorites.includes(i.id)}">${data.favorites.includes(i.id)?"★ Sim":"☆ Não"}</button></td><td>${data.pins.includes(i.id)?`<button type="button" data-personal-move="-1" data-personal-id="${esc(i.id)}" aria-label="Mover ${esc(i.label)} para cima">↑</button><button type="button" data-personal-move="1" data-personal-id="${esc(i.id)}" aria-label="Mover ${esc(i.label)} para baixo">↓</button>`:""}</td><td><button type="button" data-personal-options="${esc(i.id)}">Cor e opções</button></td></tr>`).join("")}</tbody></table></div>`}<div class="toolbar">${item?'<button type="button" data-personal-settings>Todos os atalhos</button>':""}<button type="button" data-personal-close>Fechar</button></div>`;
+  dialog.innerHTML=`<h2 id="personalToolsTitle">${item?esc(item.label):"Atalhos e favoritos"}</h2><p>Os ajustes do menu valem para esta conta neste navegador.</p><div class="personal-tools-content">${item?`${sidebarOptions}<div class="toolbar"><button type="button" data-personal-toggle="pins" data-personal-id="${esc(id)}">${data.pins.includes(id)?"Desafixar":"Fixar no topo"}</button><button type="button" data-personal-toggle="favorites" data-personal-id="${esc(id)}">${data.favorites.includes(id)?"Retirar dos favoritos":"Adicionar aos favoritos"}</button></div><h3>Cor desta aba</h3><div class="toolbar">${colors.map(([color,label])=>`<button type="button" data-personal-color="${color}" data-personal-id="${esc(id)}" style="border-bottom:5px solid ${color}">${label}</button>`).join("")}<button type="button" data-personal-color="default" data-personal-id="${esc(id)}">Cor padrão</button></div>`:`<div class="tablewrap"><table><thead><tr><th>Função</th><th>Atalho no topo</th><th>Favorito</th><th>Ordem dos atalhos</th><th>Opções</th></tr></thead><tbody>${[...catalog].sort((a,b)=>{const rank=x=>data.pins.includes(x)?data.pins.indexOf(x):999;return rank(a.id)-rank(b.id);}).map(i=>`<tr><td>${esc(i.label)}</td><td><button type="button" data-personal-toggle="pins" data-personal-id="${esc(i.id)}" aria-pressed="${data.pins.includes(i.id)}">${data.pins.includes(i.id)?"Retirar":"Adicionar"}</button></td><td><button type="button" data-personal-toggle="favorites" data-personal-id="${esc(i.id)}" aria-pressed="${data.favorites.includes(i.id)}">${data.favorites.includes(i.id)?"★ Sim":"☆ Não"}</button></td><td>${data.pins.includes(i.id)?`<button type="button" data-personal-move="-1" data-personal-id="${esc(i.id)}" aria-label="Mover ${esc(i.label)} para cima">↑</button><button type="button" data-personal-move="1" data-personal-id="${esc(i.id)}" aria-label="Mover ${esc(i.label)} para baixo">↓</button>`:""}</td><td><button type="button" data-personal-options="${esc(i.id)}">Cor e opções</button></td></tr>`).join("")}</tbody></table></div>`}</div><div class="toolbar personal-tools-footer">${item?'<button type="button" data-personal-settings>Todos os atalhos</button>':""}<button type="button" data-personal-close>Fechar</button></div>`;
   dialog.dataset.item=id||"";if(!dialog.open)dialog.showModal();
 }
 document.addEventListener("contextmenu",e=>{const target=personalTarget(e.target);if(!target)return;e.preventDefault();showPersonalTools(target.id);});
@@ -5815,3 +5864,41 @@ document.addEventListener("click",async e=>{
   if(b.dataset.credentialRevoke){if(!confirm("Revogar esta credencial? Isso não bloqueia a conta da pessoa no sistema."))return;await cloud.revokeCredential(b.dataset.credentialRevoke);credentialRows=await cloud.eventCredentials();render();toast("Credencial revogada.");}
  }catch(error){toast(error.message,true);}
 });
+
+// Fecha menus flutuantes e caixas modais pelo fundo, em qualquer dispositivo.
+{
+  const floatingBoxes = [
+    ["#arenaWeather[open]", ".arena-weather-card"],
+    ["#connectionIndicator[open]", "#connectionIndicator"],
+    ["#arenaSidebar .arena-side-group[open]", "#arenaSidebar"],
+  ];
+  let pressedBackdrop = null;
+
+  function backdropAt(event) {
+    const dialog = event.target;
+    if (!dialog.matches?.("dialog:modal")) return null;
+    const { left, right, top, bottom } = dialog.getBoundingClientRect();
+    return event.clientX < left || event.clientX >= right ||
+      event.clientY < top || event.clientY >= bottom ? dialog : null;
+  }
+
+  document.addEventListener("pointerdown", event => {
+    pressedBackdrop = event.isPrimary && event.button === 0 ? backdropAt(event) : null;
+  }, true);
+  document.addEventListener("pointercancel", () => { pressedBackdrop = null; }, true);
+  document.addEventListener("click", event => {
+    const dialog = pressedBackdrop;
+    pressedBackdrop = null;
+    if (dialog && event.detail > 0 && dialog === backdropAt(event)) {
+      dialog.close();
+      return;
+    }
+    if (document.querySelector("dialog:modal")) return;
+    for (const [selector, boundary] of floatingBoxes) {
+      for (const box of document.querySelectorAll(selector)) {
+        const container = box.closest(boundary) || box;
+        if (!container.contains(event.target)) box.open = false;
+      }
+    }
+  }, true);
+}

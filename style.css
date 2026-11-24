@@ -2225,7 +2225,18 @@ body:not([data-admin="true"]) .public-event-icon {
 .personal-shortcuts { padding:12px 14px;border:1px solid var(--line);border-radius:12px;margin:12px 0;background:var(--panel); }
 .personal-shortcuts .toolbar { margin:4px 0 10px; }
 .personal-shortcuts small { display:block;color:var(--muted);line-height:1.5; }
-.personal-tools-dialog { width:min(900px,calc(100vw - 24px));max-height:85dvh;overflow:auto;background:var(--panel);color:var(--text);border:2px solid var(--accent);border-radius:14px;padding:20px; }
+.personal-tools-dialog { width:min(900px,calc(100vw - 24px));max-height:85dvh;box-sizing:border-box;overflow:hidden;background:var(--panel);color:var(--text);border:2px solid var(--accent);border-radius:14px;padding:20px; }
+.personal-tools-dialog[open] { display:flex;flex-direction:column; }
+.personal-tools-dialog > h2,
+.personal-tools-dialog > p,
+.personal-tools-footer { flex:none; }
+.personal-tools-content { min-height:0;min-width:0;overflow:auto;overscroll-behavior:contain; }
+.personal-tools-content > .toolbar,
+.personal-tools-footer { flex-wrap:wrap;gap:10px; }
+.personal-tools-content > .toolbar + .toolbar { margin-block-start:12px; }
+.personal-tools-content > h3 { margin-block:16px 10px; }
+.personal-tools-footer { margin-block-start:16px; }
+@media(max-height:420px){.personal-tools-dialog > p{margin-block:4px}.personal-tools-dialog > h2{margin-block:4px}}
 .personal-tools-dialog::backdrop { background:#000b; }
 .personal-tools-dialog button { min-height:44px; }
 #event-credential input,#event-credential select { width:100%; }
@@ -2522,4 +2533,11 @@ body:not([data-admin="true"]) .public-event-icon {
   opacity: .65;
   cursor: default;
   text-decoration: line-through;
+}
+
+.cabin-games button {
+  min-block-size: 44px;
+  min-inline-size: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
