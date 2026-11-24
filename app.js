@@ -1207,28 +1207,46 @@ function monitorLastEvent(match) {
   const athlete = event.playerName || match.roster?.find(player => player.id === event.player)?.name;
   return [eventLabel(event,match),team,athlete].filter(Boolean).join(" · ");
 }
+const unpinnedGameBars = new Set();
+function gameBarPinButton(pinned) {
+  return `<button type="button" data-game-bar-pin aria-pressed="${pinned}">${pinned ? "Desafixar barra" : "Fixar barra"}</button>`;
+}
 function floatingGameClock() {
   if (isOperationSection() && selected) return "";
   const followed = followedGameClock();
+  const pinned = !unpinnedGameBars.has(followedClockKey());
   const matches = state.matches.filter(item => canUseCabin(item));
   const match = followed || matches.find(item => item.status === "Ao vivo") ||
     matches.find(item => ["Pausada","Suspensa"].includes(item.status));
-  if (!match) return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock arena-monitor-waiting noprint" aria-label="Monitor da partida">
-    <div><strong>Aguardando partida</strong><p>O placar e o relógio aparecem quando houver jogo em andamento autorizado.</p></div>
+  if (!match) return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock arena-monitor-waiting noprint ${pinned ? "is-pinned" : ""}" aria-label="Barra de jogos">
+    <div><strong>Barra de jogos</strong><p>Aguardando partida</p></div>
     <div class="toolbar">${section !== "operation" ? '<button type="button" data-section="operation">Abrir operação</button>' : ""}
     ${canCreateMatches() ? '<button type="button" data-section="createMatch">Agendar partida</button>' : ""}
-    ${trainingMode ? "" : '<a class="button" href="./painel.html?demonstracao=1&amp;inicio=operacao">Simular partida</a>'}</div>
+    ${trainingMode ? "" : '<a class="button" href="./painel.html?demonstracao=1&amp;inicio=operacao">Simular partida</a>'}${gameBarPinButton(pinned)}</div>
   </aside>`;
   const lastEvent = monitorLastEvent(match);
-  return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock noprint ${followed ? "is-pinned" : ""}" aria-label="Monitor da partida">
+  return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock noprint ${pinned ? "is-pinned" : ""}" aria-label="Barra de jogos">
     <strong>${esc(name(match.home))} × ${esc(name(match.away))}</strong>
     <p class="arena-followed-score"><b>${esc(gameResult(match).join(" × "))}</b> <span>${esc(match.status)}</span></p>
     ${lastEvent ? `<p class="arena-op-monitor-event">Último lance: ${esc(lastEvent)}</p>` : ""}
     ${clockMarkup(match)}
-    <div class="toolbar"><button type="button" data-open="${esc(match.id)}" ${finalStatuses.includes(match.status)?"":"data-cabin-match"}>${finalStatuses.includes(match.status)?"Ver partida":"Abrir operação"}</button><button type="button" data-clock-follow="${esc(match.id)}" aria-pressed="${!!followed}">${followed ? "Desafixar" : "Fixar monitor"}</button></div>
+    <div class="toolbar"><button type="button" data-open="${esc(match.id)}" ${finalStatuses.includes(match.status)?"":"data-cabin-match"}>${finalStatuses.includes(match.status)?"Ver partida":"Abrir operação"}</button>${gameBarPinButton(pinned)}</div>
   </aside>`;
 }
 document.addEventListener("click", event => {
+  const toggle = event.target.closest("[data-game-bar-pin]");
+  if (toggle && admin) {
+    const bar = toggle.closest("#arenaTopMatchMonitor");
+    if (!bar) return;
+    const key = followedClockKey();
+    if (unpinnedGameBars.has(key)) unpinnedGameBars.delete(key);
+    else unpinnedGameBars.add(key);
+    const pinned = !unpinnedGameBars.has(key);
+    bar.classList.toggle("is-pinned", pinned);
+    toggle.setAttribute("aria-pressed", String(pinned));
+    toggle.textContent = pinned ? "Desafixar barra" : "Fixar barra";
+    return;
+  }
   const button = event.target.closest("[data-clock-follow]");
   if (!button || !admin || busy) return;
   const key = followedClockKey();
