@@ -1565,7 +1565,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=arena-reforcos-1");
+    const { connectSpark } = await import("./spark-store.js?v=arena-remover-jogador-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -1616,7 +1616,7 @@ async function dispatch(a) {
     if (C.demo) {
       if (trainingMode && role === "operator" && !((canManageRosters()&&(["team","player"].includes(a.type)||(a.type==="import"&&["team","player"].includes(a.kind))))||(canCreateMatches()&&a.type==="match"&&!a.data?.id)||(canManageChampionships()&&a.type==="championship")) && ["team","player","match","settings","import","championship","championshipLink","teamArchive"].includes(a.type)) throw Error("Esta ação é do administrador na simulação. Troque o perfil para treinar essa função.");
       const latest = JSON.parse(localStorage.getItem(key)) || D.fresh();
-      if (!["team", "player", "match", "settings", "import", "championship","teamArchive"].includes(a.type)) {
+      if (!["team", "player", "match", "settings", "import", "championship","teamArchive","playerArchive"].includes(a.type)) {
         const old = latest.matches.find((m) => m.id === a.matchId);
         if (!old) throw Error("Partida não encontrada.");
         const current = {
@@ -1653,7 +1653,12 @@ async function dispatch(a) {
           updated;
         state = latest;
       } else {
-        state = D.reduce(latest, a, "demo");
+        if(a.type==="playerArchive"){
+          if(role!=="admin")throw Error("Somente o administrador pode remover jogadores.");
+          const reason=String(a.reason||"").trim();
+          if(reason.length<5||reason.length>500)throw Error("Informe o motivo (5 a 500 caracteres).");
+          state={...latest,players:latest.players.filter(p=>p.id!==a.playerId||p.team!==a.teamId)};
+        }else state = D.reduce(latest, a, "demo");
         if(["team","player","teamArchive"].includes(a.type)){
           const entity=a.type==="player"?"players":"teams",target=a.teamId||a.data?.id||state[entity].at(-1)?.id;
           state.teamLocalAudit=state.teamLocalAudit||[];state.teamLocalAudit.push({ID:crypto.randomUUID?crypto.randomUUID():"local-"+Date.now()+"-"+Math.random().toString(36).slice(2),entity,target,actor:"demonstração",at:new Date().toISOString(),before:latest[entity].find(r=>r.id===target)||null,after:state[entity].find(r=>r.id===target),detail:{type:a.type==="teamArchive"?(a.archived?"arquivamento":"reativação"):"cadastro / edição",reason:a.reason||"",text:"Alteração na demonstração"}});
@@ -4622,7 +4627,7 @@ function teamProfileView(){
  const championships=[...new Map(state.matches.filter(m=>[m.home,m.away].includes(t.id)).map(m=>[m.championshipId||"__unlinked__",m.championshipId?(m.competition||"Campeonato"):"Sem vínculo com campeonato"])).entries()];
  let content="";
  if(teamProfileTab==="data")content=`<section class="card"><h3>Cadastro atual</h3><dl class="account-details"><div><dt>Nome</dt><dd>${esc(t.name)}</dd></div><div><dt>Sigla</dt><dd>${esc(t.short||"Não informada")}</dd></div><div><dt>Técnico(a)</dt><dd>${esc(t.coach||"Não informado")}</dd></div><div><dt>Categoria</dt><dd>${esc(t.category||"Não informada")}</dd></div><div><dt>Responsável pela equipe</dt><dd>${esc(t.manager||"Não informado")}</dd></div><div><dt>Escola</dt><dd>${esc(t.school||"Não informada")}</dd></div><div><dt>Turma padrão da equipe</dt><dd>${esc(t.className||"Não informada")}</dd></div><div><dt>Modalidades cadastradas</dt><dd>${esc((t.sports||[]).join(", ")||"Ainda não informadas")}</dd></div><div><dt>Situação</dt><dd>${t.archived?"Arquivada":"Ativa"}</dd></div></dl><p class="muted">O cadastro atual não reescreve os elencos e técnicos congelados nas súmulas das partidas já criadas.</p><button type="button" data-profile-edit>Editar dados e modalidades</button>${role==="admin"?` <button type="button" data-profile-archive ${teamProfileBusy?"disabled":""}>${t.archived?"Reativar equipe":"Arquivar equipe"}</button><p class="muted">Arquivar preserva nome, jogadores, resultados e histórico. A equipe sai das opções de novos jogos e novos jogadores, e pode ser reativada.</p>`:""}</section>`;
- if(teamProfileTab==="roster")content=`<section class="card"><h3>Elenco atual • ${roster.length} jogador(es)</h3>${!t.archived?'<button type="button" data-profile-new-player>Adicionar jogador nesta equipe</button>':'<p>Reative a equipe antes de alterar o elenco.</p>'}${teamPlayerEditor(t)}${roster.length?table(["Nome","Número","Posição","Escalação","Ação"],roster.map(p=>tr([p.name,p.number,p.position,lineupLabel(p.reserve)]).replace("</tr>",`<td>${!t.archived?`<button type="button" data-profile-player="${esc(p.id)}">Editar jogador</button>`:"—"}</td></tr>`))):empty("Nenhum jogador cadastrado nesta equipe.")}<p class="muted">Cartões, faltas e pontos são registrados na partida. Consulte Estatísticas para os lances dos jogos selecionados.</p></section>`;
+ if(teamProfileTab==="roster")content=`<section class="card"><h3>Elenco atual • ${roster.length} jogador(es)</h3>${!t.archived?'<button type="button" data-profile-new-player>Adicionar jogador nesta equipe</button>':'<p>Reative a equipe antes de alterar o elenco.</p>'}${teamPlayerEditor(t)}${roster.length?table(["Nome","Número","Posição","Escalação","Ação"],roster.map(p=>tr([p.name,p.number,p.position,lineupLabel(p.reserve)]).replace("</tr>",`<td>${!t.archived?`<button type="button" data-profile-player="${esc(p.id)}">Editar jogador</button>${role==="admin"?` <button type="button" data-profile-remove-player="${esc(p.id)}">Remover do elenco</button>`:""}`:"—"}</td></tr>`))):empty("Nenhum jogador cadastrado nesta equipe.")}<p class="muted">Cartões, faltas e pontos são registrados na partida. Consulte Estatísticas para os lances dos jogos selecionados.</p></section>`;
  if(teamProfileTab==="games")content=`<section class="card"><h3>Jogos da equipe</h3>${matchScopeButtons("team",teamGameScope)}<p class="muted">Finalizadas inclui encerradas, homologadas e canceladas. Os dados e as súmulas permanecem salvos.</p></section><div class="grid">${scopeMatches(games,teamGameScope).map(m=>matchCard(m,true)).join("")||empty("Nenhuma partida corresponde a esta equipe e aos filtros.")}</div>${role!=="admin"?'<p>Esta conta vê somente suas partidas atribuídas.</p>':""}`;
  if(teamProfileTab==="stats"){
   const stats=teamStatistics(games,t.id),ready=C.demo||teamEventsKey===teamMatchKey(),events=ready?teamAthleteEvents(games,t.id):[];
@@ -4639,7 +4644,7 @@ function openTeamEditor(id){
  setBadgeDraft(t.badge||"");f.scrollIntoView({block:"start"});f.elements.name.focus({preventScroll:true});toast("Altere os dados e clique em Salvar equipe.");
 }
 document.addEventListener("click",async e=>{
- const b=e.target.closest("[data-team-profile],[data-profile-back],[data-profile-tab],[data-profile-edit],[data-profile-archive],[data-profile-new-player],[data-profile-player],[data-profile-events],[data-profile-history]");if(!b)return;
+ const b=e.target.closest("[data-team-profile],[data-profile-back],[data-profile-tab],[data-profile-edit],[data-profile-archive],[data-profile-new-player],[data-profile-player],[data-profile-remove-player],[data-profile-events],[data-profile-history]");if(!b)return;
  try{
   if(!canManageRosters())throw Error("Conta sem acesso aos cadastros.");
   if(b.dataset.teamProfile){teamProfileBusy=false;selectedTeamId=b.dataset.teamProfile;teamGameScope="active";teamProfileTab=["roster","games"].includes(b.dataset.initialTeamTab)?b.dataset.initialTeamTab:"data";teamProfileSport="";teamProfileChamp="";teamHistoryRows=[];teamHistoryLoaded=false;teamEventsKey="";teamProfileRequest++;section="teams";teamPlayerDraft=state.players.find(player=>player.id===b.dataset.participantPlayer&&player.team===selectedTeamId)||null;render();if(teamPlayerDraft)$("#team-player")?.scrollIntoView({block:"center"});return;}
@@ -4651,6 +4656,16 @@ document.addEventListener("click",async e=>{
    if(role!=="admin")throw Error("Exclusivo do administrador principal.");
    const reason=prompt((t.archived?"Motivo para reativar ":"Motivo para arquivar ")+t.name+" (5 a 500 caracteres):");if(reason===null)return;
    await dispatch({type:"teamArchive",teamId,archived:!t.archived,reason});teamHistoryLoaded=false;return;
+  }
+  if(b.dataset.profileRemovePlayer){
+   if(role!=="admin"||t.archived)throw Error("Somente o administrador pode remover jogadores de equipes ativas.");
+   const player=state.players.find(p=>p.id===b.dataset.profileRemovePlayer&&p.team===teamId);
+   if(!player)throw Error("Jogador não encontrado nesta equipe.");
+   const reason=prompt("Motivo para remover "+player.name+" do elenco (5 a 500 caracteres). Os jogos já cadastrados mantêm seus elencos.");
+   if(reason===null)return;
+   await dispatch({type:"playerArchive",playerId:player.id,teamId,reason});
+   teamPlayerDraft=null;teamHistoryLoaded=false;render();
+   return;
   }
   if(b.hasAttribute("data-profile-new-player")||b.dataset.profilePlayer){
    if(t.archived)throw Error("Reative a equipe antes de alterar seu elenco.");
@@ -5357,7 +5372,7 @@ setupBackToTop();
 // Dados de teste ficam no banco, separados da operação e sem excluir contas.
 function activeSportsState(raw) {
   const next={...raw};
-  for(const entity of ["teams","players","championships","matches"])next[entity]=(raw[entity]||[]).filter(r=>r.testData!==true);
+  for(const entity of ["teams","players","championships","matches"])next[entity]=(raw[entity]||[]).filter(r=>r.testData!==true && (entity!=="players" || r.archived!==true));
   return next;
 }
 const testEntities={championships:"Campeonato",matches:"Partida",teams:"Equipe",players:"Jogador"};
