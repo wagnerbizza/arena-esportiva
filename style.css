@@ -2557,3 +2557,7 @@ body:not([data-admin="true"]) .public-event-icon {
   #reportCenterPreview table { min-width:0; width:100%; }
   #reportCenterPreview th, #reportCenterPreview td { color:#111; white-space:normal; }
 }
+
+.document-preview-actions[hidden] { display:none; }
+.document-preview-actions { flex-wrap:wrap; margin-block:12px; }
+.document-preview-actions button, [data-document-preview] { min-block-size:44px; }

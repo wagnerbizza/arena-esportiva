@@ -363,6 +363,7 @@ function championshipCards() {
           <button type="button" data-championship-games="${esc(c.id)}">Ver partidas</button>
           ${role==="admin"?`<button type="button" data-phase-edition="${esc(c.id)}">Grupos e chaves</button>`:""}
           <button type="button" data-registration-sheet="${esc(c.id)}">Ver ficha de inscrição</button>
+          ${recordTrashButton("championships", c.id)}
         </div>
       </section>`;
     }).join("");
@@ -1819,7 +1820,7 @@ function render() {
     ["certificates", "Certificados"],
     ["cleanup", "Limpeza de testes"],
     ["systemCheck", "Verificar sistema"],
-    ["testData", "Visibilidade dos registros"],
+    ["testData", "Lixeira de registros"],
     ["credentials", "Credenciais de eventos"],
     ["settings", "Configurações"],
     ["qrCodes", "QR codes e links"],
@@ -1845,7 +1846,7 @@ function render() {
     $("[name=reportMatch]").value = reportFilter;
     $("#reportOutput").innerHTML = section==="matchSheets"
       ? documentMatches().map(reportMatch).join("")
-      : sportsReportPreview();
+      : sportsReportPreview() + sportsDetailScreen();
   }
 }
 function publicPageHTML() {
@@ -2434,18 +2435,18 @@ function auditReportPreview(sample){
  if(!generalAuditLoaded&&!sample)return '<p class="muted">Clique em Consultar alterações para ver os registros do Firebase. A consulta inclui cadastros, partidas, configurações, permissões e exclusões.</p>';
  const rows=(sample||filteredAuditRows()).slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
  if(!rows.length)return documentReportHeader("Relatório geral de alterações","auditReports")+empty("Nenhuma alteração registrada.");
- const visible=rows.slice(0,100),entityNames={settings:"Configurações",teams:"Equipe",players:"Jogador",matches:"Partida",championships:"Campeonato",users:"Acesso de usuário"};
+ const entityNames={settings:"Configurações",teams:"Equipe",players:"Jogador",matches:"Partida",championships:"Campeonato",users:"Acesso de usuário"};
  const details=(items,open=false)=>items.map(r=>{
   const before=r.before||{},after=r.after||{},keys=[...new Set([...Object.keys(before),...Object.keys(after)])].filter(k=>!["_audit","_updatedAt","updatedAt","createdAt","revision","auditId"].includes(k)&&JSON.stringify(before[k]??null)!==JSON.stringify(after[k]??null));
-  const changes=keys.slice(0,30).map(k=>tr([k,auditReportValue(before[k]),auditReportValue(after[k])]));
+  const changes=keys.map(k=>tr([k,auditReportValue(before[k]),auditReportValue(after[k])]));
   const description=[r.detail?.text,r.detail?.reason?`Motivo: ${r.detail.reason}`:""].filter(Boolean).join(" • ");
   const target=after.name||before.name||r.target||"—";
   return `<details class="event" ${open?"open":""}><summary>${esc(auditReportDate(r.at))} • ${esc(entityNames[r.entity]||r.entity||"Registro")} • ${esc(r.detail?.type||"Alteração")} • ${esc(target)}</summary><p>Responsável (UID): ${esc(responsibleLabel(r))}<br>ID do registro: ${esc(r.target||"—")}${description?`<br>${esc(description)}`:""}</p>${changes.length?table(["Campo","Antes","Depois"],changes):'<p class="muted">Sem diferenças de campos disponíveis.</p>'}${keys.length>changes.length?`<small>Exibindo ${changes.length} de ${keys.length} campos alterados.</small>`:""}</details>`;
  }).join("");
- return `${documentReportHeader("Relatório geral de alterações","auditReports")}<p class="muted" role="status">${rows.length} alteração(ões) encontradas. ${rows.length>visible.length?"Na tela, exibindo as 100 mais recentes; a impressão e as exportações incluem todas.":""} Os horários são de Brasília.</p><div class="audit-screen-only">${details(visible)}</div><div class="audit-print-only">${details(rows,true)}</div>${partnerMarkup("auditReports")}`;
+ return `${documentReportHeader("Relatório geral de alterações","auditReports")}<p class="muted" role="status">${rows.length} alteração(ões) encontradas. Os horários são de Brasília.</p><div class="audit-screen-only">${details(rows)}</div><div class="audit-print-only">${details(rows,true)}</div>${partnerMarkup("auditReports")}`;
 }
 function generalAuditPanel(){
- return `<section class="card noprint"><h2>Relatório geral de alterações</h2><p>Consulte as alterações registradas no Firebase: equipes, jogadores, campeonatos, partidas, configurações, permissões de operadores e exclusões de partidas de teste. A visualização mostra as 100 alterações mais recentes; as exportações incluem todos os registros que correspondem à pesquisa.</p>${field("Pesquisar nome, UID, campeonato, equipe ou acontecimento","audit-search","search",`value="${esc(generalAuditSearch)}"`)}<p>Deixe a pesquisa vazia para incluir todos os registros.</p><div class="toolbar"><button type="button" data-audit-view ${generalAuditBusy?"disabled":""}>${generalAuditBusy?"Consultando…":generalAuditLoaded?"Atualizar e visualizar alterações":"Consultar alterações"}</button><button type="button" data-audit-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-audit-json>Baixar relatório completo (JSON)</button><button type="button" data-audit-excel>Baixar relatório completo (Excel)</button></div></section><div id="generalAuditOutput">${auditReportPreview()}</div>`;
+ return `<section class="card noprint"><h2>Relatório geral de alterações</h2><p>Consulte as alterações registradas no Firebase: equipes, jogadores, campeonatos, partidas, configurações, permissões de operadores e exclusões de partidas de teste. A prévia inclui todos os registros que correspondem à pesquisa. Abra um registro para conferir os campos.</p>${field("Pesquisar nome, UID, campeonato, equipe ou acontecimento","audit-search","search",`value="${esc(generalAuditSearch)}"`)}<p>Deixe a pesquisa vazia para incluir todos os registros.</p><div class="toolbar"><button type="button" data-audit-view ${generalAuditBusy?"disabled":""}>${generalAuditBusy?"Consultando…":generalAuditLoaded?"Atualizar e visualizar alterações":"Consultar alterações"}</button>${documentPreviewActions('<button type="button" data-audit-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-audit-json>Baixar relatório completo (JSON)</button><button type="button" data-audit-excel>Baixar relatório completo (Excel)</button>')}</div></section><div id="generalAuditOutput">${auditReportPreview()}</div>`;
 }
 function documentMatches(includeSelection = true) {
  const f=documentFilters;
@@ -2473,8 +2474,41 @@ function reportMatchSelector() {
  const pick=(label,key,rows)=>select(label,"document-"+key,'<option value="">Todos</option>'+rows.map(([id,text])=>`<option value="${esc(id)}" ${f[key]===id?"selected":""}>${esc(text)}</option>`).join(""));
  return `<div class="formgrid">${pick("Campeonato / temporada","championship",(state.championships||[]).map(c=>[c.id,championshipTitle(c)+" • "+c.sport+(c.category?" • "+c.category:"")]))}${pick("Modalidade","sport",[...new Set(state.matches.map(m=>m.sport))].map(v=>[v,v]))}${pick("Situação","status",[...new Set(state.matches.map(m=>m.status))].map(v=>[v,v]))}${field("Pesquisar equipe, campeonato, local ou ID","document-query","search",`value="${esc(f.query)}"`)}${field("De","document-from","date",`value="${esc(f.from)}"`)}${field("Até","document-to","date",`value="${esc(f.to)}"`)}${select("Partida","reportMatch",'<option value="">Todas as partidas filtradas</option>'+options(documentMatches(false),m=>m.id,m=>name(m.home)+" × "+name(m.away)+" • "+format(m.date)+" • "+(m.competition||"Avulsa")))}</div><p role="status">${documentMatches().length} partida(s) selecionada(s). Os filtros são usados na visualização e nas exportações.</p><button type="button" data-document-clear>Limpar filtros dos documentos</button>`;
 }
+let documentPreviewKey = "";
+function documentPreviewIdentity() {
+  return JSON.stringify([C.demo ? "demo" : user?.uid, role, section, reportFilter, documentFilters, generalAuditSearch]);
+}
+function documentPreviewReady() {
+  return documentPreviewKey === documentPreviewIdentity();
+}
+function documentPreviewActions(actions) {
+  return `<button type="button" data-document-preview>Ver prévia completa</button><div class="toolbar document-preview-actions" ${documentPreviewReady() ? "" : "hidden"}>${actions}</div>`;
+}
+function focusDocumentPreview() {
+  const output = $(section === "auditReports" ? "#generalAuditOutput" : "#reportOutput");
+  if (!output) return;
+  output.tabIndex = -1;
+  output.focus({preventScroll:true});
+  scrollBelowPinnedCards(output);
+}
+function showMatchPDFPreview(pdf) {
+  const previous = $("#arenaMatchPDFPreview");
+  if (previous?.open) previous.close();
+  const url = URL.createObjectURL(pdf.output("blob"));
+  const dialog = document.createElement("dialog");
+  dialog.id = "arenaMatchPDFPreview";
+  dialog.className = "personal-tools-dialog noprint";
+  dialog.setAttribute("aria-labelledby", "arenaMatchPDFTitle");
+  dialog.innerHTML = `<h2 id="arenaMatchPDFTitle">Prévia da súmula em PDF</h2><div class="personal-tools-content"><iframe title="Todas as páginas da súmula" style="width:100%;height:55dvh;border:0;background:#fff"></iframe></div><div class="toolbar personal-tools-footer"><a class="button" target="_blank" rel="noopener">Abrir PDF em outra aba</a><a class="button" download="sumula-esportiva-WagnerBIZZA.pdf">Baixar PDF</a><button type="button">Voltar</button></div>`;
+  dialog.querySelector("iframe").src = url;
+  for (const link of dialog.querySelectorAll("a")) link.href = url;
+  dialog.querySelector("button").onclick = () => dialog.close();
+  dialog.addEventListener("close", () => { dialog.remove(); URL.revokeObjectURL(url); }, {once:true});
+  document.body.append(dialog);
+  dialog.showModal();
+}
 function matchSheetsView() {
- return `<section class="card noprint"><h2>Súmulas</h2><p>Escolha uma partida para visualizar sua súmula, imprimir ou salvar em PDF. A exportação JSON contém os dados das partidas selecionadas.</p>${reportMatchSelector()}<div class="toolbar"><button type="button" data-report-pdf>Visualizar / salvar súmula em PDF</button><button type="button" data-report-print>Imprimir visualização</button><button type="button" data-match-json>Baixar súmula (JSON)</button></div></section><div id="reportOutput">${documentMatches().map(reportMatch).join("") || empty("Cadastre uma partida para gerar a súmula.")}</div>`;
+ return `<section class="card noprint"><h2>Súmulas</h2><p>Escolha uma partida para visualizar sua súmula, imprimir ou salvar em PDF. A exportação JSON contém os dados das partidas selecionadas.</p>${reportMatchSelector()}<div class="toolbar">${documentPreviewActions('<button type="button" data-report-pdf>Ver arquivo PDF</button><button type="button" data-report-print>Imprimir prévia</button><button type="button" data-match-json>Baixar súmula (JSON)</button>')}</div></section><div id="reportOutput">${documentMatches().map(reportMatch).join("") || empty("Cadastre uma partida para gerar a súmula.")}</div>`;
 }
 function documentReportHeader(title,surface="") {
  const logo=state.settings.logo||"";
@@ -2595,8 +2629,13 @@ document.addEventListener("click", event => {
   }
 });
 
+function sportsDetailScreen() {
+ const matches = documentMatches();
+ if (!documentPreviewReady() || !matches.length) return "";
+ return `<details class="card noprint"><summary>Ver elencos, lances e parciais por partida</summary>${matches.map(reportMatch).join("")}</details>`;
+}
 function reports() {
- return `<section class="card noprint"><h2>Relatórios esportivos</h2><p>Visualize resultados das partidas e exporte os dados selecionados. O Excel detalhado contém resultados, elencos, eventos e parciais.</p>${reportMatchSelector()}<div class="toolbar"><button type="button" data-sports-report-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-report-excel class="primary">Baixar relatório (Excel)</button><button type="button" data-sports-report-json>Baixar relatório (JSON)</button></div></section><div id="reportOutput">${sportsReportPreview()}</div>`;
+ return `<section class="card noprint"><h2>Relatórios esportivos</h2><p>Visualize resultados das partidas e exporte os dados selecionados. O Excel detalhado contém resultados, elencos, eventos e parciais.</p>${reportMatchSelector()}<div class="toolbar">${documentPreviewActions('<button type="button" data-sports-report-pdf>Imprimir / salvar relatório em PDF</button><button type="button" data-report-excel class="primary">Baixar relatório (Excel)</button><button type="button" data-sports-report-json>Baixar relatório (JSON)</button>')}</div></section><div id="reportOutput">${sportsReportPreview()}</div>`;
 }
 document.addEventListener("submit", event => {
   if (event.target?.id !== "arenaCertificateForm") return;
@@ -3598,28 +3637,41 @@ document.addEventListener("click", async (e) => {
         if (!C.demo) toast("Importação concluída.");
       }
     } else if (b.hasAttribute("data-document-clear")) {
+      documentPreviewKey = "";
       documentFilters={championship:"",sport:"",status:"",query:"",from:"",to:""};reportFilter="";render();
-    } else if (b.hasAttribute("data-report-pdf")) {
-      if (!C.demo) {
-        const filter = $("[name=reportMatch]").value;
-        await cloud.loadHistory(
-          documentMatches().map((m) => m.id),
-        );
+    } else if (b.hasAttribute("data-document-preview")) {
+      if (role !== "admin" || !["matchSheets","reports","auditReports"].includes(section)) return;
+      const identity = documentPreviewIdentity();
+      if (section === "auditReports") {
+        if (C.demo) throw Error("Abra o painel real para consultar os registros.");
+        if (!generalAuditLoaded) {
+          generalAuditRows = await cloud.auditRows();
+          generalAuditLoaded = true;
+        }
+      } else {
+        const matches = documentMatches();
+        if (!matches.length) throw Error("Nenhuma partida na seleção.");
+        if (!C.demo) await cloud.loadHistory(matches.map(m => m.id));
       }
-      toast("Preparando súmula PDF…");
-      const { downloadReportPDF } = await import("./report-pdf.js?v=previas-4");
-      const ms = documentMatches();
-      await downloadReportPDF(
-        ms.map(m=>reportPDFData(m)),
-      );
-      toast("PDF gerado.");
-    } else if (b.hasAttribute("data-report-print")||b.hasAttribute("data-sports-report-pdf")) {
-      if (!C.demo) await cloud.loadHistory(documentMatches().map(m=>m.id));
+      if (identity !== documentPreviewIdentity()) return;
+      documentPreviewKey = identity;
       render();
+      focusDocumentPreview();
+    } else if (b.hasAttribute("data-report-pdf")) {
+      if (role !== "admin" || section !== "matchSheets" || !documentPreviewReady()) return;
+      const identity = documentPreviewIdentity();
+      const matches = documentMatches();
+      if (!matches.length) throw Error("Nenhuma partida na seleção.");
+      toast("Preparando prévia do PDF…");
+      const { createReportPDF } = await import("./report-pdf.js?v=previas-4");
+      const pdf = await createReportPDF(matches.map(m => reportPDFData(m)));
+      if (identity === documentPreviewIdentity()) showMatchPDFPreview(pdf);
+    } else if (b.hasAttribute("data-report-print")||b.hasAttribute("data-sports-report-pdf")) {
+      if (role !== "admin" || !documentPreviewReady()) return;
       await prepareReportImages("#reportOutput");
-      window.print();
+      if (documentPreviewReady()) window.print();
     } else if (b.hasAttribute("data-match-json")||b.hasAttribute("data-sports-report-json")) {
-      if (!C.demo) await cloud.loadHistory(documentMatches().map(m=>m.id));
+      if (role !== "admin" || !documentPreviewReady()) return;
       const matches=documentMatches();
       if(!matches.length)throw Error("Não há partidas para exportar nesta seleção.");
       download(b.hasAttribute("data-match-json")?"sumulas-esportivas.json":"relatorio-esportivo.json",JSON.stringify({
@@ -3627,12 +3679,7 @@ document.addEventListener("click", async (e) => {
         geradoEm:new Date().toISOString(),partidas:matches.map(match=>({...match,faseCampeonato:matchPhase(match)}))
       },(_key,value)=>value?.toDate?value.toDate().toISOString():value,2));
     } else if (b.hasAttribute("data-report-excel")) {
-      if (!C.demo) {
-        const filter = $("[name=reportMatch]").value;
-        await cloud.loadHistory(
-          documentMatches().map((m) => m.id),
-        );
-      }
+      if (role !== "admin" || !documentPreviewReady()) return;
       exportExcel();
     } else if (b.hasAttribute("data-audit-view")) {
       if (role !== "admin" || C.demo)
@@ -3646,7 +3693,7 @@ document.addEventListener("click", async (e) => {
       }
     } else if (b.hasAttribute("data-audit-pdf")||b.hasAttribute("data-audit-json")) {
       if(role!=="admin"||C.demo)throw Error("O relatório oficial exige a conta de administrador conectada ao Firebase.");
-      if(!generalAuditLoaded){generalAuditBusy=true;render();try{generalAuditRows=await cloud.auditRows();generalAuditLoaded=true;}finally{generalAuditBusy=false;render();}}
+      if (!generalAuditLoaded || !documentPreviewReady()) return;
       if(b.hasAttribute("data-audit-pdf")){await prepareReportImages("#generalAuditOutput");window.print();}
       else download("relatorio-geral-alteracoes.json",JSON.stringify({formato:"arena-auditoria-v1",geradoEm:new Date().toISOString(),alteracoes:filteredAuditRows()},(_key,value)=>value?.toDate?value.toDate().toISOString():value,2));
     } else if (b.hasAttribute("data-audit-excel")) {
@@ -3657,8 +3704,8 @@ document.addEventListener("click", async (e) => {
           "Auditoria oficial está disponível após conectar ao Firebase.",
         );
       sheetReady();
-      toast("Consultando auditoria…");
-      const rows = filteredAuditRows(await cloud.auditRows()),
+      if (!generalAuditLoaded || !documentPreviewReady()) return;
+      const rows = filteredAuditRows(),
         wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(
         wb,
@@ -3747,18 +3794,22 @@ document.addEventListener("change", async (e) => {
     }
     if (e.target.name === "audit-search") {
       generalAuditSearch=e.target.value;
+      documentPreviewKey = "";
       $("#generalAuditOutput").innerHTML=auditReportPreview();
+      const actions=$("[data-document-preview]")?.nextElementSibling;
+      if(actions)actions.hidden=true;
     }
     if (e.target.name?.startsWith("document-")) {
       const key=e.target.name.slice(9);
       if (Object.hasOwn(documentFilters,key)) documentFilters[key]=e.target.value;
+      documentPreviewKey = "";
       reportFilter="";render();
     }
     if (e.target.name === "reportMatch") {
       reportFilter = e.target.value;
-      $("#reportOutput").innerHTML = section==="matchSheets"
-        ? documentMatches().map(reportMatch).join("")
-        : sportsReportPreview();
+      documentPreviewKey = "";
+      render();
+      $("[name=reportMatch]")?.focus({preventScroll:true});
     }
     if (e.target.name === "importKind") {
       pendingImport = null;
@@ -3993,7 +4044,7 @@ function tutorialSteps() {
     step("Auditoria geral", "Consulte alterações e pesquise nome, UID, campeonato, equipe ou acontecimento. Antes e depois ajudam a conferir o que mudou. Esses detalhes são administrativos.", "#view", "auditReports"),
     step("Certificados", "Preencha participante, participação, evento e emissão. O código identifica a emissão, mas não representa validação pública online. O sistema não mantém um arquivo permanente das emissões.", "#view", "certificates"),
     step("Identidade e documentos", "Configure título, logo, cor, capa e limites de lances. Salvar aparência publica a mudança. Os logos e preferências da ficha de inscrição são locais a este navegador.", "#view", "settings"),
-    step("Visibilidade dos registros", "Prepare os registros antigos, selecione os testes e confira os vínculos. Reservar os mantém no banco, exclusivos do administrador. Contas e senhas são preservadas. Restaurar reativa as permissões antigas dos registros.", "#view", "testData"),
+    step("Lixeira de registros", "Prepare os registros antigos, selecione os testes e confira os vínculos. Reservar os mantém no banco, exclusivos do administrador. Contas e senhas são preservadas. Restaurar reativa as permissões antigas dos registros.", "#view", "testData"),
     step("Credenciais de eventos", "Emita identificações por evento com pessoa, função e validade. Consulte, imprima e revogue os crachás. Eles não concedem permissões de login e não têm validação pública online.", "#view", "credentials"),
     step("Limpeza e lixeira", "A limpeza exige conferência e cópia. Partidas elegíveis podem ser recuperadas por 30 dias. A purga definitiva é separada e remove os detalhes; não use sem revisar.", "#view", "cleanup"));
   steps.push(step("Minha conta", "Confira os dados pessoais e os métodos de entrada. Vincule Google à conta existente, mantendo a identidade. Conflitos entre contas precisam ser tratados sem criar cadastros duplicados.", "#view", "account"),
@@ -4492,7 +4543,7 @@ async function renderQRPreviews() {
 }
 function registrationSheetsView() {
  const rows=(state.championships||[]).filter(c=>!c.testData).slice().sort(alphabetical);
- return `<section class="card"><h2>Fichas de inscrição</h2><p>Escolha o campeonato para preparar sua ficha, imprimir ou salvar em PDF.</p>${role==="admin"?'<button type="button" data-section="settings">Configurar identidade da ficha</button>':""}</section><div class="grid">${rows.map(c=>`<article class="card"><h3>${esc(championshipTitle(c))}</h3><p>${esc(c.sport)} • ${esc(c.category||"Sem categoria")}</p><button type="button" class="primary" data-registration-sheet="${esc(c.id)}">Preparar ficha de inscrição</button><button type="button" data-championship-games="${esc(c.id)}">Ver partidas</button></article>`).join("")||empty(role==="admin" ? "Nenhum campeonato cadastrado. Cadastre um campeonato para preparar a ficha." : "Nenhum campeonato carregado para esta conta. O administrador deve autorizar a operação do campeonato em Usuários e permissões. Campeonatos reservados como teste não aparecem aqui.")}</div>`;
+ return `<section class="card"><h2>Fichas de inscrição</h2><p>Escolha o campeonato para preparar sua ficha, imprimir ou salvar em PDF.</p>${role==="admin"?'<button type="button" data-section="settings">Configurar identidade da ficha</button>':""}</section><div class="grid">${rows.map(c=>`<article class="card"><h3>${esc(championshipTitle(c))}</h3><p>${esc(c.sport)} • ${esc(c.category||"Sem categoria")}</p><button type="button" class="primary" data-registration-sheet="${esc(c.id)}">Preparar ficha de inscrição</button><button type="button" data-championship-games="${esc(c.id)}">Ver partidas</button>${recordTrashButton("championships", c.id)}</article>`).join("")||empty(role==="admin" ? "Nenhum campeonato cadastrado. Cadastre um campeonato para preparar a ficha." : "Nenhum campeonato carregado para esta conta. O administrador deve autorizar a operação do campeonato em Usuários e permissões. Campeonatos reservados como teste não aparecem aqui.")}</div>`;
 }
 function permissionHistoryView() {
  const holder=document.createElement("div");holder.innerHTML=usersView();
@@ -4895,7 +4946,7 @@ function teamDirectoryCard(t){
  ];
  const summary=fields.map(([label,value])=>`<div><strong>${label}:</strong> ${esc(value)}</div>`).join("");
  const games=state.matches.filter(m=>[m.home,m.away].includes(t.id)).length;
- return `<article class="card team-directory-card"><div class="team-directory-title">${badge({...t,name:title})}<span class="status">${t.archived?"Arquivada":"Ativa"}</span></div><h3>${esc(title)}${t.short?.trim()?` <small class="muted">(${esc(t.short.trim())})</small>`:""}</h3><div class="muted">${summary}</div><p>${roster.length} jogador(es) • ${games} ${role==="admin"?"partida(s)":"partida(s) autorizada(s)"}</p><div class="toolbar"><button type="button" class="primary" data-team-profile="${esc(t.id)}">Ver dados da equipe</button><details style="width:100%"><summary>Mais ações</summary><div class="toolbar" style="margin-top:8px"><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="roster">Jogadores</button><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="games">Jogos</button><button type="button" data-edit-team="${esc(t.id)}">Editar cadastro</button> ${role==="admin" ? `<button type="button" data-profile-archive="${esc(t.id)}">${t.archived?"Reativar equipe":"Arquivar equipe"}</button> <button type="button" data-test-reserve-team="${esc(t.id)}">Ocultar dos painéis</button>` : ""}</div></details></div></article>`;
+ return `<article class="card team-directory-card"><div class="team-directory-title">${badge({...t,name:title})}<span class="status">${t.archived?"Arquivada":"Ativa"}</span></div><h3>${esc(title)}${t.short?.trim()?` <small class="muted">(${esc(t.short.trim())})</small>`:""}</h3><div class="muted">${summary}</div><p>${roster.length} jogador(es) • ${games} ${role==="admin"?"partida(s)":"partida(s) autorizada(s)"}</p><div class="toolbar"><button type="button" class="primary" data-team-profile="${esc(t.id)}">Ver dados da equipe</button>${recordTrashButton("teams", t.id)}<details style="width:100%"><summary>Mais ações</summary><div class="toolbar" style="margin-top:8px"><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="roster">Jogadores</button><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="games">Jogos</button><button type="button" data-edit-team="${esc(t.id)}">Editar cadastro</button> ${role==="admin" ? `<button type="button" data-profile-archive="${esc(t.id)}">${t.archived?"Reativar equipe":"Arquivar equipe"}</button>` : ""}</div></details></div></article>`;
 }
 const participantColumns = [
   ["team", "Equipe"], ["player", "Participante"], ["number", "Nº"], ["position", "Posição"],
@@ -5072,7 +5123,7 @@ function arenaPageControls() {
  </nav>`;
 }
 function locationTrail(){
- const labels={overview:"Visão geral",matches:"Acompanhar jogos",championships:"Campeonatos",standings:"Classificação",teams:"Equipes",players:"Jogadores",imports:"Importar",documentation:"Guias",matchSheets:"Súmulas",reports:"Relatórios esportivos",auditReports:"Relatório geral",certificates:"Certificados",monitor:"Operadores e partidas",users:"Usuários e permissões",settings:"Configurações",cleanup:"Limpeza de testes",testData:"Visibilidade dos registros",credentials:"Credenciais de eventos",account:"Minha conta"};
+ const labels={overview:"Visão geral",matches:"Acompanhar jogos",championships:"Campeonatos",standings:"Classificação",teams:"Equipes",players:"Jogadores",imports:"Importar",documentation:"Guias",matchSheets:"Súmulas",reports:"Relatórios esportivos",auditReports:"Relatório geral",certificates:"Certificados",monitor:"Operadores e partidas",users:"Usuários e permissões",settings:"Configurações",cleanup:"Limpeza de testes",testData:"Lixeira de registros",credentials:"Credenciais de eventos",account:"Minha conta"};
  if(["account","profiles","preferences","settings"].includes(section))return '<nav class="location-trail" aria-label="Localização atual"><span>Você está em:</span><strong>'+esc(labels[section]||navigationDescriptions[section]?.label||"Minha conta")+'</strong></nav>';
  const group=workspaceDefinitions.find(g=>g.sections.includes(section));
  const profile=section==="teams"&&selectedTeamId?state.teams.find(t=>t.id===selectedTeamId):null;
@@ -5386,7 +5437,7 @@ const navigationDescriptions={
  users:{label:"Permissões",description:"Escolha quem pode entrar e quais ações cada operador pode fazer.",keywords:"usuario conta acesso permissao convite cadastro link aprovar bloquear autorizar"},
  systemCheck:{label:"Verificar sistema",description:"Diagnóstico, testes em memória e consultas ao servidor sem alterar dados.",keywords:"verificar sistema diagnostico teste automatico falha erro monitor validacao funcionamento"},
  settings:{label:"Configurações",description:"Alterar título, cor, capa, logo e identidade visual.",keywords:"logotipo logo favicon icone aba titulo nome cor imagem capa configuracao"},
- testData:{label:"Visibilidade dos registros",description:"Ocultar equipes, jogadores e partidas dos painéis ou restaurar a visibilidade.",keywords:"teste testes ocultar reservar restaurar preparar proteção"},
+ testData:{label:"Lixeira de registros",description:"Revise equipes, jogadores, partidas e campeonatos antes de retirar ou restaurar.",keywords:"visibilidade registros teste testes lixeira ocultar reservar restaurar"},
  credentials:{label:"Credenciais de eventos",description:"Emitir, imprimir e revogar crachás de identificação por evento.",keywords:"credencial credenciais cracha crachas identificação organização apoio operador validade"},
  cleanup:{label:"Limpeza de testes",description:"Conferir cópia e excluir partidas de teste com registro.",keywords:"limpeza teste excluir apagar exclusoes historico"},
  account:{label:"Minha conta",description:"Identificação, segurança, redefinição de senha e vínculo Google.",keywords:"email senha recuperar google vincular login conta sair"},
@@ -5643,9 +5694,14 @@ function visibilityRows(rows = testRecords()) {
     return searchText(text).includes(query);
   }).sort((a,b) => testRecordName(a).localeCompare(testRecordName(b),"pt-BR",{numeric:true}));
 }
+function recordTrashButton(entity, id, restore = false) {
+  if (role !== "admin" || C.demo) return "";
+  return `<button type="button" data-record-trash="${esc(entity + "/" + id)}" ${restore ? "data-record-restore" : ""}>${restore ? "Revisar restauração" : "Mover para a lixeira"}</button>`;
+}
 function testDataPanel() {
   const rows=testRecords(), legacy=rows.filter(r=>typeof r.data.testData!=="boolean");
   const visible=visibilityRows(rows);
+  const blocked = testPlan?.items.some(r => r.entity === "matches" && (r.data.clock?.running || ["Ao vivo","Pausada","Suspensa"].includes(r.data.status)));
   const rosterByTeam=new Map();
   for (const row of rows) {
     if (row.entity !== "players") continue;
@@ -5658,23 +5714,23 @@ function testDataPanel() {
     const details=r.entity==="teams" ? `<small>${esc([r.data.className,r.data.school].filter(Boolean).join(" · "))}</small>
       <details><summary>Elenco (${roster.length})</summary>${roster.length?`<ul>${roster.slice().sort(alphabetical).map(p=>`<li>${esc(p.name)}${p.testData?" (oculto)":""}</li>`).join("")}</ul>`:"<p>Equipe sem jogadores cadastrados.</p>"}</details>` : "";
     return `<tr><td><input type="checkbox" data-test-select="${esc(key)}" aria-label="Selecionar ${esc(testRecordName(r))}" ${testSelection.has(key)?"checked":""} ${testClassBusy?"disabled":""}></td>
-      <td>${r.label}</td><td>${esc(testRecordName(r))}<br>${details}<button type="button" data-test-detail="${esc(key)}">Ver detalhes</button></td></tr>`;
+      <td>${r.label}</td><td>${esc(testRecordName(r))}<br>${details}<button type="button" data-test-detail="${esc(key)}">Ver detalhes</button>${testOnlyReserved ? recordTrashButton(r.entity, r.id, true) : ""}</td></tr>`;
   };
-  return `<section class="card"><h2>Visibilidade dos registros</h2>
-    <p>Registros ocultos ficam disponíveis apenas nesta área administrativa e saem do painel público, das listas e das pesquisas normais. Os dados ficam guardados.</p>
+  return `<section class="card"><h2>Lixeira de registros</h2>
+    <p>Os registros na lixeira saem do painel público, das listas e das pesquisas normais. Você pode restaurá-los nesta área administrativa.</p>
     <p>Ao restaurar, as autorizações antigas voltam a valer. A operação pausa gravações esportivas temporariamente.</p>
     ${C.demo?"<p>O treinamento permite consultar a tela. Use a conta administrativa real para alterar a visibilidade.</p>":`<details><summary>Manutenção</summary><div class="toolbar"><button type="button" data-test-prepare ${testClassBusy||!legacy.length?"disabled":""}>Preparar registros antigos (${legacy.length})</button><button type="button" data-test-unlock ${testClassBusy?"disabled":""}>Liberar operação após interrupção</button></div></details>`}
-    <div class="toolbar"><button type="button" data-test-scope="normal" class="${!testOnlyReserved?"primary":""}">Disponíveis (${rows.filter(r=>!r.data.testData).length})</button><button type="button" data-test-scope="reserved" class="${testOnlyReserved?"primary":""}">Ocultos (${rows.filter(r=>r.data.testData).length})</button></div>
+    <div class="toolbar"><button type="button" data-test-scope="normal" class="${!testOnlyReserved?"primary":""}">Disponíveis (${rows.filter(r=>!r.data.testData).length})</button><button type="button" data-test-scope="reserved" class="${testOnlyReserved?"primary":""}">Na lixeira (${rows.filter(r=>r.data.testData).length})</button></div>
     <div class="formgrid">
      <label>Tipo de registro<select name="test-type">${visibilityTypes.map(([value,label])=>`<option value="${value}" ${testType===value?"selected":""}>${label}</option>`).join("")}</select></label>
      <label>Pesquisar por nome, equipe, turma ou escola<input name="test-search" type="search" value="${esc(testSearch)}"></label>
     </div>
     <p>Ao ocultar uma equipe completa, a prévia inclui o elenco e as partidas vinculadas. Para marcar atletas individualmente, escolha Jogadores.</p>
     <div class="toolbar"><button type="button" data-test-select-all ${testClassBusy||!visible.length?"disabled":""}>Selecionar todos os resultados (${visible.length})</button><button type="button" data-test-select-clear ${testClassBusy?"disabled":""}>Limpar seleção</button>
-    <button type="button" data-test-preview ${testClassBusy||!testSelection.size||C.demo?"disabled":""}>${testOnlyReserved?"Revisar restauração":"Revisar o que será ocultado"}</button></div>
+    <button type="button" data-test-preview ${testClassBusy||!testSelection.size||C.demo?"disabled":""}>${testOnlyReserved?"Revisar restauração":"Revisar envio à lixeira"}</button></div>
     <p role="status">${testSelection.size} selecionado(s) · ${visible.length} resultado(s)${visible.length>500?" · Exibindo os primeiros 500.":""}</p>
     ${visible.length?`<div class="tablewrap"><table><thead><tr><th>Selecionar</th><th>Tipo</th><th>Registro</th></tr></thead><tbody>${visible.slice(0,500).map(displayRow).join("")}</tbody></table></div>`:empty("Nenhum registro com estes filtros.")}
-    ${testDetailPanel()}${testPlan?`<section class="public-notice"><h3>Prévia • ${testPlan.items.length} registro(s)</h3><p>Nenhum dado será apagado. Confira todos os registros incluídos automaticamente pelos vínculos.</p><ul>${testPlan.items.map(r=>`<li>${r.label}: ${esc(testRecordName(r))}</li>`).join("")}</ul><button type="button" data-test-backup>Baixar cópia privada desta seleção</button><form id="test-classify"><label>Motivo<textarea name="reason" required minlength="5" maxlength="300"></textarea></label><label>Digite ${testPlan.hidden?"OCULTAR":"RESTAURAR"}<input name="word" autocomplete="off" required></label><button class="primary" ${testClassBusy||!testBackup?"disabled":""}>Confirmar ${testPlan.hidden?"ocultação":"restauração"}</button></form><p>A cópia contém dados privados e não possui importação automática. Guarde-a em local restrito.</p></section>`:""}</section>`;
+    ${testDetailPanel()}${testPlan?`<section class="public-notice" id="recordTrashPreview" tabindex="-1"><h3>Prévia • ${testPlan.items.length} registro(s)</h3><p>Nenhum dado será apagado. Confira todos os registros incluídos automaticamente pelos vínculos.</p>${blocked ? "<p>Encerre primeiro as partidas em andamento, pausadas ou suspensas.</p>" : ""}<ul>${testPlan.items.map(r=>`<li>${r.label}: ${esc(testRecordName(r))}</li>`).join("")}</ul><button type="button" data-test-backup>Baixar cópia privada desta seleção</button><form id="test-classify"><label>Motivo<textarea name="reason" required minlength="5" maxlength="300"></textarea></label><label>Digite ${testPlan.hidden?"OCULTAR":"RESTAURAR"}<input name="word" autocomplete="off" required></label><button class="primary" ${testClassBusy||blocked||!testBackup?"disabled":""}>Confirmar ${testPlan.hidden?"ocultação":"restauração"}</button></form><p>A cópia contém dados privados e não possui importação automática. Guarde-a em local restrito.</p></section>`:""}</section>`;
 }
 async function runTestClassification(items,hidden,reason) {
   if(role!=="admin"||C.demo)throw Error("Use a conta administrativa real.");
@@ -5693,18 +5749,32 @@ document.addEventListener("change",e=>{
  if(e.target.matches("[data-test-select]")){const key=e.target.dataset.testSelect;e.target.checked?testSelection.add(key):testSelection.delete(key);testPlan=null;testBackup=false;render();}
 });
 document.addEventListener("click",async e=>{
- const shortcut=e.target.closest("[data-test-reserve-team]");
- if(shortcut && role==="admin"){
-  const key="teams/"+shortcut.dataset.testReserveTeam;
-  if(C.demo) return toast("Use a conta administrativa real.",true);
-  testOnlyReserved=false;
-  testType="teams";
-  testSearch="";
-  testSelection=new Set([key]);
-  testPlan={items:planTestClassification(testRecords(),testSelection,true),hidden:true};
-  testBackup=false;
-  section="testData";
+ const shortcut = e.target.closest("[data-record-trash]");
+ if (shortcut) {
+  if (role !== "admin" || C.demo || testClassBusy) return;
+  const key = shortcut.dataset.recordTrash;
+  const restore = shortcut.hasAttribute("data-record-restore");
+  const rows = testRecords();
+  const target = rows.find(row => row.entity + "/" + row.id === key);
+  if (!target || (target.data.testData === true) !== restore) {
+   toast("O registro mudou. Atualize a lista e tente de novo.", true);
+   return;
+  }
+  testOnlyReserved = restore;
+  testType = target.entity;
+  testSearch = "";
+  testDetail = "";
+  testSelection = new Set([key]);
+  testPlan = {items:planTestClassification(rows,testSelection,!restore),hidden:!restore};
+  testBackup = false;
+  selected = "";
+  section = "testData";
   render();
+  requestAnimationFrame(() => {
+   const preview = $("#recordTrashPreview");
+   preview?.focus({preventScroll:true});
+   scrollBelowPinnedCards(preview);
+  });
   return;
  }
  const b=e.target.closest("[data-test-scope],[data-test-preview],[data-test-backup],[data-test-prepare],[data-test-unlock],[data-test-detail],[data-test-history],[data-test-select-all],[data-test-select-clear]");if(!b||role!=="admin")return;
