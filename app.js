@@ -334,7 +334,7 @@ function championshipsView() {
   const c = (state.championships || []).find((c) => c.id === editedChampionshipId);
   const draft = championshipDraft && championshipDraft.id === (c?.id || "") ? championshipDraft : c;
   const value = (key) => esc(draft?.[key] || "");
-  return `<div class="card"><h2>${c ? "Editar campeonato / temporada" : "Cadastrar campeonato / temporada"}</h2><p class="muted">Cadastre a primeira modalidade e categoria. Depois, use Adicionar modalidade ou categoria no cartão da edição.</p><form id="championship"><input type="hidden" name="recordId" value="${value("id")}"><div class="formgrid">${field("Nome do campeonato", "name", "text", `required maxlength="100" value="${value("name")}"`)}${field("Edição / temporada", "season", "text", `required maxlength="40" placeholder="Ex.: 2026 ou 2º semestre de 2026" value="${value("season")}"`)}<label>Modalidade<select name="sport" required>${D.SPORTS.map((sport) => `<option ${draft?.sport === sport ? "selected" : ""} ${c && c.sport !== sport ? "disabled" : ""}>${esc(sport)}</option>`).join("")}</select><small>A modalidade fica fixa nesta categoria após salvar.</small></label>${field("Categoria", "category", "text", `maxlength="150" placeholder="Ex.: Livre, Sub-17, Feminino" value="${value("category")}"`)}<label>Situação<select name="status">${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${draft?.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></label></div><button class="primary">${c ? "Salvar alterações" : "Cadastrar campeonato"}</button> ${c ? '<button type="button" data-new-championship>Cancelar edição / novo cadastro</button>' : ""}</form><p class="muted">Encerrar o campeonato impede criar novas partidas vinculadas; não encerra partidas automaticamente. Alterações do nome ou da edição não reescrevem súmulas existentes.</p></div><section class="card list-filters"><h2>Campeonatos cadastrados</h2><div class="list-controls"><label class="list-search">Buscar campeonato, edição, modalidade ou categoria<input type="search" data-championship-filter="query" value="${esc(championshipQuery)}" placeholder="Digite para buscar…"></label><label>Situação<select data-championship-filter="status"><option value="">Todas as situações</option>${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${championshipStatus === status ? "selected" : ""}>${status}</option>`).join("")}</select></label><label>Ordenar<select data-championship-filter="order"><option value="az" ${championshipOrder==="az"?"selected":""}>A–Z</option><option value="za" ${championshipOrder==="za"?"selected":""}>Z–A</option></select></label><button type="button" data-clear-championship-filters>Limpar filtros</button></div><p id="championship-count" class="muted" role="status">${championshipCount()}</p></section><div class="grid" id="championship-results">${championshipCards()}</div>${phasesView()}`;
+  return `<div class="card"><h2>${c ? "Editar campeonato / temporada" : "Cadastrar campeonato / temporada"}</h2><p class="muted">Cadastre a primeira modalidade e categoria. Depois, use Adicionar modalidade ou categoria no cartão da edição.</p><form id="championship"><input type="hidden" name="recordId" value="${value("id")}"><div class="formgrid">${field("Nome do campeonato", "name", "text", `required maxlength="100" value="${value("name")}"`)}${field("Edição / temporada", "season", "text", `required maxlength="40" placeholder="Ex.: 2026 ou 2º semestre de 2026" value="${value("season")}"`)}<label>Modalidade<select name="sport" required>${D.SPORTS.map((sport) => `<option ${draft?.sport === sport ? "selected" : ""} ${c && c.sport !== sport ? "disabled" : ""}>${esc(sport)}</option>`).join("")}</select><small>A modalidade fica fixa nesta categoria após salvar.</small></label>${field("Categoria", "category", "text", `maxlength="150" placeholder="Ex.: Livre, Sub-17, Feminino" value="${value("category")}"`)}<label>Situação<select name="status">${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${draft?.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></label></div><button class="primary">${c ? "Salvar alterações" : "Cadastrar campeonato"}</button> ${c ? '<button type="button" data-new-championship>Cancelar edição / novo cadastro</button>' : ""}</form><p class="muted">Encerrar o campeonato impede criar novas partidas vinculadas; não encerra partidas automaticamente. Alterações do nome ou da edição não reescrevem súmulas existentes.</p>${c ? championshipMatchSportForm(c) : ""}</div><section class="card list-filters"><h2>Campeonatos cadastrados</h2><div class="list-controls"><label class="list-search">Buscar campeonato, edição, modalidade ou categoria<input type="search" data-championship-filter="query" value="${esc(championshipQuery)}" placeholder="Digite para buscar…"></label><label>Situação<select data-championship-filter="status"><option value="">Todas as situações</option>${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${championshipStatus === status ? "selected" : ""}>${status}</option>`).join("")}</select></label><label>Ordenar<select data-championship-filter="order"><option value="az" ${championshipOrder==="az"?"selected":""}>A–Z</option><option value="za" ${championshipOrder==="za"?"selected":""}>Z–A</option></select></label><button type="button" data-clear-championship-filters>Limpar filtros</button></div><p id="championship-count" class="muted" role="status">${championshipCount()}</p></section><div class="grid" id="championship-results">${championshipCards()}</div>${phasesView()}`;
 }
 function visibleChampionships() {
   const q = searchText(championshipQuery);
@@ -937,23 +937,38 @@ function updateChampionshipList() {
   if ($("#championship-count")) $("#championship-count").textContent = championshipCount();
 }
 const canCorrectMatchSport = id => !C.demo && (role === "admin" || (role === "operator" && cloud?.canCorrectSport(id)));
-function correctMatchSportForm(m) {
-  if (!canCorrectMatchSport(m.id) || m.status !== "Encerrada" || m.sport !== "Futebol" || m.clock?.running) return "";
+function eligibleSportCorrection(m) {
+  return !m.testData && m.status === "Encerrada" && m.sport === "Futebol" &&
+    !m.clock?.running && canCorrectMatchSport(m.id);
+}
+function championshipMatchSportForm(edition) {
+  if (edition.sport !== "Futebol" || edition.testData || C.demo) return "";
+  const matches = state.matches.filter(m => m.championshipId === edition.id && eligibleSportCorrection(m));
+  return matches.length ? correctMatchSportForm(matches, edition.id) : "";
+}
+function correctMatchSportForm(matches, sourceEdition = "") {
+  const eligible = matches.filter(eligibleSportCorrection);
+  if (!eligible.length) return "";
+  const m = eligible[0];
+  const linked = Boolean(m.championshipId);
   const editions = (state.championships || []).filter(item => item.sport === "Futsal" && !item.testData).sort(alphabetical);
-  return `<details><summary>Corrigir modalidade para Futsal</summary>
+  return `<details><summary>${sourceEdition ? "Corrigir modalidade de uma partida" : "Corrigir modalidade para Futsal"}</summary>
     <p>A correção mantém placar, lances e escalações. Se o jogo está vinculado a um campeonato, selecione sua edição de Futsal.</p>
-    <form id="arena-correct-match-sport" data-match-id="${esc(m.id)}">
-      <label>Edição de Futsal<select name="championshipId" ${m.championshipId ? "required" : ""}>
-        <option value="">${m.championshipId ? "Escolha a edição correta" : "Manter sem vínculo"}</option>
+    <form id="arena-correct-match-sport" data-match-id="${sourceEdition ? "" : esc(m.id)}" data-source-edition="${esc(sourceEdition)}">
+      ${sourceEdition ? `<label>Partida<select name="matchId" required><option value="">Selecione a partida</option>
+        ${options(eligible,item=>item.id,item=>name(item.home)+" × "+name(item.away)+" · "+format(item.date))}
+      </select></label>` : ""}
+      <label>Edição de Futsal<select name="championshipId" ${linked ? "required" : ""}>
+        <option value="">${linked ? "Escolha a edição correta" : "Manter sem vínculo"}</option>
         ${options(editions,item=>item.id,item=>championshipTitle(item)+(item.category ? " · "+item.category : ""))}
       </select></label>
-      ${m.championshipId && !editions.length ? '<p>É preciso ter acesso a uma edição de Futsal antes de corrigir.</p>' : ""}
+      ${linked && !editions.length ? '<p>Cadastre ou solicite acesso a uma edição de Futsal antes de corrigir.</p>' : ""}
       ${field("Motivo da correção","reason","text",'required minlength="5" maxlength="300"')}
-      <button type="submit" ${m.championshipId && !editions.length ? "disabled" : ""}>Corrigir para Futsal</button>
+      <button type="submit" ${linked && !editions.length ? "disabled" : ""}>Corrigir para Futsal</button>
     </form></details>`;
 }
 function championshipLinkForm(m) {
-  const correction = correctMatchSportForm(m);
+  const correction = correctMatchSportForm([m]);
   if (role !== "admin") return correction ? `<div class="card">${correction}</div>` : "";
   const rows = (state.championships || []).filter((c) => c.sport === m.sport).sort(alphabetical);
   return `<div class="card"><details><summary>Campeonato / temporada desta partida</summary><p class="muted">Vínculo atual: ${esc(m.championshipId ? ((state.championships || []).find((c) => c.id === m.championshipId) ? championshipTitle(state.championships.find((c) => c.id === m.championshipId)) : m.competition) : "Sem vínculo")}. O vínculo não altera placar, elenco ou cronômetro. Remover mantém o nome histórico da competição.</p><form id="championship-link"><label>Campeonato de ${esc(m.sport)}<select name="championshipId"><option value="">Sem vínculo</option>${rows.map((c) => `<option value="${esc(c.id)}" ${m.championshipId === c.id ? "selected" : ""}>${esc(championshipTitle(c) + (c.category ? " • " + c.category : "") + " — " + c.status)}</option>`).join("")}</select></label>${field("Justificativa (registrada no histórico)", "reason", "text", 'required maxlength="500"')}<p><button>Salvar vínculo com justificativa</button></p></form></details>${correction}</div>`;
@@ -3340,9 +3355,15 @@ document.addEventListener("submit", async (e) => {
       await cloud.saveMatchPhase(d.matchId,phaseEdition,d);
       toast("Fase salva.");
     } else if (f.id === "arena-correct-match-sport") {
-      if (!selected || selected !== f.dataset.matchId || !canCorrectMatchSport(selected)) throw Error("Esta conta precisa de autorização para corrigir a modalidade desta partida.");
-      if (!confirm("Corrigir a modalidade desta partida encerrada de Futebol para Futsal?")) return;
-      await dispatch({type:"correctMatchSport",matchId:selected,championshipId:d.championshipId,reason:d.reason});
+      const sourceEdition = f.dataset.sourceEdition;
+      const matchId = sourceEdition ? d.matchId : f.dataset.matchId;
+      const match = state.matches.find(item => item.id === matchId);
+      const sameScreen = sourceEdition
+        ? editedChampionshipId === sourceEdition && match?.championshipId === sourceEdition
+        : selected === matchId;
+      if (!match || !sameScreen || !eligibleSportCorrection(match)) throw Error("Esta partida não está disponível para correção de modalidade.");
+      if (!confirm("Corrigir " + name(match.home) + " × " + name(match.away) + " de Futebol para Futsal?")) return;
+      await dispatch({type:"correctMatchSport",matchId,championshipId:d.championshipId,reason:d.reason});
     } else if (f.id === "championship-link") {
       await dispatch({type:"championshipLink", matchId:selected, championshipId:d.championshipId, reason:d.reason});
     } else if (f.id === "clock-config") {
