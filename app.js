@@ -66,7 +66,7 @@ function updateMatchNotices() {
 }
 
 let state = D.fresh(),
-  section = "overview",
+  section = admin && new URLSearchParams(location.search).get("tela") === "operacao" ? "operation" : "overview",
   selected = "",
   user = null,
   role = "",
@@ -1887,7 +1887,7 @@ function render() {
     ["imports", "Importar"],
   ];
   const pageControls = arenaPageControls();
-  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div>${pageControls}<span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${accountPendingBanner()}${section==="operation"?"":`<div class="noprint">${liveStatusPanel("admin")}</div>`}${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>${floatingGameClock()}`;
+  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div>${pageControls}<span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>${relatedArenaScreens()}${floatingGameClock()}`;
   const permissionsForm = app.querySelector("#access-user");
   if (permissionsForm) updateOperationSummary(permissionsForm);
   stopInvisibleTimeline();
@@ -2042,6 +2042,24 @@ function canUseCabin(match) {
     (role === "admin" || (role === "operator" &&
       ((trainingMode && !canViewAllGames()) || cloud?.canOperate(match.id))));
 }
+function cabinOpenURL() {
+  const url = new URL("painel.html", location.href);
+  url.searchParams.set("tela", "operacao");
+  if (trainingMode) url.searchParams.set("demonstracao", "1");
+  return url.href;
+}
+function cabinStandby() {
+  const account = C.demo ? "treinamento-" + role : user?.uid || role;
+  return `<section class="card arena-cabin-standby">
+    <h2>Prévia da mesa de operação</h2>
+    <p>Escolha uma partida agendada ou em andamento que sua conta possa operar para liberar os comandos.</p>
+    <div class="arena-cabin-preview">
+      <strong>Equipe 1 × Equipe 2</strong><b>0 × 0</b><span>Relógio parado · 00:00</span>
+    </div>
+    <div class="toolbar">${["Iniciar","Continuar","Encerrar","Avisos","+1"].map(label=>`<button type="button" disabled>${label}</button>`).join("")}</div>
+    ${window.ArenaOperation?.preview?.(account) || ""}
+  </section>`;
+}
 function cabinView() {
   const match = state.matches.find(item => item.id === selected);
   if (canUseCabin(match) && !finalStatuses.includes(match.status)) {
@@ -2050,7 +2068,8 @@ function cabinView() {
   }
   const games = state.matches.filter(item => canUseCabin(item) && !finalStatuses.includes(item.status))
     .sort((a,b) => Number(b.status === "Ao vivo") - Number(a.status === "Ao vivo") || String(a.date).localeCompare(String(b.date)));
-  return `<section class="card"><h2>Escolha um jogo para operar</h2><div class="grid cabin-games">${games.map(item => `<button type="button" class="shortcut-primary" data-open="${esc(item.id)}" data-cabin-match><strong>${esc(name(item.home))} × ${esc(name(item.away))}</strong><small>${esc(item.sport)} · ${esc(item.status)} · ${esc(format(item.date))}</small></button>`).join("") || empty("Nenhum jogo em aberto autorizado para esta conta.")}</div></section>`;
+  const open = new URLSearchParams(location.search).get("tela") === "operacao" ? "" : `<a class="button" href="${esc(cabinOpenURL())}" target="_blank" rel="noopener">Abrir Operação em outra aba</a>`;
+  return `<section class="card"><h2>Escolha um jogo para operar</h2><div class="toolbar"><button type="button" data-section="matches">Ver jogos</button>${canCreateMatches()?'<button type="button" data-section="createMatch">Agendar partida</button>':""}${open}</div><div class="grid cabin-games">${games.map(item => `<button type="button" class="shortcut-primary" data-open="${esc(item.id)}" data-cabin-match><strong>${esc(name(item.home))} × ${esc(name(item.away))}</strong><small>${esc(item.sport)} · ${esc(item.status)} · ${esc(format(item.date))}</small></button>`).join("") || empty("Nenhum jogo em aberto autorizado para esta conta.")}</div></section>${games.length ? "" : cabinStandby()}`;
 }
 document.addEventListener("click", event => {
   const button = event.target.closest("[data-cabin-keyboard]");
@@ -5199,6 +5218,22 @@ function arenaPageControls() {
   ${section !== "overview" ? `<button type="button" ${detailBack || `data-section="${arenaPreviousPage}"`}>Voltar</button><button type="button" data-section="overview">Início</button>` : ""}
   <button type="button" data-personal-settings>Personalizar menu</button>
  </nav>`;
+}
+function relatedArenaScreens() {
+ const group = workspaceDefinitions.find(item => item.sections.includes(section));
+ if (!group || section === "overview" || (isOperationSection() && selected)) return "";
+ const crossLinks = {
+  games:["teams","championships","reportCenter"],
+  records:["championships","createMatch"],
+  championships:["teams","createMatch","reportCenter"],
+  reports:["matches","teams","certificates"],
+  documents:["registrationSheets","credentials","reportCenter"],
+  credentials:["registrationSheets","certificates"],
+ };
+ const allowed = new Set(workspaceDefinitions.flatMap(allowedWorkspaceSections));
+ const links = [...new Set([...group.sections,...(crossLinks[group.id] || [])])]
+  .filter(id => id !== section && id !== "overview" && allowed.has(id) && navigationDescriptions[id]);
+ return links.length ? `<nav class="toolbar arena-related-screens noprint" aria-label="Telas relacionadas"><strong>Telas relacionadas</strong>${links.map(id=>`<button type="button" data-section="${id}">${esc(navigationDescriptions[id].label)}</button>`).join("")}</nav>` : "";
 }
 function locationTrail(){
  const labels={overview:"Visão geral",matches:"Acompanhar jogos",championships:"Campeonatos",standings:"Classificação",teams:"Equipes",players:"Jogadores",imports:"Importar",documentation:"Guias",matchSheets:"Súmulas",reports:"Relatórios esportivos",auditReports:"Relatório geral",certificates:"Certificados",monitor:"Operadores e partidas",users:"Usuários e permissões",settings:"Configurações",cleanup:"Limpeza de testes",testData:"Lixeira de registros",credentials:"Credenciais de eventos",account:"Minha conta"};

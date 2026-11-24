@@ -2580,3 +2580,10 @@ body:not([data-admin="true"]) .public-event-icon {
   min-width:0; margin:0; padding:0; border:0;
   background:transparent; box-shadow:none;
 }
+
+.arena-related-screens { flex-wrap:wrap; gap:8px; margin-block:20px; }
+.arena-related-screens strong { flex:0 0 100%; }
+.arena-related-screens button,.arena-cabin-standby button { min-height:44px; white-space:normal; }
+.arena-cabin-standby .toolbar { flex-wrap:wrap; gap:8px; margin-block:12px; }
+.arena-cabin-preview { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; }
+.arena-cabin-preview b { font-size:1.4rem; }

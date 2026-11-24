@@ -502,5 +502,10 @@
  });
  document.addEventListener('change',event=>{if(!event.target.matches('[data-op-compact],[data-op-columns]'))return;const root=event.target.closest('.arena-operation-workspace');if(!root)return;const prefs=read(root.dataset.opKey);prefs.compact=root.querySelector('[data-op-compact]').checked;prefs.columns=root.querySelector('[data-op-columns]').checked;apply(root,prefs);save(root,prefs);});
  window.addEventListener('storage',event=>{if(event.key?.startsWith('arena-operation-layout-v1:'))sessionPreferences.delete(event.key);});
- window.ArenaOperation=Object.freeze({build});
+ function preview(account) {
+  const prefs=read('arena-operation-layout-v1:'+encodeURIComponent(account||'sem-conta'));
+  const shortcuts=prefs.monitor.map(id=>escape(monitorCommands[id][0])).join(' · ');
+  return '<details><summary>Ajustes atuais da mesa</summary><p><strong>Atalhos no monitor:</strong> '+(shortcuts||'Nenhum')+'</p><p><strong>Controles:</strong> '+(prefs.compact?'compactos':'tamanho padrão')+' · '+(prefs.columns?'duas colunas em tela larga':'uma coluna')+'</p><p><strong>Ordem das caixas:</strong> '+prefs.order.map(id=>escape(panelTitle(prefs,id))).join(' · ')+'</p><p>Para mudar esses ajustes, abra uma partida e use Minha mesa de operação.</p></details>';
+ }
+ window.ArenaOperation=Object.freeze({build,preview});
 })();
