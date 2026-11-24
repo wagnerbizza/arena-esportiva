@@ -1188,6 +1188,45 @@ function addedClock(m, now = Date.now()) {
     waiting,
   };
 }
+const followedGameClocks = new Map();
+function followedClockKey() {
+  return C.demo ? "treino:" + role : user?.uid;
+}
+function followedGameClock() {
+  const id = followedGameClocks.get(followedClockKey());
+  const match = state.matches.find(item => item.id === id);
+  return canUseCabin(match) ? match : null;
+}
+function monitorLastEvent(match) {
+  const events = match.publicEvents?.length ? match.publicEvents : match.events;
+  const event = events?.at(-1);
+  if (!event) return "";
+  const team = [0,1].includes(event.side) ? name([match.home,match.away][event.side]) : "";
+  const athlete = event.playerName || match.roster?.find(player => player.id === event.player)?.name;
+  return [eventLabel(event,match),team,athlete].filter(Boolean).join(" · ");
+}
+function floatingGameClock() {
+  const match = followedGameClock();
+  if (!match || (isOperationSection() && selected === match.id)) return "";
+  return `<aside class="arena-followed-clock noprint" aria-label="Monitor da partida fixado">
+    <strong>${esc(name(match.home))} × ${esc(name(match.away))}</strong>
+    <p class="arena-followed-score"><b>${esc(gameResult(match).join(" × "))}</b> <span>${esc(match.status)}</span></p>
+    ${monitorLastEvent(match) ? `<p class="arena-op-monitor-event">Último lance: ${esc(monitorLastEvent(match))}</p>` : ""}
+    ${clockMarkup(match)}
+    <div class="toolbar"><button type="button" data-open="${esc(match.id)}" ${finalStatuses.includes(match.status)?"":"data-cabin-match"}>Voltar ao jogo</button><button type="button" data-clock-follow="${esc(match.id)}">Desafixar monitor</button></div>
+  </aside>`;
+}
+document.addEventListener("click", event => {
+  const button = event.target.closest("[data-clock-follow]");
+  if (!button || !admin || busy) return;
+  const key = followedClockKey();
+  const match = state.matches.find(item => item.id === button.dataset.clockFollow);
+  if (!key || !canUseCabin(match)) return;
+  if (followedGameClocks.get(key) === match.id) followedGameClocks.delete(key);
+  else if (!finalStatuses.includes(match.status)) followedGameClocks.set(key, match.id);
+  render();
+  (app.querySelector("[data-clock-follow]") || app.querySelector(".admin-heading h1"))?.focus({preventScroll:true});
+});
 function clockMarkup(m) {
   const clock = addedClock(m);
   return `<div class="game-clock"><span class="clock-caption">${clock.caption}</span><strong data-clock="${esc(m.id)}">${clock.time}</strong><small data-clock-status>${clock.status}</small>${m.addedTime?.stage === m.stage && m.addedTime.minutes > 0 ? `<span class="tag">Acréscimos +${esc(m.addedTime.minutes)} min</span>` : ""}</div>`;
@@ -1846,7 +1885,7 @@ function render() {
     ["imports", "Importar"],
   ];
   const pageControls = arenaPageControls();
-  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div>${pageControls}<span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${accountPendingBanner()}${section==="operation"?"":`<div class="noprint">${liveStatusPanel("admin")}</div>`}${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>`;
+  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div>${pageControls}<span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${accountPendingBanner()}${section==="operation"?"":`<div class="noprint">${liveStatusPanel("admin")}</div>`}${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>${floatingGameClock()}`;
   const permissionsForm = app.querySelector("#access-user");
   if (permissionsForm) updateOperationSummary(permissionsForm);
   stopInvisibleTimeline();
@@ -2143,7 +2182,7 @@ function operate() {
       )
       .join("") || empty("Use Ver lances anteriores nesta seção para consultar o histórico operacional. A auditoria completa permanece com o administrador.")
   }</div>`;
-  return window.ArenaOperation?.build?window.ArenaOperation.build(m,markup,{account:C.demo?"treinamento-"+role:user?.uid||role,rosterHTML:operationRosterPanel(m),layoutRemote:!C.demo&&user?cloud?.operationLayout?.(user.uid):null}):markup;
+  return window.ArenaOperation?.build?window.ArenaOperation.build(m,markup,{account:C.demo?"treinamento-"+role:user?.uid||role,rosterHTML:operationRosterPanel(m),monitorEvent:monitorLastEvent(m),followClock:canUseCabin(m)&&(!locked||followedGameClock()?.id===m.id),clockFollowed:followedGameClock()?.id===m.id,layoutRemote:!C.demo&&user?cloud?.operationLayout?.(user.uid):null}):markup;
 }
 document.addEventListener("click",async event=>{
  const button=event.target.closest("[data-return-normal-clock]");if(!button||!admin||!selected)return;

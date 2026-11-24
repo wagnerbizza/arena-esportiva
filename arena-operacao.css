@@ -116,3 +116,35 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 [data-op-group="pinned"]:not([hidden]) + [data-op-group="regular"]:not([hidden]) {
   margin-block-start:8px;
 }
+
+.arena-op-strip:has(.arena-op-monitor-row) { flex-wrap:wrap; }
+.arena-op-monitor-row { flex:0 0 100%; min-width:0; display:flex; align-items:center; gap:8px; }
+.arena-op-monitor { display:flex; flex:1; min-width:0; gap:8px; overflow-x:auto; }
+.arena-op-monitor-row button { min-height:44px; flex:none; white-space:nowrap; }
+.arena-op-monitor-options { min-width:0; margin-block:12px; }
+.arena-op-monitor-options [data-op-monitor-choices] { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr)); gap:6px 12px; }
+.arena-op-monitor-options label { display:flex; align-items:center; gap:8px; min-height:44px; }
+.arena-op-monitor-options input { flex:none; }
+
+.arena-followed-clock {
+  position:fixed; z-index:730;
+  inset:auto max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) auto;
+  box-sizing:border-box; width:min(360px,calc(100% - 32px)); padding:12px;
+  border:1px solid var(--accent); border-radius:12px;
+  background:var(--panel); color:var(--text); box-shadow:0 4px 24px #0007;
+}
+.arena-followed-clock > strong { overflow-wrap:anywhere; }
+.arena-followed-clock .game-clock { margin-block:6px; padding:4px 10px; }
+.arena-followed-clock .toolbar { flex-wrap:wrap; gap:8px; }
+.arena-followed-clock button { min-block-size:44px; }
+@media(max-width:767px) {
+  .arena-followed-clock { inset:auto auto max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); width:min(320px,calc(100% - 76px)); }
+  .arena-op-monitor-row { flex-wrap:wrap; }
+  .arena-op-monitor-row .arena-op-monitor { flex-basis:100%; }
+  .arena-op-monitor-row > button { flex:1; }
+}
+
+.arena-op-strip > .arena-op-monitor-event { flex:0 0 100%; }
+.arena-op-monitor-event { margin:0; overflow-wrap:anywhere; font-size:.875rem; color:var(--muted,var(--text)); }
+.arena-followed-score { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:4px 0; }
+.arena-followed-score b { font-size:1.3rem; }

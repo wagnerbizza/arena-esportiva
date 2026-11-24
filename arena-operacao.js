@@ -7,11 +7,38 @@
  const star=icon('<path d="m12 3 2.8 5.7 6.3.9-4.6 4.4 1.1 6.3-5.6-3-5.6 3 1.1-6.3-4.6-4.4 6.3-.9Z"/>');
  const chevron=icon('<path d="m6 9 6 6 6-6"/>');
  const grip=icon('<path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" stroke-width="3.5"/>');
+ const monitorCommands = {
+  end: ['Encerrar', '[data-status="Encerrada"]'],
+  resume: ['Iniciar / continuar', '[data-guided-start]'],
+  pause: ['Pausar jogo', '[data-status="Pausada"]'],
+  suspend: ['Suspender', '[data-status="Suspensa"]'],
+  notices: ['Avisos', null, 'notices'],
+  clock: ['Configurar relógio', '[data-open-clock]'],
+  added: ['Iniciar acréscimos', '[data-clock-command="iniciar-acrescimos"]'],
+  set: ['Encerrar set', '[data-set]'],
+  home: ['+1 para a primeira equipe', '[data-quick="1"][data-side="0"]'],
+  away: ['+1 para a segunda equipe', '[data-quick="1"][data-side="1"]'],
+  home2: ['+2 para a primeira equipe', '[data-quick="2"][data-side="0"]'],
+  away2: ['+2 para a segunda equipe', '[data-quick="2"][data-side="1"]'],
+  home3: ['+3 para a primeira equipe', '[data-quick="3"][data-side="0"]'],
+  away3: ['+3 para a segunda equipe', '[data-quick="3"][data-side="1"]'],
+  homeFoul: ['Falta da primeira equipe', '[data-fast-event="falta"][data-side="0"]'],
+  awayFoul: ['Falta da segunda equipe', '[data-fast-event="falta"][data-side="1"]'],
+  homeYellow: ['Amarelo para primeira equipe', '[data-fast-event="cartão amarelo"][data-side="0"]'],
+  awayYellow: ['Amarelo para segunda equipe', '[data-fast-event="cartão amarelo"][data-side="1"]'],
+  homeRed: ['Vermelho para primeira equipe', '[data-fast-event="cartão vermelho"][data-side="0"]'],
+  awayRed: ['Vermelho para segunda equipe', '[data-fast-event="cartão vermelho"][data-side="1"]'],
+  referee: ['Avisar sobre arbitragem', '[data-fast-notice="arbitragem"]'],
+  care: ['Avisar sobre atendimento', '[data-fast-notice="atendimento"]'],
+  clearNotice: ['Retirar aviso', '[data-fast-notice="retirar"]'],
+  ...Object.fromEntries(defaults.filter(id=>id!=='notices').map(id=>['panel-'+id,[labels[id],null,id]])),
+ };
+ const defaultMonitor = ['end','resume','pause','notices'];
  const sessionPreferences=new Map();
  const panelColors={azul:['Azul','#45a4ff'],verde:['Verde','#49c99a'],laranja:['Laranja','#f4a858'],roxo:['Roxo','#b58cff'],rosa:['Rosa','#ee80ac']};
  const panelTitle=(prefs,id)=>prefs.names?.[id]||labels[id];
  const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>Object.hasOwn(panelColors,saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
+ function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>Object.hasOwn(panelColors,saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set(saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id)))]:[...defaultMonitor],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
  let syncedLayout=null;
  function currentWorkspace(key){
   return [...document.querySelectorAll('.arena-operation-workspace')].find(root=>root.dataset.opKey===key);
@@ -72,7 +99,25 @@
   heading.append(toggle,lock);
   const content=document.createElement('div');content.id=section.id+'-content';content.dataset.opContent='';
   content.append(node);section.append(content);return section;}
- function toolbar(root,prefs){const nav=root.querySelector('[data-op-shortcuts]');nav.replaceChildren();const panels=[...root.querySelectorAll('[data-op-panel]')];for(const section of panels){const id=section.dataset.opPanel,fold=section.querySelector('[data-op-fold]'),closed=prefs.collapsed.includes(id);
+ function monitorToolbar(root,prefs) {
+  const menu=root.querySelector('[data-op-monitor]');
+  const choices=root.querySelector('[data-op-monitor-choices]');
+  menu.replaceChildren();
+  for(const id of prefs.monitor){
+   const [label,selector,panelId]=monitorCommands[id];
+   const source=selector?root.querySelector(selector):root.querySelector('[data-op-panel="'+panelId+'"]');
+   if(!source)continue;
+   const button=document.createElement('button');
+   button.type='button';
+   if(panelId)button.dataset.opJump=panelId;else button.dataset.opMonitorRun=id;
+   button.textContent=id==='resume'?(source.textContent.trim().startsWith('Retomar')?'Continuar':source.textContent.trim()):label;
+   button.disabled=source.disabled===true;
+   menu.append(button);
+  }
+  choices.innerHTML=Object.entries(monitorCommands).map(([id,[label]])=>
+   '<label><input type="checkbox" data-op-monitor-choice="'+id+'" '+(prefs.monitor.includes(id)?'checked':'')+'> '+escape(label)+'</label>').join('');
+ }
+ function toolbar(root,prefs){monitorToolbar(root,prefs);const nav=root.querySelector('[data-op-shortcuts]');nav.replaceChildren();const panels=[...root.querySelectorAll('[data-op-panel]')];for(const section of panels){const id=section.dataset.opPanel,fold=section.querySelector('[data-op-fold]'),closed=prefs.collapsed.includes(id);
    const title=panelTitle(prefs,id),color=panelColors[prefs.colors[id]];
    section.querySelector('h2').textContent=title;
    if(color)section.style.setProperty('--arena-op-box-color',color[1]);
@@ -137,7 +182,7 @@
   const strip=document.createElement('div');
   strip.className='arena-op-strip';
   strip.classList.toggle('is-pinned',prefs.scorePinned);
-  strip.setAttribute('aria-label','Placar e relógio da operação');
+  strip.setAttribute('aria-label','Monitor da partida');
   const teams=[...score.querySelectorAll('.score .name')].map(node=>node.textContent);
   const scores=[...score.querySelectorAll('.arena-score-value')].map(node=>node.textContent);
   const result=scores.length===2?scores.join(' × '):score.querySelector('.score>strong')?.textContent||'';
@@ -149,9 +194,26 @@
   describeScorePin(pin,prefs.scorePinned);strip.append(pin);
   const anchor=document.createElement('div');anchor.dataset.opScoreAnchor='';anchor.setAttribute('aria-hidden','true');
   if(back){back.classList.add('primary','arena-op-back');strip.prepend(back);}
+  const monitor=document.createElement('nav');
+  monitor.className='arena-op-monitor';monitor.dataset.opMonitor='';monitor.setAttribute('aria-label','Atalhos do placar');
+  const editMonitor=document.createElement('button');
+  editMonitor.type='button';editMonitor.dataset.opMonitorEdit='';editMonitor.textContent='Atalhos';
+  const monitorRow=document.createElement('div');monitorRow.className='arena-op-monitor-row';monitorRow.append(monitor,editMonitor);
+  if(config.followClock){
+   const follow=document.createElement('button');
+   follow.type='button';
+   follow.dataset.clockFollow=match.id;
+   follow.textContent=config.clockFollowed?'Desafixar monitor':'Fixar monitor';
+   follow.setAttribute('aria-pressed',String(config.clockFollowed));
+   monitorRow.append(follow);
+  }
+  const activity=document.createElement('p');
+  activity.className='arena-op-monitor-event';
+  activity.textContent=match.status+(config.monitorEvent?' · Último lance: '+config.monitorEvent:'');
+  strip.append(activity,monitorRow);
   root.append(strip);
   const timeline=score.querySelector('.match-timeline');if(timeline)timeline.remove();const scoreWrap=document.createElement('section');scoreWrap.className='arena-op-score';scoreWrap.append(score);const guide=old.querySelector('.match-guide');root.append(scoreWrap);
-  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.innerHTML='<summary>Minha mesa de operação: atalhos e organização</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
+  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.innerHTML='<summary>Minha mesa de operação: atalhos e organização</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Marque os atalhos que deseja mostrar. Os botões aparecem quando servem para o jogo e a situação atual.</p><div data-op-monitor-choices></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
   const nav=document.createElement('nav');nav.className='toolbar arena-op-shortcuts';nav.dataset.opShortcuts='';nav.setAttribute('aria-label','Meus atalhos da operação');root.append(nav);const grid=document.createElement('div');grid.className='arena-op-grid';grid.dataset.opGrid='';root.append(grid);
   for(const [group,label] of [['pinned','Caixas fixadas no topo'],['regular','Caixas desafixadas']]){
    const lane=document.createElement('div');lane.dataset.opGroup=group;
@@ -409,8 +471,34 @@
    visible.splice(target,0,id);
    prefs.order=[...visible,...prefs.order.filter(key=>!visible.includes(key))];
   }
-  if(button.hasAttribute('data-op-reset')){prefs.order=[...defaults];prefs.names={};prefs.colors={};prefs.collapsed=[];prefs.locked=[];prefs.favorites=['points','time','events','history'];prefs.compact=false;prefs.columns=false;root.querySelector('[data-op-compact]').checked=false;root.querySelector('[data-op-columns]').checked=false;}
+  if(button.hasAttribute('data-op-reset')){prefs.order=[...defaults];prefs.monitor=[...defaultMonitor];prefs.names={};prefs.colors={};prefs.collapsed=[];prefs.locked=[];prefs.favorites=['points','time','events','history'];prefs.compact=false;prefs.columns=false;root.querySelector('[data-op-compact]').checked=false;root.querySelector('[data-op-columns]').checked=false;}
   apply(root,prefs);save(root,prefs);
+ });
+ document.addEventListener('click',event=>{
+  const button=event.target.closest('[data-op-monitor-edit],[data-op-monitor-run]');
+  if(!button||button.disabled)return;
+  const root=button.closest('.arena-operation-workspace');
+  if(!root)return;
+  if(button.hasAttribute('data-op-monitor-edit')){
+   const settings=root.querySelector('.arena-op-settings');
+   settings.open=true;
+   settings.scrollIntoView({block:'center'});
+   settings.querySelector('[data-op-monitor-choice]')?.focus({preventScroll:true});
+   return;
+  }
+  const command=monitorCommands[button.dataset.opMonitorRun];
+  const source=command?.[1]&&root.querySelector(command[1]);
+  if(source&&!source.disabled)source.click();
+ });
+ document.addEventListener('change',event=>{
+  const input=event.target.closest('[data-op-monitor-choice]');if(!input)return;
+  const root=input.closest('.arena-operation-workspace');if(!root)return;
+  const prefs=read(root.dataset.opKey),id=input.dataset.opMonitorChoice;
+  if(!Object.hasOwn(monitorCommands,id))return;
+  prefs.monitor=input.checked?[...new Set([...prefs.monitor,id])]:prefs.monitor.filter(key=>key!==id);
+  monitorToolbar(root,prefs);
+  root.querySelector('[data-op-monitor-choice="'+id+'"]')?.focus({preventScroll:true});
+  save(root,prefs);
  });
  document.addEventListener('change',event=>{if(!event.target.matches('[data-op-compact],[data-op-columns]'))return;const root=event.target.closest('.arena-operation-workspace');if(!root)return;const prefs=read(root.dataset.opKey);prefs.compact=root.querySelector('[data-op-compact]').checked;prefs.columns=root.querySelector('[data-op-columns]').checked;apply(root,prefs);save(root,prefs);});
  window.addEventListener('storage',event=>{if(event.key?.startsWith('arena-operation-layout-v1:'))sessionPreferences.delete(event.key);});
