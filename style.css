@@ -2571,3 +2571,12 @@ body:not([data-admin="true"]) .public-event-icon {
 .report-game-guide p:last-child { margin-bottom:0; }
 .report-team-class { font-size:1.05rem; overflow-wrap:anywhere; }
 .report-team-class strong,.report-game-guide strong { font-weight:800; }
+
+.team-profile-heading,.team-profile-content { min-width:0; }
+.team-profile-title > div { min-width:0; overflow-wrap:anywhere; }
+.team-profile-title p { margin:5px 0; }
+.team-profile-content { display:grid; gap:20px; margin-block-start:20px; }
+.team-profile-content > .card {
+  min-width:0; margin:0; padding:0; border:0;
+  background:transparent; box-shadow:none;
+}
