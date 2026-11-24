@@ -5248,7 +5248,7 @@ document.addEventListener("keydown",event=>{
 document.addEventListener("toggle",e=>{const group=e.target.dataset?.navigationGroup;if(!group)return;if(e.target.open){expandedNavigation.clear();expandedNavigation.add(group);for(const other of document.querySelectorAll("[data-navigation-group]"))if(other!==e.target)other.open=false;}else expandedNavigation.delete(group);},true);
 document.addEventListener("click",e=>{
  if(e.target.closest("[data-clear-navigation-search]")){const side=Boolean(e.target.closest(".arena-side-search"));navigationQuery="";refreshFunctionSearch();$(side?"#sideFunctionSearch":"#functionSearch")?.focus();}
- if(e.target.closest("[data-navigation-result],.navigation-options [data-section]")){navigationQuery="";expandedNavigation.clear();for(const d of document.querySelectorAll("[data-navigation-group]"))d.open=false;refreshFunctionSearch();$("#view")?.scrollIntoView({block:"start"});}
+ if(e.target.closest("[data-navigation-result],.navigation-options [data-section]")){navigationQuery="";expandedNavigation.clear();for(const d of document.querySelectorAll("[data-navigation-group]"))d.open=false;refreshFunctionSearch();if(!e.target.closest('[data-section="overview"]'))$("#view")?.scrollIntoView({block:"start"});}
 });
 
 // 32 — Indicador de sincronização: sem faixa técnica no uso normal.
@@ -5282,6 +5282,8 @@ boot();
 // 30 — Navegação intencional: posiciona somente após abrir uma função.
 // Não acompanha snapshots, cronômetro, placar, filtros nem gravações de lances.
 function navigationDestination(control){
+ // Início já posiciona o cabeçalho no topo no clique de navegação.
+ if(control.dataset.section==="overview")return null;
  const routes=[
   ['data-my-account','#view'],['data-account-settings','#view'],
   ['data-section','#view'],['data-workspace','#view'],
