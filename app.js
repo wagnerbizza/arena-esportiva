@@ -362,7 +362,7 @@ function championshipCards() {
           <button type="button" data-edit-championship="${esc(c.id)}">Editar</button>
           <button type="button" data-championship-games="${esc(c.id)}">Ver partidas</button>
           ${role==="admin"?`<button type="button" data-phase-edition="${esc(c.id)}">Grupos e chaves</button>`:""}
-          <button type="button" data-registration-sheet="${esc(c.id)}">Ficha de inscrição</button>
+          <button type="button" data-registration-sheet="${esc(c.id)}">Ver ficha de inscrição</button>
         </div>
       </section>`;
     }).join("");
@@ -708,6 +708,7 @@ function printRegistrationSheet(championship) {
     if (select.matches(".registration-lineup")) select.nextElementSibling.textContent = select.value;
   });
   if (canManageRosters()) setupRegistrationRoster(sheet, playersTable);
+  sheet.document.getElementById("registration-back").onclick = () => sheet.close();
   sheet.document.getElementById("print").onclick = async () => {
     await Promise.all([...sheet.document.images].map(img => img.decode().catch(() => {})));
     sheet.print();
@@ -832,7 +833,8 @@ function registrationSheetHTML(championship,count,branding=state.partners,previe
     ${partnerPrintCSS}</style>
     ${!custom&&style.watermark ? `<div class="watermark" aria-hidden="true">${esc(style.watermark)}</div>` : ""}
     ${preview ? "" : `<div class="registration-tools">
-      <button type="button" id="print">Imprimir / Salvar PDF</button>
+      <button type="button" id="print">Imprimir ou salvar PDF</button>
+      <button type="button" id="registration-back">Voltar</button>
       ${canManageRosters() ? `<div><label>Equipe cadastrada <select id="registration-team"><option value="">Selecione uma equipe</option></select></label>
         <button type="button" id="registration-fill">Preencher com o cadastro</button>
         <span id="registration-fill-status" role="status"></span></div>` : ""}
@@ -2352,7 +2354,7 @@ function reportMatch(m) {
   return `<article class="card report-sheet"><div class="report-header" style="display:flex;align-items:center;gap:10px"><div style="display:flex;align-items:center;min-width:0;flex:1;gap:12px">${logoHeader}<div style="min-width:0"><span class="tag">SÚMULA DA PARTIDA</span><h2>${esc(matchCompetitionLabel(m))} • ${esc(m.sport)}</h2></div></div><span class="report-brand">WagnerBIZZA</span></div><div class="report-score"><div>${badge(team(m.home))}<strong>${esc(name(m.home))}</strong></div><b>${sc.join(" × ")}</b><div>${badge(team(m.away))}<strong>${esc(name(m.away))}</strong></div></div><div class="report-meta"><p><b>Data:</b> ${esc(format(m.date))}<br><b>Local:</b> ${esc(m.place || "Não informado")}</p><p><b>Arbitragem / mesa:</b> ${esc(m.referees || "Não informada")}<br><b>Situação:</b> ${esc(m.status)} • <b>Etapa:</b> ${esc(m.stage)} • <b>Relógio:</b> ${m.clock ? M.clockText(m) : "Não utilizado"}</p></div>${m.publicNotice ? '<p class="report-alert"><b>Aviso:</b> ' + esc(m.publicNotice) + "</p>" : ""}${m.sets.length ? "<p><b>Parciais:</b> " + m.sets.map((s) => esc(s.score.join(" × "))).join(" / ") + "</p>" : ""}<div class="roster-grid">${roster}</div><h3>Histórico e ocorrências</h3><div class="tablewrap report-events"><table><thead><tr><th>Horário / jogo</th><th>Etapa</th><th>Acontecimento</th><th>Equipe / atleta</th><th>Descrição / motivo</th><th>Responsável</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Nenhum lançamento carregado.</td></tr>'}</tbody></table></div><small>Nomes antigos são recuperados do cadastro disponível; quando ausentes, o UID é preservado.</small><section class="report-notes"><h3>Observações da súmula</h3><p>${esc(m.notes || "Sem observações.")}</p></section><section class="signatures"><div>Árbitro(a): __________________________</div><div>Mesa: __________________________</div><div>Responsável da equipe da casa: __________________________</div><div>Responsável da equipe visitante: __________________________</div><small>Súmula do sistema. Campos para assinatura em papel.</small></section>${partnerMarkup("matchSheets")}</article>`;
 }
 function certificatePanel() {
-  return `<section class="card certificate-panel noprint"><span class="tag">EMISSÃO DE DOCUMENTOS</span><h2>Certificados</h2><p class="muted">Preencha os dados e abra a visualização de impressão para imprimir ou salvar o certificado em PDF. Também é possível baixar os dados preenchidos em JSON; o sistema não mantém um arquivo permanente de certificados emitidos.</p><datalist id="certificateChampionships">${(state.championships||[]).map(c=>`<option value="${esc(championshipTitle(c))}">${esc(c.sport)}</option>`).join("")}</datalist><form id="arenaCertificateForm"><div class="formgrid">${field("Nome completo do participante", "certificateName", "text", 'required maxlength="120" placeholder="Nome que aparecerá no certificado"')}${field("Participação / reconhecimento", "certificateRole", "text", 'required maxlength="120" value="Participação"')}${field("Evento / campeonato", "certificateEvent", "text", 'required maxlength="150" list="certificateChampionships" placeholder="Nome do evento ou campeonato"')}${field("Modalidade", "certificateSport", "text", 'maxlength="80" placeholder="Ex.: Futebol, Basquete, Vôlei"')}${field("Local", "certificatePlace", "text", 'maxlength="120" placeholder="Cidade ou local do evento"')}${field("Data de emissão", "certificateDate", "date", `required value="${new Date().toISOString().slice(0,10)}"`)}${field("Responsável pela emissão", "certificateIssuer", "text", 'required maxlength="100" value="WagnerBIZZA"')}</div><div class="toolbar"><button class="primary" type="submit">Visualizar / imprimir ou salvar em PDF</button><button type="button" data-certificate-json>Baixar dados do certificado (JSON)</button></div></form><div class="certificate-institutional"><h3>Certificado institucional do projeto</h3><p>Documento de reconhecimento da idealização e do desenvolvimento da plataforma Arena Esportiva.</p><div class="toolbar"><button type="button" data-institutional-certificate>Visualizar / imprimir em PDF</button><button type="button" data-institutional-certificate-json>Baixar dados institucionais (JSON)</button></div></div><p class="muted">Cada emissão recebe um código identificador. Nesta etapa, o código identifica o documento, mas ainda não representa uma validação pública online nem um registro permanente no Firebase.</p></section>`;
+  return `<section class="card certificate-panel noprint"><span class="tag">EMISSÃO DE DOCUMENTOS</span><h2>Certificados</h2><p class="muted">Preencha os dados e clique em Ver prévia. Na prévia, você pode imprimir, salvar em PDF ou baixar os dados em JSON; o sistema não mantém um arquivo permanente de certificados emitidos.</p><datalist id="certificateChampionships">${(state.championships||[]).map(c=>`<option value="${esc(championshipTitle(c))}">${esc(c.sport)}</option>`).join("")}</datalist><form id="arenaCertificateForm"><div class="formgrid">${field("Nome completo do participante", "certificateName", "text", 'required maxlength="120" placeholder="Nome que aparecerá no certificado"')}${field("Participação / reconhecimento", "certificateRole", "text", 'required maxlength="120" value="Participação"')}${field("Evento / campeonato", "certificateEvent", "text", 'required maxlength="150" list="certificateChampionships" placeholder="Nome do evento ou campeonato"')}${field("Modalidade", "certificateSport", "text", 'maxlength="80" placeholder="Ex.: Futebol, Basquete, Vôlei"')}${field("Local", "certificatePlace", "text", 'maxlength="120" placeholder="Cidade ou local do evento"')}${field("Data de emissão", "certificateDate", "date", `required value="${new Date().toISOString().slice(0,10)}"`)}${field("Responsável pela emissão", "certificateIssuer", "text", 'required maxlength="100" value="WagnerBIZZA"')}</div><div class="toolbar"><button class="primary" type="submit">Ver prévia do certificado</button></div></form><div class="certificate-institutional"><h3>Certificado institucional do projeto</h3><p>Documento de reconhecimento da idealização e do desenvolvimento da plataforma Arena Esportiva.</p><div class="toolbar"><button type="button" data-institutional-certificate>Ver prévia institucional</button></div></div><p class="muted">Cada emissão recebe um código identificador. Nesta etapa, o código identifica o documento, mas ainda não representa uma validação pública online nem um registro permanente no Firebase.</p></section>`;
 }
 function certificateHTML({name:person, role:participation, event, sport, place, date, issuer, institutional=false},branding=state.partners,preview=false) {
   const code = "ARENA-" + new Date().getFullYear() + "-" + (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2,10)).replace(/-/g,"").slice(0,12).toUpperCase();
@@ -2371,11 +2373,44 @@ function certificateHTML({name:person, role:participation, event, sport, place, 
   const safe = v => esc(v);
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} • Arena Esportiva</title><style>@page{size:A4 landscape;margin:0}*{box-sizing:border-box}body{margin:0;background:#eef1f4;color:#18232e;font-family:Arial,Helvetica,sans-serif}.sheet{width:297mm;height:210mm;margin:0 auto;padding:13mm;background:#fff;position:relative;overflow:hidden}.frame{height:100%;border:2px solid #183b52;padding:12mm 17mm;position:relative;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center}.frame:before{content:"";position:absolute;inset:3mm;border:1px solid #b58b45;pointer-events:none}.certificate-logo{position:absolute;top:9mm;right:12mm;display:block;max-width:30mm;max-height:24mm;object-fit:contain}.brand{font-size:13px;font-weight:800;letter-spacing:5px;color:#183b52}.mark{font-size:34px;color:#b58b45;margin:3mm 0}.eyebrow{font-size:13px;letter-spacing:4px;color:#536879;margin:2mm 0}.title{font-family:Georgia,serif;font-size:31px;letter-spacing:2px;color:#183b52;margin:4mm 0 8mm}.intro{font-size:15px;color:#53616c}.recipient{font-family:Georgia,serif;font-size:31px;font-weight:bold;color:#142f42;margin:5mm 0 7mm;border-bottom:1px solid #b58b45;padding:0 15mm 4mm}.description{font-family:Georgia,serif;font-size:17px;line-height:1.65;max-width:220mm;margin:0 auto}.bottom{width:100%;display:flex;justify-content:space-between;align-items:end;margin-top:13mm;font-size:12px;color:#465663}.signature{min-width:65mm;border-top:1px solid #536879;padding-top:3mm}.code{position:absolute;bottom:5mm;right:8mm;font-size:9px;color:#65737d}.seal{position:absolute;top:10mm;right:12mm;border:1px solid #b58b45;border-radius:50%;width:24mm;height:24mm;display:grid;place-content:center;color:#183b52;font-size:9px;font-weight:bold;transform:rotate(12deg)}@media print{body{background:white}.sheet{margin:0;box-shadow:none}}@media screen{.sheet{margin:18px auto;box-shadow:0 8px 35px #0002}}@media(max-width:800px){.sheet{transform-origin:top left;}}${partnerPrintCSS}.frame>.arena-doc-header{justify-content:flex-end;text-align:right}.frame>.arena-doc-header:has(>[data-brand-resource="system"]:only-child){position:absolute;top:9mm;right:12mm;width:auto;margin:0}.frame>.arena-doc-header:has(>[data-brand-resource="system"]:only-child) img{height:auto;max-height:24mm;max-width:30mm}</style></head><body><main class="sheet"><div class="frame">${window.ArenaDocuments?.active(branding,"certificates")?brand("header"):organizationLogoMarkup || '<div class="seal">ARENA<br>ESPORTIVA</div>'}<div class="brand">WAGNERBIZZA • ARENA ESPORTIVA</div><div class="mark">◇</div><div class="eyebrow">RECONHECIMENTO OFICIAL DO PROJETO</div><h1 class="title">${title}</h1><p class="intro">Certificamos para os devidos fins que</p><div class="recipient">${safe(recipient)}</div><p class="description">${safe(description)}</p><div class="bottom"><div class="signature">${safe(issuer || "WagnerBIZZA")}<br>Responsável pela emissão</div><div>${safe(date)}${place ? `<br>${safe(place)}` : ""}</div><div class="signature">Arena Esportiva<br>Gestão esportiva</div></div>${brand("footer")+brand("background")}<div class="code">Código do documento: ${code}</div></div></main>${preview ? "" : `<script>window.addEventListener('load',()=>{const logo=document.querySelector('.certificate-logo');let printed=false;const print=()=>{if(printed)return;printed=true;setTimeout(()=>window.print(),180)};if(logo&&!logo.complete){logo.addEventListener('load',print,{once:true});logo.addEventListener('error',print,{once:true});setTimeout(print,3000)}else print()});</script>`}</body></html>`;
 }
-function certificateDocument(data) {
-  const html=certificateHTML(data);
+function certificateDocument(data, exportData) {
   const win = window.open("", "_blank");
-  if (!win) { toast("Permita janelas pop-up para gerar o certificado.", true); return; }
-  win.document.open(); win.document.write(html); win.document.close();
+  if (!win) { toast("Permita janelas pop-up para abrir a prévia do certificado.", true); return; }
+  win.opener = null;
+  const tools = `<style>
+    .certificate-preview-tools { display:flex; flex-wrap:wrap; gap:10px; padding:12px; background:#eef1f4; }
+    .certificate-preview-tools button { min-height:44px; padding:8px 14px; font:inherit; cursor:pointer; }
+    @media screen { main.sheet { zoom:var(--certificate-preview-scale,1); } }
+    @media print { .certificate-preview-tools { display:none; } }
+  </style><nav class="certificate-preview-tools" aria-label="Ações do certificado">
+    <button type="button" id="certificate-print" disabled>Imprimir ou salvar PDF</button>
+    <button type="button" id="certificate-download">Baixar dados (JSON)</button>
+    <button type="button" id="certificate-back">Voltar</button>
+  </nav>`;
+  const html = certificateHTML(data, state.partners, true).replace("<body>", "<body>" + tools);
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  const sheet = win.document.querySelector("main.sheet");
+  const fit = () => {
+    const available = Math.max(1, win.document.documentElement.clientWidth - 16);
+    sheet.style.setProperty("--certificate-preview-scale", String(Math.min(1, available / sheet.offsetWidth)));
+  };
+  fit();
+  win.addEventListener("resize", fit);
+  const print = win.document.getElementById("certificate-print");
+  const ready = Promise.all([...sheet.querySelectorAll("img")].map(image => image.decode().catch(() => {})));
+  let timeout;
+  Promise.race([ready, new Promise(resolve => { timeout = setTimeout(resolve, 5000); })]).then(() => {
+    clearTimeout(timeout);
+    if (!win.closed) print.disabled = false;
+  });
+  print.onclick = () => { if (!win.closed) win.print(); };
+  win.document.getElementById("certificate-download").onclick = () => download(
+    data.institutional ? "certificado-institucional-dados.json" : "certificado-dados.json",
+    JSON.stringify(exportData, null, 2),
+  );
+  win.document.getElementById("certificate-back").onclick = () => win.close();
 }
 let generalAuditRows=[],generalAuditLoaded=false,generalAuditBusy=false,generalAuditSearch="";
 function filteredAuditRows(rows=generalAuditRows) {
@@ -2568,26 +2603,15 @@ document.addEventListener("submit", event => {
   event.preventDefault();
   if (role !== "admin") { toast("Somente o administrador principal pode emitir certificados.", true); return; }
   const data = new FormData(event.target);
-  certificateDocument({name:data.get("certificateName"),role:data.get("certificateRole"),event:data.get("certificateEvent"),sport:data.get("certificateSport"),place:data.get("certificatePlace"),date:new Date(data.get("certificateDate")+"T12:00:00").toLocaleDateString("pt-BR"),issuer:data.get("certificateIssuer")});
-});
-document.addEventListener("click",event=>{
- const button=event.target.closest("[data-certificate-json],[data-institutional-certificate-json]");
- if(!button||role!=="admin")return;
- try{
-  if(button.hasAttribute("data-institutional-certificate-json")){
-   download("certificado-institucional-dados.json",JSON.stringify({formato:"arena-certificado-dados-v1",tipo:"institucional",titular:"Wagner BIZZA",projeto:"Arena Esportiva",emissor:"WagnerBIZZA",data:new Date().toISOString()},null,2));return;
-  }
-  const form=$("#arenaCertificateForm");
-  if(!form?.reportValidity())return;
-  const values=Object.fromEntries(new FormData(form));
-  download("certificado-dados.json",JSON.stringify({formato:"arena-certificado-dados-v1",tipo:"participacao",dados:values,geradoEm:new Date().toISOString()},null,2));
- }catch(error){toast(error.message,true);}
+  certificateDocument({name:data.get("certificateName"),role:data.get("certificateRole"),event:data.get("certificateEvent"),sport:data.get("certificateSport"),place:data.get("certificatePlace"),date:new Date(data.get("certificateDate")+"T12:00:00").toLocaleDateString("pt-BR"),issuer:data.get("certificateIssuer")},
+    {formato:"arena-certificado-dados-v1",tipo:"participacao",dados:Object.fromEntries(data),geradoEm:new Date().toISOString()});
 });
 document.addEventListener("click", event => {
   const button = event.target.closest("[data-institutional-certificate]");
   if (!button) return;
   if (role !== "admin") { toast("Somente o administrador principal pode emitir certificados.", true); return; }
-  certificateDocument({date:new Date().toLocaleDateString("pt-BR"),issuer:"WagnerBIZZA",institutional:true});
+  certificateDocument({date:new Date().toLocaleDateString("pt-BR"),issuer:"WagnerBIZZA",institutional:true},
+    {formato:"arena-certificado-dados-v1",tipo:"institucional",titular:"Wagner BIZZA",projeto:"Arena Esportiva",emissor:"WagnerBIZZA",data:new Date().toISOString()});
 });
 
 function exportExcel() {
@@ -5839,12 +5863,18 @@ function credentialsPanel() {
   const query=credentialQuery.toLocaleLowerCase("pt-BR");
   const all=credentialRows.filter(r=>state.championships.some(c=>c.id===r.eventId));
   const rows=all.filter(r=>(!credentialStatus||r.status===credentialStatus)&&[r.name,r.function,r.organization,r.id].join(" ").toLocaleLowerCase("pt-BR").includes(query));
-  return `<section class="card"><h2>Credenciais de eventos</h2><p>Crachás de identificação para operadores, organização, arbitragem e apoio. Não criam contas e não concedem permissões no sistema. A lista e a emissão são exclusivas do administrador.</p><form id="event-credential"><div class="formgrid"><label>Edição do campeonato<select name="eventId" required><option value="">Selecione a edição</option>${eventOptions}</select></label><label>Conta existente opcional<select name="credentialUser"><option value="">Pessoa sem conta vinculada</option>${(state.users||[]).filter(u=>!u.deleted).map(u=>`<option value="${esc(u.id)}">${esc(u.name||u.email||u.id)}</option>`).join("")}</select></label><label>Nome completo<input name="name" maxlength="150" required></label><label>Função<input name="function" list="credentialFunctions" maxlength="80" required></label><datalist id="credentialFunctions"><option>Operador</option><option>Organização</option><option>Arbitragem</option><option>Apoio</option><option>Equipe técnica</option><option>Imprensa</option></datalist><label>Organização / equipe<input name="organization" maxlength="150"></label><label>Modalidade no crachá<select name="credentialDisplay"><option value="hidden" selected>Sem modalidade no crachá</option><option value="all">Todas as modalidades</option></select></label><label>Válida até<input type="date" name="validUntil" required></label></div><button class="primary" ${C.demo||credentialBusy||!eventOptions?"disabled":""}>Emitir e salvar credencial</button></form><p>O código é um identificador para conferência nesta lista, sem validação pública online. A revogação não altera um crachá já impresso: a organização deve consultar a situação atual.</p></section><section class="card"><h3>Credenciais emitidas</h3><div class="toolbar"><button type="button" data-credential-load ${C.demo||credentialBusy?"disabled":""}>${credentialLoaded?"Atualizar credenciais":"Consultar credenciais"}</button></div><div class="formgrid"><label>Pesquisar nome, função ou código<input name="credential-query" value="${esc(credentialQuery)}"></label><label>Situação<select name="credential-status"><option value="ativa" ${credentialStatus==="ativa"?"selected":""}>Ativas</option><option value="revogada" ${credentialStatus==="revogada"?"selected":""}>Revogadas</option><option value="" ${!credentialStatus?"selected":""}>Todas</option></select></label></div>${!credentialLoaded?'<p>Consulte a lista para carregar os registros do banco.</p>':`<div class="tablewrap"><table><thead><tr><th>Pessoa / código</th><th>Evento</th><th>Função / organização</th><th>Validade / situação</th><th>Ações</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}<small class="cell-sub">${esc(r.id)}</small></td><td>${esc(championshipTitle(state.championships.find(c=>c.id===r.eventId)))}</td><td>${esc(r.function)}<small class="cell-sub">${esc(r.organization)}</small></td><td>${esc(credentialValidityLabel(r.validUntil))}<br>${esc(r.status)}${credentialIsExpired(r)?" • VENCIDA":""}</td><td><label>Modalidade no crachá<select data-credential-display="${esc(r.id)}">${credentialDisplayOptions(credentialDisplay(r.id))}</select></label><button type="button" data-credential-print="${esc(r.id)}">Visualizar / imprimir</button>${r.status==="ativa"?`<button type="button" data-credential-revoke="${esc(r.id)}">Revogar</button>`:""}</td></tr>`).join("")}</tbody></table></div><p>${rows.length} credencial(is). Eventos reservados como teste não entram nesta lista.</p>`}</section>`;
+  return `<section class="card"><h2>Credenciais de eventos</h2><p>Crachás de identificação para operadores, organização, arbitragem e apoio. Não criam contas e não concedem permissões no sistema. A lista e a emissão são exclusivas do administrador.</p><form id="event-credential"><div class="formgrid"><label>Edição do campeonato<select name="eventId" required><option value="">Selecione a edição</option>${eventOptions}</select></label><label>Conta existente opcional<select name="credentialUser"><option value="">Pessoa sem conta vinculada</option>${(state.users||[]).filter(u=>!u.deleted).map(u=>`<option value="${esc(u.id)}">${esc(u.name||u.email||u.id)}</option>`).join("")}</select></label><label>Nome completo<input name="name" maxlength="150" required></label><label>Função<input name="function" list="credentialFunctions" maxlength="80" required></label><datalist id="credentialFunctions"><option>Operador</option><option>Organização</option><option>Arbitragem</option><option>Apoio</option><option>Equipe técnica</option><option>Imprensa</option></datalist><label>Organização / equipe<input name="organization" maxlength="150"></label><label>Modalidade no crachá<select name="credentialDisplay"><option value="hidden" selected>Sem modalidade no crachá</option><option value="all">Todas as modalidades</option></select></label><label>Válida até<input type="date" name="validUntil" required></label></div><button class="primary" ${C.demo||credentialBusy||!eventOptions?"disabled":""}>Emitir e salvar credencial</button></form><p>O código é um identificador para conferência nesta lista, sem validação pública online. A revogação não altera um crachá já impresso: a organização deve consultar a situação atual.</p></section><section class="card"><h3>Credenciais emitidas</h3><div class="toolbar"><button type="button" data-credential-load ${C.demo||credentialBusy?"disabled":""}>${credentialLoaded?"Atualizar credenciais":"Consultar credenciais"}</button></div><div class="formgrid"><label>Pesquisar nome, função ou código<input name="credential-query" value="${esc(credentialQuery)}"></label><label>Situação<select name="credential-status"><option value="ativa" ${credentialStatus==="ativa"?"selected":""}>Ativas</option><option value="revogada" ${credentialStatus==="revogada"?"selected":""}>Revogadas</option><option value="" ${!credentialStatus?"selected":""}>Todas</option></select></label></div>${!credentialLoaded?'<p>Consulte a lista para carregar os registros do banco.</p>':`<div class="tablewrap"><table><thead><tr><th>Pessoa / código</th><th>Evento</th><th>Função / organização</th><th>Validade / situação</th><th>Ações</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.name)}<small class="cell-sub">${esc(r.id)}</small></td><td>${esc(championshipTitle(state.championships.find(c=>c.id===r.eventId)))}</td><td>${esc(r.function)}<small class="cell-sub">${esc(r.organization)}</small></td><td>${esc(credentialValidityLabel(r.validUntil))}<br>${esc(r.status)}${credentialIsExpired(r)?" • VENCIDA":""}</td><td><label>Modalidade no crachá<select data-credential-display="${esc(r.id)}">${credentialDisplayOptions(credentialDisplay(r.id))}</select></label><button type="button" data-credential-print="${esc(r.id)}">Ver prévia</button>${r.status==="ativa"?`<button type="button" data-credential-revoke="${esc(r.id)}">Revogar</button>`:""}</td></tr>`).join("")}</tbody></table></div><p>${rows.length} credencial(is). Eventos reservados como teste não entram nesta lista.</p>`}</section>`;
 }
 async function printEventCredential(record) {
   const event=state.championships.find(c=>c.id===record.eventId);if(!event)throw Error("Evento indisponível nesta área.");
   const win=window.open("","_blank");if(!win)throw Error("Permita abrir a visualização de impressão neste navegador.");
   win.opener=null;win.document.open();win.document.write(credentialHTML(record,event));win.document.close();
+  const back=win.document.createElement("button");
+  back.type="button";back.className="credential-preview-back";back.textContent="Voltar";back.onclick=()=>win.close();
+  win.document.body.prepend(back);
+  const printCSS=win.document.createElement("style");
+  printCSS.textContent=".credential-preview-back{min-height:44px;margin-bottom:10px}@media print{.credential-preview-back{display:none}}";
+  win.document.head.append(printCSS);
   try {
     const {qrSvg}=await import("./vendor/arena-qrcode.js");
     if(win.closed)return;
