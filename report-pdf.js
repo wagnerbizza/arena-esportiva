@@ -318,7 +318,11 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
     );
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    y = paragraph("Data: " + g.date + "   |   Local: " + g.place, y);
+    y = paragraph("Local do jogo: " + g.place + "   |   Data e horário: " + g.date, y);
+    if (g.homeClass || g.awayClass) {
+      y = paragraph(g.home + " — Turma: " + (g.homeClass || "Não informada"), y);
+      y = paragraph(g.away + " — Turma: " + (g.awayClass || "Não informada"), y);
+    }
     y = paragraph("Arbitragem / mesa: " + g.referees, y);
     y = paragraph(
       "Situação: " +
@@ -337,10 +341,10 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
     y += 3;
     y =
       table(
-        ["Equipe", "Atleta", "Nº", "Posição", "Escalação"],
-        g.roster.map((r) => r.map(clean)),
+        ["Equipe", "Atleta", "Turma", "Nº", "Posição", "Escalação"],
+        g.roster.map((r) => (r.length === 5 ? [r[0], r[1], "—", ...r.slice(2)] : r).map(clean)),
         y,
-        [37, 53, 10, 49, 37],
+        [33, 47, 25, 10, 39, 32],
       ) + 5;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);

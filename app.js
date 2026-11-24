@@ -527,7 +527,7 @@ document.addEventListener("click",async event=>{
     }else if(surface==="certificates"){
       preview.srcdoc=certificateHTML({name:"Nome de exemplo",role:"Atleta",event:championship.name,sport:championship.sport},branding,true);
     }else if(surface==="matchSheets"){
-      const { createReportPDF }=await import("./report-pdf.js?v=previas-4");
+      const { createReportPDF }=await import("./report-pdf.js?v=sumula-turmas-1");
       const match=documentMatches(false)[0];
       const games=match?[reportPDFData(match,branding)]:[{
         title:"Partida de exemplo",sport:"Futebol",home:"Equipe A",away:"Equipe B",score:"2 x 1",
@@ -2330,6 +2330,17 @@ function prepare(rows) {
     )}<p><button data-confirm-import class="primary" ${valid.length ? "" : "disabled"}>Confirmar ${valid.length} cadastros válidos</button></p><small>Linhas com problemas serão ignoradas. No Firebase, cada linha válida tem gravação e auditoria próprias; se houver interrupção, prepare outra prévia.</small>`;
 }
 // 6 — Relatórios. PDF usa a impressão do navegador; Excel contém várias abas.
+function reportRosterClass(player) {
+  return player.className?.trim() ||
+    state.players.find(item => item.id === player.id)?.className?.trim() ||
+    team(player.originTeam || player.team).className?.trim() || "Não informada";
+}
+function reportTeamClass(match, teamId) {
+  const registered = team(teamId).className?.trim();
+  if (registered) return registered;
+  return [...new Set(match.roster.filter(player => player.team === teamId && !player.originTeam)
+    .map(reportRosterClass).filter(label => label !== "Não informada"))].join(", ") || "Não informada";
+}
 function reportPDFData(m,branding=state.partners) {
   return {
           title: matchCompetitionLabel(m),
@@ -2338,6 +2349,8 @@ function reportPDFData(m,branding=state.partners) {
           sport: m.sport,
           home: name(m.home),
           away: name(m.away),
+          homeClass: reportTeamClass(m,m.home),
+          awayClass: reportTeamClass(m,m.away),
           badges: [team(m.home).badge || "", team(m.away).badge || ""],
           score: gameResult(m).join(" x "),
           date: format(m.date),
@@ -2352,6 +2365,7 @@ function reportPDFData(m,branding=state.partners) {
           roster: m.roster.map((p) => [
             name(p.team),
             p.name,
+            reportRosterClass(p),
             p.number,
             p.position,
             lineupLabel(p.reserve),
@@ -2376,13 +2390,14 @@ function reportMatch(m) {
   const roster = [m.home, m.away]
     .map(
       (id, index) =>
-        `<section class="roster-block"><h3>${esc(name(id))}</h3><p>Técnico(a): ${esc(m.coaches?.[index] || "Não informado")}</p>${table(
-          ["Atleta", "Nº", "Posição", "Escalação"],
+        `<section class="roster-block"><h3>${esc(name(id))}</h3><p class="report-team-class"><strong>Turma:</strong> ${esc(reportTeamClass(m,id))}</p><p>Técnico(a): ${esc(m.coaches?.[index] || "Não informado")}</p>${table(
+          ["Atleta", "Turma", "Nº", "Posição", "Escalação"],
           m.roster
             .filter((p) => p.team === id)
             .map((p) =>
               tr([
                 p.name,
+                reportRosterClass(p),
                 p.number,
                 p.position,
                 lineupLabel(p.reserve),
@@ -2404,7 +2419,7 @@ function reportMatch(m) {
   const logoHeader = documentBrandingActive("matchSheets")
     ? (brandingHeader ? `<div style="flex:0 1 auto;min-width:0;max-width:42%">${brandingHeader}</div>` : "")
     : organizationLogoMarkup;
-  return `<article class="card report-sheet"><div class="report-header" style="display:flex;align-items:center;gap:10px"><div style="display:flex;align-items:center;min-width:0;flex:1;gap:12px">${logoHeader}<div style="min-width:0"><span class="tag">SÚMULA DA PARTIDA</span><h2>${esc(matchCompetitionLabel(m))} • ${esc(m.sport)}</h2></div></div><span class="report-brand">WagnerBIZZA</span></div><div class="report-score"><div>${badge(team(m.home))}<strong>${esc(name(m.home))}</strong></div><b>${sc.join(" × ")}</b><div>${badge(team(m.away))}<strong>${esc(name(m.away))}</strong></div></div><div class="report-meta"><p><b>Data:</b> ${esc(format(m.date))}<br><b>Local:</b> ${esc(m.place || "Não informado")}</p><p><b>Arbitragem / mesa:</b> ${esc(m.referees || "Não informada")}<br><b>Situação:</b> ${esc(m.status)} • <b>Etapa:</b> ${esc(m.stage)} • <b>Relógio:</b> ${m.clock ? M.clockText(m) : "Não utilizado"}</p></div>${m.publicNotice ? '<p class="report-alert"><b>Aviso:</b> ' + esc(m.publicNotice) + "</p>" : ""}${m.sets.length ? "<p><b>Parciais:</b> " + m.sets.map((s) => esc(s.score.join(" × "))).join(" / ") + "</p>" : ""}<div class="roster-grid">${roster}</div><h3>Histórico e ocorrências</h3><div class="tablewrap report-events"><table><thead><tr><th>Horário / jogo</th><th>Etapa</th><th>Acontecimento</th><th>Equipe / atleta</th><th>Descrição / motivo</th><th>Responsável</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Nenhum lançamento carregado.</td></tr>'}</tbody></table></div><small>Nomes antigos são recuperados do cadastro disponível; quando ausentes, o UID é preservado.</small><section class="report-notes"><h3>Observações da súmula</h3><p>${esc(m.notes || "Sem observações.")}</p></section><section class="signatures"><div>Árbitro(a): __________________________</div><div>Mesa: __________________________</div><div>Responsável da equipe da casa: __________________________</div><div>Responsável da equipe visitante: __________________________</div><small>Súmula do sistema. Campos para assinatura em papel.</small></section>${partnerMarkup("matchSheets")}</article>`;
+  return `<article class="card report-sheet"><div class="report-header" style="display:flex;align-items:center;gap:10px"><div style="display:flex;align-items:center;min-width:0;flex:1;gap:12px">${logoHeader}<div style="min-width:0"><span class="tag">SÚMULA DA PARTIDA</span><h2>${esc(matchCompetitionLabel(m))} • ${esc(m.sport)}</h2></div></div><span class="report-brand">WagnerBIZZA</span></div><div class="report-score"><div>${badge(team(m.home))}<strong>${esc(name(m.home))}</strong></div><b>${sc.join(" × ")}</b><div>${badge(team(m.away))}<strong>${esc(name(m.away))}</strong></div></div><section class="report-game-guide"><h3>Onde e quando é o jogo</h3><p><strong>Local:</strong> ${esc(m.place || "Não informado")}<br><strong>Data e horário:</strong> ${esc(format(m.date))}</p><p>Confira os times, as turmas e a escalação abaixo. As ocorrências e as assinaturas ficam no fim da súmula.</p></section><div class="report-meta"><p><b>Arbitragem / mesa:</b> ${esc(m.referees || "Não informada")}<br><b>Situação:</b> ${esc(m.status)} • <b>Etapa:</b> ${esc(m.stage)} • <b>Relógio:</b> ${m.clock ? M.clockText(m) : "Não utilizado"}</p></div>${m.publicNotice ? '<p class="report-alert"><b>Aviso:</b> ' + esc(m.publicNotice) + "</p>" : ""}${m.sets.length ? "<p><b>Parciais:</b> " + m.sets.map((s) => esc(s.score.join(" × "))).join(" / ") + "</p>" : ""}<div class="roster-grid">${roster}</div><h3>Histórico e ocorrências</h3><div class="tablewrap report-events"><table><thead><tr><th>Horário / jogo</th><th>Etapa</th><th>Acontecimento</th><th>Equipe / atleta</th><th>Descrição / motivo</th><th>Responsável</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Nenhum lançamento carregado.</td></tr>'}</tbody></table></div><small>Nomes antigos são recuperados do cadastro disponível; quando ausentes, o UID é preservado.</small><section class="report-notes"><h3>Observações da súmula</h3><p>${esc(m.notes || "Sem observações.")}</p></section><section class="signatures"><div>Árbitro(a): __________________________</div><div>Mesa: __________________________</div><div>Responsável da equipe da casa: __________________________</div><div>Responsável da equipe visitante: __________________________</div><small>Súmula do sistema. Campos para assinatura em papel.</small></section>${partnerMarkup("matchSheets")}</article>`;
 }
 function certificatePanel() {
   return `<section class="card certificate-panel noprint"><span class="tag">EMISSÃO DE DOCUMENTOS</span><h2>Certificados</h2><p class="muted">Preencha os dados e clique em Ver prévia. Na prévia, você pode imprimir, salvar em PDF ou baixar os dados em JSON; o sistema não mantém um arquivo permanente de certificados emitidos.</p><datalist id="certificateChampionships">${(state.championships||[]).map(c=>`<option value="${esc(championshipTitle(c))}">${esc(c.sport)}</option>`).join("")}</datalist><form id="arenaCertificateForm"><div class="formgrid">${field("Nome completo do participante", "certificateName", "text", 'required maxlength="120" placeholder="Nome que aparecerá no certificado"')}${field("Participação / reconhecimento", "certificateRole", "text", 'required maxlength="120" value="Participação"')}${field("Evento / campeonato", "certificateEvent", "text", 'required maxlength="150" list="certificateChampionships" placeholder="Nome do evento ou campeonato"')}${field("Modalidade", "certificateSport", "text", 'maxlength="80" placeholder="Ex.: Futebol, Basquete, Vôlei"')}${field("Local", "certificatePlace", "text", 'maxlength="120" placeholder="Cidade ou local do evento"')}${field("Data de emissão", "certificateDate", "date", `required value="${new Date().toISOString().slice(0,10)}"`)}${field("Responsável pela emissão", "certificateIssuer", "text", 'required maxlength="100" value="WagnerBIZZA"')}</div><div class="toolbar"><button class="primary" type="submit">Ver prévia do certificado</button></div></form><div class="certificate-institutional"><h3>Certificado institucional do projeto</h3><p>Documento de reconhecimento da idealização e do desenvolvimento da plataforma Arena Esportiva.</p><div class="toolbar"><button type="button" data-institutional-certificate>Ver prévia institucional</button></div></div><p class="muted">Cada emissão recebe um código identificador. Nesta etapa, o código identifica o documento, mas ainda não representa uma validação pública online nem um registro permanente no Firebase.</p></section>`;
@@ -3722,7 +3737,7 @@ document.addEventListener("click", async (e) => {
       const matches = documentMatches();
       if (!matches.length) throw Error("Nenhuma partida na seleção.");
       toast("Preparando prévia do PDF…");
-      const { createReportPDF } = await import("./report-pdf.js?v=previas-4");
+      const { createReportPDF } = await import("./report-pdf.js?v=sumula-turmas-1");
       const pdf = await createReportPDF(matches.map(m => reportPDFData(m)));
       if (identity === documentPreviewIdentity()) showMatchPDFPreview(pdf);
     } else if (b.hasAttribute("data-report-print")||b.hasAttribute("data-sports-report-pdf")) {
