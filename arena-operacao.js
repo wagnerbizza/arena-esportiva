@@ -198,12 +198,12 @@
   pin.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6v6l4 4v2H5v-2l4-4V3Zm3 12v6"/><path data-op-pin-slash d="M3 3l18 18"/></svg>';
   describeScorePin(pin,prefs.scorePinned);strip.append(pin);
   const anchor=document.createElement('div');anchor.dataset.opScoreAnchor='';anchor.setAttribute('aria-hidden','true');
-  if(back&&!config.standby){back.classList.add('primary','arena-op-back');strip.prepend(back);}
   const monitor=document.createElement('nav');
   monitor.className='arena-op-monitor';monitor.dataset.opMonitor='';monitor.setAttribute('aria-label','Atalhos do placar');
   const editMonitor=document.createElement('button');
-  editMonitor.type='button';editMonitor.dataset.opMonitorEdit='';editMonitor.textContent='Atalhos';
+  editMonitor.type='button';editMonitor.dataset.opMonitorEdit='';editMonitor.textContent='Editar atalhos';
   const monitorRow=document.createElement('div');monitorRow.className='arena-op-monitor-row';monitorRow.append(monitor,editMonitor);
+  if(back&&!config.standby)monitorRow.prepend(back);
   if(config.followClock){
    const follow=document.createElement('button');
    follow.type='button';
