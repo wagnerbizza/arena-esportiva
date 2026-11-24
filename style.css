@@ -2561,3 +2561,7 @@ body:not([data-admin="true"]) .public-event-icon {
 .document-preview-actions[hidden] { display:none; }
 .document-preview-actions { flex-wrap:wrap; margin-block:12px; }
 .document-preview-actions button, [data-document-preview] { min-block-size:44px; }
+
+.team-card-counts { flex-wrap:wrap; gap:8px; margin-block:12px; }
+.team-card-counts button { min-height:44px; max-inline-size:100%; white-space:normal; }
+.admin-metrics > button.overview-shortcut { min-width:0; margin:0; overflow-wrap:anywhere; }

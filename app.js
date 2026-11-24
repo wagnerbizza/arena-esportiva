@@ -1041,8 +1041,10 @@ function accountPendingBanner() {
   const removals = (state.users || []).filter(u => !u.deleted && u.removalRequested).length;
   if (!pending && !removals) return "";
   return `<section class="card public-notice" role="status" aria-live="polite"><h3>Solicitações aguardando você</h3>
-    <p>${pending} solicitação(ões) de acesso · ${removals} solicitação(ões) de exclusão</p>
-    <button type="button" data-review-account-requests>Revisar solicitações</button></section>`;
+    <div class="toolbar team-card-counts">
+      ${pending ? `<button type="button" data-review-account-requests>${pending} ${pending===1?"pedido de acesso":"pedidos de acesso"}</button>` : ""}
+      ${removals ? `<button type="button" data-review-account-requests>${removals} ${removals===1?"pedido de exclusão":"pedidos de exclusão"}</button>` : ""}
+    </div></section>`;
 }
 function accountView() {
   if (C.demo) return `<section class="card"><h2>Minha conta</h2><p>Você está na demonstração local. Nome, e-mail e recuperação de senha aparecem ao entrar com uma conta do Firebase.</p></section>`;
@@ -3434,6 +3436,13 @@ document.addEventListener("click", async (e) => {
       await sairParaApresentacao();
       return;
     }
+    if (b.hasAttribute("data-unassigned-games")) {
+      if (role !== "admin" || section !== "monitor") return;
+      const target=$("#arenaUnassignedGames");
+      target?.focus({preventScroll:true});
+      scrollBelowPinnedCards(target);
+      return;
+    }
     if (b.hasAttribute("data-review-account-requests")) {
       if (role !== "admin") return;
       showRemovedOperators = false;
@@ -4746,7 +4755,7 @@ function operatorMonitor(){
  const assigned=new Set(state.matches.filter(m=>operators.some(u=>(u.matches||[]).includes(m.id)||(m.championshipId&&(u.operatedChampionships||[]).includes(m.championshipId)))).map(m=>m.id));
  const operational=state.matches.filter(m=>!["Encerrada","Homologada","Cancelada"].includes(m.status));
  const unassigned=operational.filter(m=>!assigned.has(m.id));
- return `<section class="card"><span class="tag">ADMINISTRAÇÃO</span><h2>Operadores e distribuição de partidas</h2><p>Acompanhe as aprovações e quem tem autorização em cada jogo. “Aprovado” indica permissão de acesso; não indica que a pessoa esteja conectada neste momento.</p><div class="admin-metrics"><article><strong>${operators.length}</strong><span>Operadores aprovados</span></article><article><strong>${pending.length}</strong><span>Solicitações pendentes</span></article><article><strong>${unassigned.length}</strong><span>Partidas em aberto sem operador</span></article></div><button type="button" data-section="users">Gerenciar acessos e atribuições</button>${table(["Pessoa","E-mail","Situação do acesso","Partidas existentes atribuídas"],people.map(u=>tr([u.name||"Operador",u.email||"Não informado",u.role==="pending"?"Aguardando aprovação":u.role==="operator"?(u.enabled===false?"Bloqueado":"Aprovado"):"Revisar perfil",state.matches.filter(m=>(u.matches||[]).includes(m.id)||(m.championshipId&&(u.operatedChampionships||[]).includes(m.championshipId))).map(m=>`${name(m.home)} × ${name(m.away)} (${m.status})`).join("; ")||"Nenhuma"]))) }${people.length?"":empty(C.demo?"A demonstração não contém contas reais de operadores.":"Nenhum operador cadastrado.")}<h3>Relatórios e documentos</h3><p class="muted">A visualização de operadores continua atualizando em tempo real. Para gerar documentos administrativos, escolha o relatório desejado:</p><div class="toolbar"><button type="button" data-section="matchSheets">Súmulas</button><button type="button" data-section="reports">Relatórios esportivos</button><button type="button" data-section="auditReports">Relatório geral de alterações</button><button type="button" data-section="certificates">Certificados</button></div></section><section class="card"><h3>Partidas em aberto sem operador atribuído</h3>${unassigned.length?table(["Partida","Modalidade","Situação","Local"],unassigned.map(m=>tr([name(m.home)+" × "+name(m.away),m.sport,m.status,m.place||"A definir"]))):empty("Todas as partidas em aberto possuem operador aprovado atribuído, ou não há partidas em aberto.")}<p class="muted">O administrador principal continua autorizado a operar todas as partidas.</p></section>`;
+ return `<section class="card"><span class="tag">ADMINISTRAÇÃO</span><h2>Operadores e distribuição de partidas</h2><p>Acompanhe as aprovações e quem tem autorização em cada jogo. “Aprovado” indica permissão de acesso; não indica que a pessoa esteja conectada neste momento.</p><div class="admin-metrics"><button type="button" class="card overview-shortcut" data-section="users"><strong>${operators.length}</strong><span>Operadores aprovados</span></button><button type="button" class="card overview-shortcut" data-review-account-requests><strong>${pending.length}</strong><span>Solicitações pendentes</span></button><button type="button" class="card overview-shortcut" data-unassigned-games><strong>${unassigned.length}</strong><span>Partidas em aberto sem operador</span></button></div><button type="button" data-section="users">Gerenciar acessos e atribuições</button>${table(["Pessoa","E-mail","Situação do acesso","Partidas existentes atribuídas"],people.map(u=>tr([u.name||"Operador",u.email||"Não informado",u.role==="pending"?"Aguardando aprovação":u.role==="operator"?(u.enabled===false?"Bloqueado":"Aprovado"):"Revisar perfil",state.matches.filter(m=>(u.matches||[]).includes(m.id)||(m.championshipId&&(u.operatedChampionships||[]).includes(m.championshipId))).map(m=>`${name(m.home)} × ${name(m.away)} (${m.status})`).join("; ")||"Nenhuma"]))) }${people.length?"":empty(C.demo?"A demonstração não contém contas reais de operadores.":"Nenhum operador cadastrado.")}<h3>Relatórios e documentos</h3><p class="muted">A visualização de operadores continua atualizando em tempo real. Para gerar documentos administrativos, escolha o relatório desejado:</p><div class="toolbar"><button type="button" data-section="matchSheets">Súmulas</button><button type="button" data-section="reports">Relatórios esportivos</button><button type="button" data-section="auditReports">Relatório geral de alterações</button><button type="button" data-section="certificates">Certificados</button></div></section><section class="card" id="arenaUnassignedGames" tabindex="-1"><h3>Partidas em aberto sem operador atribuído</h3>${unassigned.length?table(["Partida","Modalidade","Situação","Local"],unassigned.map(m=>tr([name(m.home)+" × "+name(m.away),m.sport,m.status,m.place||"A definir"]))):empty("Todas as partidas em aberto possuem operador aprovado atribuído, ou não há partidas em aberto.")}<p class="muted">O administrador principal continua autorizado a operar todas as partidas.</p></section>`;
 }
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-workspace]");if(!b)return;
@@ -4938,7 +4947,7 @@ document.addEventListener("click",async e=>{
  const b=e.target.closest("[data-team-profile],[data-profile-back],[data-profile-tab],[data-profile-edit],[data-profile-archive],[data-profile-new-player],[data-profile-player],[data-profile-remove-player],[data-profile-events],[data-profile-history]");if(!b)return;
  try{
   if(!canManageRosters())throw Error("Conta sem acesso aos cadastros.");
-  if(b.dataset.teamProfile){teamProfileBusy=false;selectedTeamId=b.dataset.teamProfile;teamGameScope="active";teamProfileTab=["roster","games"].includes(b.dataset.initialTeamTab)?b.dataset.initialTeamTab:"data";teamProfileSport="";teamProfileChamp="";teamHistoryRows=[];teamHistoryLoaded=false;teamEventsKey="";teamProfileRequest++;section="teams";teamPlayerDraft=state.players.find(player=>player.id===b.dataset.participantPlayer&&player.team===selectedTeamId)||null;render();if(teamPlayerDraft)$("#team-player")?.scrollIntoView({block:"center"});return;}
+  if(b.dataset.teamProfile){teamProfileBusy=false;selectedTeamId=b.dataset.teamProfile;teamGameScope=b.hasAttribute("data-team-count-link")&&b.dataset.initialTeamTab==="games"?"all":"active";teamProfileTab=["roster","games"].includes(b.dataset.initialTeamTab)?b.dataset.initialTeamTab:"data";teamProfileSport="";teamProfileChamp="";teamHistoryRows=[];teamHistoryLoaded=false;teamEventsKey="";teamProfileRequest++;section="teams";teamPlayerDraft=state.players.find(player=>player.id===b.dataset.participantPlayer&&player.team===selectedTeamId)||null;render();if(teamPlayerDraft)$("#team-player")?.scrollIntoView({block:"center"});return;}
   if(b.hasAttribute("data-profile-back")){teamPlayerDraft=null;teamFormVisible=false;teamEditorId="";selectedTeamId="";teamProfileBusy=false;teamProfileRequest++;render();return;}
   if(b.dataset.profileTab){if(["stats","history"].includes(b.dataset.profileTab)&&role!=="admin")return;teamProfileTab=b.dataset.profileTab;teamPlayerDraft=null;render();return;}
   if(b.hasAttribute("data-profile-edit")){openTeamEditor(selectedTeamId);return;}
@@ -4996,7 +5005,10 @@ function teamDirectoryCard(t){
  ];
  const summary=fields.map(([label,value])=>`<div><strong>${label}:</strong> ${esc(value)}</div>`).join("");
  const games=state.matches.filter(m=>[m.home,m.away].includes(t.id)).length;
- return `<article class="card team-directory-card"><div class="team-directory-title">${badge({...t,name:title})}<span class="status">${t.archived?"Arquivada":"Ativa"}</span></div><h3>${esc(title)}${t.short?.trim()?` <small class="muted">(${esc(t.short.trim())})</small>`:""}</h3><div class="muted">${summary}</div><p>${roster.length} jogador(es) • ${games} ${role==="admin"?"partida(s)":"partida(s) autorizada(s)"}</p><div class="toolbar"><button type="button" class="primary" data-team-profile="${esc(t.id)}">Ver dados da equipe</button>${recordTrashButton("teams", t.id)}<details style="width:100%"><summary>Mais ações</summary><div class="toolbar" style="margin-top:8px"><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="roster">Jogadores</button><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="games">Jogos</button><button type="button" data-edit-team="${esc(t.id)}">Editar cadastro</button> ${role==="admin" ? `<button type="button" data-profile-archive="${esc(t.id)}">${t.archived?"Reativar equipe":"Arquivar equipe"}</button>` : ""}</div></details></div></article>`;
+ return `<article class="card team-directory-card"><div class="team-directory-title">${badge({...t,name:title})}<span class="status">${t.archived?"Arquivada":"Ativa"}</span></div><h3>${esc(title)}${t.short?.trim()?` <small class="muted">(${esc(t.short.trim())})</small>`:""}</h3><div class="muted">${summary}</div><div class="toolbar team-card-counts" aria-label="Totais de ${esc(title)}">
+ <button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="roster" data-team-count-link aria-label="Ver ${roster.length} jogadores de ${esc(title)}">${roster.length} ${roster.length===1?"jogador":"jogadores"}</button>
+ <button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="games" data-team-count-link aria-label="Ver ${games} partidas de ${esc(title)}">${games} ${games===1?"partida":"partidas"}</button>
+ </div><div class="toolbar"><button type="button" class="primary" data-team-profile="${esc(t.id)}">Ver dados da equipe</button>${recordTrashButton("teams", t.id)}<details style="width:100%"><summary>Mais ações</summary><div class="toolbar" style="margin-top:8px"><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="roster">Jogadores</button><button type="button" data-team-profile="${esc(t.id)}" data-initial-team-tab="games">Jogos</button><button type="button" data-edit-team="${esc(t.id)}">Editar cadastro</button> ${role==="admin" ? `<button type="button" data-profile-archive="${esc(t.id)}">${t.archived?"Reativar equipe":"Arquivar equipe"}</button>` : ""}</div></details></div></article>`;
 }
 const participantColumns = [
   ["team", "Equipe"], ["player", "Participante"], ["number", "Nº"], ["position", "Posição"],
@@ -5559,6 +5571,7 @@ boot();
 function navigationDestination(control){
  // Início já posiciona o cabeçalho no topo no clique de navegação.
  if(control.dataset.section==="overview")return null;
+ if(control.hasAttribute("data-team-count-link"))return ".team-profile-heading + .card";
  const routes=[
   ['data-my-account','#view'],['data-account-settings','#view'],
   ['data-section','#view'],['data-workspace','#view'],
