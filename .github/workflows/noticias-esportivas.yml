@@ -1,0 +1,36 @@
+name: Atualizar manchetes esportivas
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: noticias-esportivas
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Consultar RSS da Agência Brasil
+        run: python3 .github/scripts/atualizar-noticias.py "$RUNNER_TEMP/noticias.json"
+      - name: Publicar dados em branch própria
+        shell: bash
+        run: |
+          branch=arena-dados-noticias
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            git fetch origin "$branch"
+            git switch --detach FETCH_HEAD
+          else
+            git switch --orphan "$branch"
+          fi
+          cp "$RUNNER_TEMP/noticias.json" noticias.json
+          git add noticias.json
+          git commit -m "Atualiza manchetes esportivas"
+          git push origin "HEAD:refs/heads/$branch"

@@ -2,7 +2,7 @@
 (function(){
  'use strict';
  if(document.getElementById('arenaWeather'))return;
- const TTL=30*60*1000,defaultPlace={name:'São Paulo, SP',latitude:-23.55,longitude:-46.63};
+ const TTL=15*60*1000,defaultPlace={name:'São Paulo, SP',latitude:-23.55,longitude:-46.63};
  const storage={read(key){try{return JSON.parse(localStorage.getItem(key));}catch{return null;}},write(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch{}}};
  const validPlace=p=>p&&typeof p.name==='string'&&p.name.length<=180&&Number.isFinite(p.latitude)&&Math.abs(p.latitude)<=90&&Number.isFinite(p.longitude)&&Math.abs(p.longitude)<=180;
  let place=storage.read('arena-weather-place-v1');if(!validPlace(place))place=defaultPlace;
@@ -27,20 +27,53 @@
   from { opacity: .55; }
   to { opacity: 1; }
 }
-#arenaWeather[data-weather-clouds] [data-weather-summary]::before {
-  content: "☁";
+@keyframes forecast-sun-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes forecast-rain-fall {
+  from { transform: translateY(-3px); opacity: .65; }
+  to { transform: translateY(4px); opacity: 1; }
+}
+@keyframes forecast-moon-glow {
+  to { opacity: .6; }
+}
+#arenaWeather [data-weather-summary]::before {
   display: inline-block;
   margin-inline-end: .45em;
+}
+#arenaWeather[data-weather-icon="sun"] [data-weather-summary]::before {
+  content: "☀";
+  color: #e4a11b;
+  animation: forecast-sun-spin 12s linear infinite;
+}
+#arenaWeather[data-weather-icon="moon"] [data-weather-summary]::before {
+  content: "☾";
+  color: var(--accent);
+  animation: forecast-moon-glow 3s ease-in-out infinite alternate;
+}
+#arenaWeather[data-weather-icon="cloud"] [data-weather-summary]::before,
+#arenaWeather[data-weather-icon="partly-day"] [data-weather-summary]::before,
+#arenaWeather[data-weather-icon="partly-night"] [data-weather-summary]::before {
+  content: "☁";
   color: var(--accent);
   animation: forecast-cloud-drift 2.8s ease-in-out infinite alternate;
 }
+#arenaWeather[data-weather-icon="partly-day"] [data-weather-summary]::before { content: "⛅"; }
+#arenaWeather[data-weather-icon="partly-night"] [data-weather-summary]::before { content: "☾☁"; }
+#arenaWeather[data-weather-icon="rain"] [data-weather-summary]::before {
+  content: "💧";
+  animation: forecast-rain-fall .9s linear infinite;
+}
+#arenaWeather[data-weather-icon="storm"] [data-weather-summary]::before { content: "⛈"; }
+#arenaWeather[data-weather-icon="fog"] [data-weather-summary]::before { content: "≋"; }
+#arenaWeather[data-weather-icon="snow"] [data-weather-summary]::before { content: "❄"; }
 #arenaWeather[open] .arena-weather-body {
   animation: forecast-detail-in .2s ease-out;
 }
 .arena-weather-pin { transition: color .18s ease, background-color .18s ease; }
 .arena-weather-pin[aria-pressed="true"] { background-color: color-mix(in srgb, var(--accent) 12%, transparent) !important; }
 @media (prefers-reduced-motion: reduce) {
-  #arenaWeather[data-weather-clouds] [data-weather-summary]::before,
+  #arenaWeather[data-weather-icon] [data-weather-summary]::before,
   #arenaWeather[open] .arena-weather-body { animation: none; }
   .arena-weather-pin { transition: none; }
 }
@@ -179,9 +212,16 @@
  function label(code){if(code===0)return 'Céu limpo';if([1,2,3].includes(code))return 'Parcialmente nublado a nublado';if([45,48].includes(code))return 'Nevoeiro';if([51,53,55,56,57].includes(code))return 'Garoa';if([61,63,65,66,67,80,81,82].includes(code))return 'Chuva';if([71,73,75,77,85,86].includes(code))return 'Neve';if([95,96,99].includes(code))return 'Trovoadas';return 'Condição não informada';}
  const finite=x=>typeof x==='number'&&Number.isFinite(x),number=x=>finite(x)?Math.round(x).toLocaleString('pt-BR'):'—';
  function usable(data){return data&&data.current&&finite(data.current.temperature_2m)&&typeof data.current.time==='string'&&data.daily&&Array.isArray(data.daily.time)&&data.daily.time.length>0&&Array.isArray(data.daily.temperature_2m_min)&&Array.isArray(data.daily.temperature_2m_max)&&Array.isArray(data.daily.precipitation_probability_max);}
+ function weatherIcon({weather_code:code,is_day:day}){
+  if(code===0)return day===0?'moon':day===1?'sun':'';
+  if(code===1||code===2)return day===0?'partly-night':day===1?'partly-day':'cloud';
+  return {3:'cloud',45:'fog',48:'fog',51:'rain',53:'rain',55:'rain',56:'rain',57:'rain',
+    61:'rain',63:'rain',65:'rain',66:'rain',67:'rain',71:'snow',73:'snow',75:'snow',
+    77:'snow',80:'rain',81:'rain',82:'rain',85:'snow',86:'snow',95:'storm',96:'storm',99:'storm'}[code]||'';
+ }
  function paint(data,at,stale){
   if(!usable(data))return false;
-  panel.toggleAttribute('data-weather-clouds', data.current.weather_code > 0);
+  panel.dataset.weatherIcon=stale?'':weatherIcon(data.current);
   find('[data-weather-title]').textContent=place.name+' · '+number(data.current.temperature_2m)+' °C';
   find('[data-weather-summary]').textContent=label(data.current.weather_code)+' · '+(stale?'dados salvos':'previsão de 3 dias');
   const days=find('[data-weather-days]');days.replaceChildren();
@@ -194,14 +234,16 @@
   if(!force&&cached&&Number.isFinite(cached.at)&&cached.at<=now&&now-cached.at<TTL&&paint(cached.data,cached.at,false))return;
   if(cached)paint(cached.data,cached.at,true);
   loading=true;lastAttempt=now;panel.setAttribute('aria-busy','true');find('[data-weather-refresh]').disabled=true;status('Atualizando a previsão de '+location.name+'…');
-  try{const url=new URL('https://api.open-meteo.com/v1/forecast');url.search=new URLSearchParams({latitude:location.latitude,longitude:location.longitude,current:'temperature_2m,weather_code',daily:'temperature_2m_min,temperature_2m_max,precipitation_probability_max',forecast_days:'3',timezone:'auto',temperature_unit:'celsius'}).toString();const data=await json(url);if(request!==sequence)return;if(!usable(data))throw Error('Dados incompletos');paint(data,now,false);storage.write(key,{at:now,data});}
-  catch{if(request!==sequence)return;if(!(cached&&paint(cached.data,cached.at,true))){find('[data-weather-title]').textContent='Previsão · '+place.name;find('[data-weather-summary]').textContent='Indisponível no momento';find('[data-weather-days]').replaceChildren();status('Não foi possível consultar o tempo. Tente Atualizar previsão quando estiver conectado.');}else status('Sem atualização agora. Dados salvos da previsão: '+cached.data.current.time.replace('T',' ')+'.');}
+  try{const url=new URL('https://api.open-meteo.com/v1/forecast');url.search=new URLSearchParams({latitude:location.latitude,longitude:location.longitude,current:'temperature_2m,weather_code,is_day',daily:'temperature_2m_min,temperature_2m_max,precipitation_probability_max',forecast_days:'3',timezone:'auto',temperature_unit:'celsius'}).toString();const data=await json(url);if(request!==sequence)return;if(!usable(data))throw Error('Dados incompletos');paint(data,now,false);storage.write(key,{at:now,data});}
+  catch{if(request!==sequence)return;if(!(cached&&paint(cached.data,cached.at,true))){delete panel.dataset.weatherIcon;find('[data-weather-title]').textContent='Previsão · '+place.name;find('[data-weather-summary]').textContent='Indisponível no momento';find('[data-weather-days]').replaceChildren();status('Não foi possível consultar o tempo. Tente Atualizar previsão quando estiver conectado.');}else status('Sem atualização agora. Dados salvos da previsão: '+cached.data.current.time.replace('T',' ')+'.');}
   finally{if(request===sequence){loading=false;panel.setAttribute('aria-busy','false');find('[data-weather-refresh]').disabled=false;}}
  }
  find('[data-weather-refresh]').addEventListener('click',()=>load(true));
- find('[data-weather-search]').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,query=form.elements.city.value.trim();if(query.length<3)return;const request=++searchSequence,button=form.querySelector('button');button.disabled=true;const results=find('[data-weather-results]');results.replaceChildren();status('Buscando cidade…');try{const url=new URL('https://geocoding-api.open-meteo.com/v1/search');url.search=new URLSearchParams({name:query,count:'5',language:'pt',countryCode:'BR'}).toString();const response=await json(url);if(request!==searchSequence)return;const rows=(Array.isArray(response.results)?response.results:[]).filter(row=>validPlace({...row,name:String(row.name||'')})).slice(0,5);if(!rows.length){status('Nenhuma cidade encontrada. Informe o nome completo.');return;}status('Escolha a cidade para consultar a previsão.');for(const row of rows){const name=[row.name,row.admin1,row.country].filter(x=>typeof x==='string'&&x).join(', ').slice(0,180),choice=document.createElement('button');choice.type='button';choice.textContent=name;choice.addEventListener('click',()=>{if(loading){status('Aguarde a consulta atual terminar e selecione a cidade novamente.');return;}place={name,latitude:row.latitude,longitude:row.longitude};storage.write('arena-weather-place-v1',place);results.replaceChildren();find('[data-weather-days]').replaceChildren();find('[data-weather-title]').textContent='Previsão · '+name;find('[data-weather-summary]').textContent='Consultando…';load();});results.append(choice);}}
+ find('[data-weather-search]').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,query=form.elements.city.value.trim();if(query.length<3)return;const request=++searchSequence,button=form.querySelector('button');button.disabled=true;const results=find('[data-weather-results]');results.replaceChildren();status('Buscando cidade…');try{const url=new URL('https://geocoding-api.open-meteo.com/v1/search');url.search=new URLSearchParams({name:query,count:'5',language:'pt',countryCode:'BR'}).toString();const response=await json(url);if(request!==searchSequence)return;const rows=(Array.isArray(response.results)?response.results:[]).filter(row=>validPlace({...row,name:String(row.name||'')})).slice(0,5);if(!rows.length){status('Nenhuma cidade encontrada. Informe o nome completo.');return;}status('Escolha a cidade para consultar a previsão.');for(const row of rows){const name=[row.name,row.admin1,row.country].filter(x=>typeof x==='string'&&x).join(', ').slice(0,180),choice=document.createElement('button');choice.type='button';choice.textContent=name;choice.addEventListener('click',()=>{if(loading){status('Aguarde a consulta atual terminar e selecione a cidade novamente.');return;}place={name,latitude:row.latitude,longitude:row.longitude};storage.write('arena-weather-place-v1',place);results.replaceChildren();find('[data-weather-days]').replaceChildren();find('[data-weather-title]').textContent='Previsão · '+name;delete panel.dataset.weatherIcon;find('[data-weather-summary]').textContent='Consultando…';load();});results.append(choice);}}
   catch{if(request===searchSequence)status('Busca de cidade indisponível. Tente novamente em instantes.');}finally{if(request===searchSequence)button.disabled=false;}});
  window.addEventListener('storage',event=>{if(event.key==='arena-weather-place-v1'){const next=storage.read(event.key);if(validPlace(next)&&!loading){place=next;find('[data-weather-days]').replaceChildren();load();}}});
- document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-lastAttempt>=TTL)load();});
+ const refreshVisible=()=>{if(!document.hidden&&Date.now()-lastAttempt>=TTL)load();};
+ document.addEventListener('visibilitychange',refreshVisible);
+ setInterval(refreshVisible,60*1000);
  load();
 })();
