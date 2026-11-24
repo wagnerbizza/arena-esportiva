@@ -2618,3 +2618,26 @@ label.arena-icon-action,.navigation-search-results .arena-icon-action { justify-
   color:var(--accent); border-color:var(--line);
 }
 #arenaTopMatchMonitor .arena-game-bar-pin .arena-icon { width:20px; height:20px; }
+
+.arena-dialog-heading {
+  display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex:none;
+}
+.arena-dialog-heading > :is(h2,h3) { margin:0; min-width:0; overflow-wrap:anywhere; }
+button.arena-close-x {
+  display:inline-grid; place-items:center; flex:0 0 44px;
+  inline-size:44px; min-block-size:44px; padding:0; margin:0;
+  font:normal 1.6rem/1 system-ui,sans-serif;
+  color:var(--text); background:transparent; border:1px solid var(--line); border-radius:9px;
+}
+button.arena-close-x:hover,button.arena-close-x:focus-visible { color:var(--accent); border-color:currentColor; }
+:is(.personal-tools-dialog,#arenaPreferencesDialog,.arena-op-customize) :is(h2,h3) { line-height:1.2; }
+:is(.personal-tools-dialog,#arenaPreferencesDialog,.arena-op-customize) p { line-height:1.45; }
+:is(.personal-tools-dialog,#arenaPreferencesDialog,.arena-op-customize,#arenaTourPanel)
+  .toolbar > :is(button,.button):not(.primary):not(.arena-close-x) {
+  min-block-size:44px; padding:6px 10px; font-size:.9rem;
+}
+.personal-tools-dialog .personal-tools-footer:empty { display:none; }
+@media(max-width:600px) {
+  .preferences-dialog-heading { flex-wrap:nowrap; }
+  #arenaTourPanel .arena-close-x { flex:0 0 44px; }
+}

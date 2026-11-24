@@ -27,6 +27,22 @@ document.getElementById('demo-proximo').addEventListener('click', () => changeEx
 
 for (const name of ['access', 'preferences']) {
   const dialog = document.getElementById('demo-' + name);
+  const isBackdrop = event => {
+    if (event.target !== dialog) return false;
+    const rect = dialog.getBoundingClientRect();
+    return event.clientX < rect.left || event.clientX >= rect.right ||
+      event.clientY < rect.top || event.clientY >= rect.bottom;
+  };
+  let pressedOutside = false;
+  dialog.addEventListener('pointerdown', event => {
+    pressedOutside = event.isPrimary && event.button === 0 && isBackdrop(event);
+  });
+  dialog.addEventListener('pointercancel', () => { pressedOutside = false; });
+  dialog.addEventListener('click', event => {
+    const outside = pressedOutside && event.detail > 0 && isBackdrop(event);
+    pressedOutside = false;
+    if (outside) dialog.close();
+  });
   document.querySelectorAll('[data-demo-' + name + ']').forEach(button => {
     button.addEventListener('click', () => dialog.showModal());
   });

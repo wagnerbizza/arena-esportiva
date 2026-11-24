@@ -364,12 +364,12 @@
   const prefs=read(key),dialog=document.createElement('dialog');
   dialog.id='arenaOpCustomize';dialog.className='card arena-op-customize';
   dialog.setAttribute('aria-labelledby','arenaOpCustomizeTitle');
-  dialog.innerHTML='<form><h2 id="arenaOpCustomizeTitle">Personalizar caixa</h2>'+
+  dialog.innerHTML='<form><div class="arena-dialog-heading"><h2 id="arenaOpCustomizeTitle">Personalizar caixa</h2><button type="button" class="arena-close-x" data-op-customize-close aria-label="Fechar personalização" title="Fechar personalização">×</button></div>'+
     '<label>Nome<input name="panelName" maxlength="64" placeholder="Nome padrão"></label>'+
     '<label>Cor<select name="color"><option value="">Padrão</option></select></label>'+
     '<label>Posição<select name="position"></select></label>'+
     '<div class="toolbar"><button class="primary" type="submit">Salvar</button>'+
-    '<button type="button" data-op-customize-close>Cancelar</button></div></form>';
+    '</div></form>';
   const form=dialog.querySelector('form');
   form.elements.panelName.value=prefs.names[id]||'';
   for(const [color,[title]] of Object.entries(panelColors))form.elements.color.add(new Option(title,color));

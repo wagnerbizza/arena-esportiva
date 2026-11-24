@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Conheça o Arena • Central Esporte</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=arena-caixas-compactas-1">
   <link rel="stylesheet" href="arena-extras.css">
   <script src="arena-weather.js" defer></script>
   <style>
@@ -144,7 +144,7 @@
     }
   </style>
   <script src="config.js"></script>
-  <script src="apresentacao-arena.js?v=3" defer></script>
+  <script src="apresentacao-arena.js?v=4" defer></script>
 </head>
 <body>
   <header class="demo-header" id="inicio">
@@ -220,7 +220,7 @@
   <dialog class="demo-dialog demo-card" id="demo-access" aria-labelledby="demo-access-title">
     <div class="access-heading">
       <h2 id="demo-access-title">Como deseja acessar?</h2>
-      <form method="dialog"><button type="submit" aria-label="Fechar janela de acesso">×</button></form>
+      <form method="dialog"><button type="submit" class="arena-close-x" aria-label="Fechar janela de acesso" title="Fechar janela de acesso">×</button></form>
     </div>
     <div class="access-options">
       <a class="access-option" href="index.html"><strong>Sou espectador</strong><small>Veja a agenda, os placares e os resultados sem fazer login.</small><span aria-hidden="true">→</span></a>
@@ -231,7 +231,7 @@
   <dialog class="demo-dialog demo-card" id="demo-preferences" aria-labelledby="demo-preferences-title">
     <form method="dialog" class="demo-preferences-heading">
       <h2 id="demo-preferences-title">Preferências e acessibilidade</h2>
-      <button aria-label="Fechar preferências" autofocus>×</button>
+      <button class="arena-close-x" aria-label="Fechar preferências" title="Fechar preferências" autofocus>×</button>
     </form>
     <label for="demo-theme">Tema</label>
     <select id="demo-theme"><option value="dark">Escuro</option><option value="light">Claro</option></select>
