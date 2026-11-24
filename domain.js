@@ -89,7 +89,7 @@
       need(str(d.season, 40), "Informe a edição ou temporada.");
       need(SPORTS.includes(d.sport), "Modalidade inválida.");
       need(["Planejado", "Em andamento", "Encerrado"].includes(d.status), "Situação do campeonato inválida.");
-      need(!previous || previous.sport === d.sport, "A modalidade não pode mudar após o cadastro. Crie outra edição.");
+      need(!previous || previous.sport === d.sport || (a.canChangeChampionshipSport === true && str(d.sportChangeReason,300).length >= 5), "Para alterar a modalidade, use a conta principal e informe um motivo de pelo menos 5 caracteres.");
       const updated = { id: d.id || id(), name: str(d.name, 100), season: str(d.season, 40), sport: d.sport, category: str(d.category), status: d.status };
       need(!s.championships.some((c) => c.id !== updated.id && c.name.toLocaleLowerCase() === updated.name.toLocaleLowerCase() && c.season.toLocaleLowerCase() === updated.season.toLocaleLowerCase() && c.sport === updated.sport && c.category.toLocaleLowerCase() === updated.category.toLocaleLowerCase()), "Esta edição, modalidade e categoria já estão cadastradas.");
       if (previous) s.championships[s.championships.indexOf(previous)] = updated;

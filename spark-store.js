@@ -602,7 +602,7 @@ export async function connectSpark({
       prepared = null;
     if (["team", "player", "settings", "match", "championship"].includes(action.type)) {
       const activeState={...state};for(const entity of ["matches","teams","players","championships"])activeState[entity]=(state[entity]||[]).filter(r=>!r.testData && (entity!=="players" || r.archived!==true));
-      const checked = D.reduce(activeState, action, session.uid);
+      const checked = D.reduce(activeState, {...action, canChangeChampionshipSport: session.uid === OWNER_UID}, session.uid);
       entity = {
         championship: "championships",
         team: "teams",
@@ -755,6 +755,13 @@ export async function connectSpark({
             0,
             500,
           );
+          if (entity === "championships" && before && before.sport !== next.sport) {
+            const reason = String(action.data.sportChangeReason || "").trim();
+            if (session.uid !== OWNER_UID || reason.length < 5 || reason.length > 300)
+              throw Error("Somente o administrador principal pode alterar a modalidade, com motivo de 5 a 300 caracteres.");
+            Object.assign(detail, {type:"modalidade do campeonato", from:before.sport, to:next.sport, reason,
+              text:"Modalidade do campeonato alterada"});
+          }
         } else if(action.type==="playerArchive"){
           if(!before||before.team!==action.teamId||before.archived===true||before.testData===true)throw Error("Jogador indisponível nesta equipe.");
           next={...before,archived:true};
