@@ -2509,3 +2509,17 @@ body:not([data-admin="true"]) .public-event-icon {
 @media (min-width: 768px) {
   .arena-score-center .arena-live-ball { font-size: clamp(2rem, 3vw, 3rem); }
 }
+
+.arena-page-actions {
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-block-end: .75rem;
+}
+.arena-page-actions button {
+  min-block-size: 44px;
+}
+.arena-sidebar .arena-side-item[aria-disabled="true"] {
+  opacity: .65;
+  cursor: default;
+  text-decoration: line-through;
+}

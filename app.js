@@ -1802,13 +1802,13 @@ function render() {
   }
   if (selected && !state.matches.some((m) => m.id === selected)) selected = "";
   const sections = [
-    ["overview", "Visão geral"],
+    ["overview", "Início"],
     ["championships", "Campeonatos"],
     ["standings", "Classificação"],
     ["teams", "Equipes"],
     ["players", "Jogadores"],
     ["createMatch", "Cadastrar partida"],
-    ["matches", "Acompanhar jogos"],
+    ["matches", "Jogos"],
     ["matchSheets", "Súmulas"],
     ["reports", "Relatórios esportivos"],
     ["auditReports", "Relatório geral"],
@@ -1823,13 +1823,16 @@ function render() {
     ["preferences", "Configurações pessoais"],
     ["registrationSheets", "Fichas de inscrição"],
     ["accessHistory", "Histórico de permissões"],
-    ["users", "Usuários e permissões"],
+    ["users", "Permissões"],
     ["account", "Minha conta"],
     ["documentation", "Backups e suporte"],
     ["monitor", "Operadores e partidas"],
     ["imports", "Importar"],
   ];
-  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div><span class="tag">${esc(panelDisplayName())}</span><h1>${esc(selected && section==="matches" ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>`;
+  const pageControls = arenaPageControls();
+  app.innerHTML = `<div class="sectionhead admin-heading noprint"><div>${pageControls}<span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && section==="matches" ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>`;
+  const permissionsForm = app.querySelector("#access-user");
+  if (permissionsForm) updateOperationSummary(permissionsForm);
   stopInvisibleTimeline();
   applyArenaDrawer();
   if(section==="qrCodes")renderQRPreviews();
@@ -2704,11 +2707,25 @@ function updateOperationSummary(form) {
   const matches = [...form.querySelectorAll('input[name="assignedMatches"]:checked')].map(input => input.value);
   const championships = [...form.querySelectorAll('input[name="operatedChampionships"]:checked')].map(input => input.value);
   const count = state.matches.filter(m => matches.includes(m.id) || (m.championshipId && championships.includes(m.championshipId))).length;
-  const corrections=form.elements.historyCorrectPermission?.checked;
-  output.textContent = count+" partida(s) atual(is) para operar, mais as novas vinculadas às categorias marcadas. Anulações: "+(corrections?"permitidas com justificativa somente nessas partidas.":"não autorizadas.");
+  const options = [
+    ["rosterPermission", "Editar e importar equipes e jogadores"],
+    ["championshipPermission", "Criar e editar campeonatos"],
+    ["matchCreatePermission", "Criar jogos"],
+    ["gamesViewPermission", "Consultar todos os jogos publicados"],
+    ["historyCorrectPermission", "Anular lances nos jogos liberados"],
+    ["phaseEditPermission", "Editar grupos e chaves nos campeonatos liberados"],
+  ];
+  const chosen = options.filter(([name]) => form.elements[name]?.checked).map(([, label]) => label);
+  const followed = form.querySelectorAll('input[name="followedEditions"]:checked').length;
+  output.textContent = [
+    `Jogos liberados para operar agora: ${count}.`,
+    `Categorias de campeonato liberadas para operar: ${championships.length}.`,
+    `Campeonatos marcados para consulta: ${followed}.`,
+    chosen.length ? `Outras opções marcadas: ${chosen.join(", ")}.` : "",
+  ].filter(Boolean).join(" ");
   for(const group of form.querySelectorAll("[data-permission-section]")){
     const badge=group.querySelector("[data-permission-count]");
-    if(badge)badge.textContent=group.querySelectorAll('input[type="checkbox"][name]:checked').length+" selecionado(s)";
+    if(badge)badge.textContent=group.querySelectorAll('input[type="checkbox"][name]:checked:not([data-operated-all])').length+" selecionado(s)";
   }
 }
 document.addEventListener("change", event => {
@@ -2796,13 +2813,13 @@ function authorizationSection(id,title,description,content,count,open=false) {
 }
 function operatorAuthorizationGroups(operator,editionOptions) {
  const permissions=operator.permissions||[],checked=id=>permissions.includes(id)?"checked":"";
- const operations=authorizationSection("championships","Operar campeonatos","Libera placar, relógio, cartões e avisos nas categorias autorizadas, inclusive para novas partidas vinculadas.",championshipOperationPicker(operator),(operator.operatedChampionships||[]).length,true);
- const matches=authorizationSection("matches","Operar partidas específicas","Use para jogos avulsos ou exceções. Não precisa marcar novamente as partidas já liberadas por campeonato.",operatorMatchPicker(operator),(operator.matches||[]).length);
- const history=authorizationSection("history","Histórico e anulações","O operador consulta o histórico operacional das partidas autorizadas. Pode anular gols/pontos, cartões, faltas, substituições e pedidos de tempo durante jogos abertos. Retificações após o encerramento ou em sets fechados são exclusivas do administrador. Anular gols ou pontos exige esta permissão adicional e justificativa. Não permite apagar lances, alterar registros anteriores ou editar a súmula administrativa.",`<label class="confirmation-check"><input type="checkbox" name="historyCorrectPermission" ${checked("historyCorrections")}><span>Permitir anular lances com justificativa nas partidas que este operador pode operar.</span></label><p class="muted">A anulação vira um novo registro; o lance original e a auditoria completa permanecem na súmula do administrador. Não concede acesso a outras partidas.</p>`,permissions.includes("historyCorrections")?1:0);
- const phases=authorizationSection("phases","Grupos e chaves","Autoriza editar fase, grupo ou chave e rodada somente nas categorias marcadas em Operar campeonatos.",
-  `<label class="confirmation-check"><input type="checkbox" name="phaseEditPermission" ${checked("editMatchPhases")}><span>Editar grupos e chaves</span></label>`,permissions.includes("editMatchPhases")?1:0);
- const registrations=authorizationSection("records","Cadastros esportivos","Conceda somente os cadastros necessários. Criar uma partida não concede automaticamente sua operação.",`<label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${checked("rosters")}><span>Equipes e jogadores: cadastrar, editar e importar, inclusive técnicos e elencos.</span></label><label class="confirmation-check"><input type="checkbox" name="championshipPermission" ${checked("championships")}><span>Campeonatos e temporadas: cadastrar e editar.</span></label><label class="confirmation-check"><input type="checkbox" name="matchCreatePermission" ${checked("matchesCreate")}><span>Partidas: cadastrar novos jogos.</span></label>`,permissions.filter(id=>["rosters","championships","matchesCreate"].includes(id)).length);
- const viewing=authorizationSection("view","Acompanhar jogos sem operar","Consulta dos jogos publicados. Esta seção não libera gols, cartões, relógio ou anulações.",`<fieldset><legend>Campeonatos para acompanhar</legend>${editionOptions}<label class="confirmation-check"><input type="checkbox" name="gamesViewPermission" ${checked("gamesView")}><span>Consultar todos os jogos publicados, sem alterar placares.</span></label></fieldset>`,(operator.followedEditions||[]).length+(permissions.includes("gamesView")?1:0));
+ const operations=authorizationSection("championships","Operar campeonatos","Marque as categorias em que o operador pode mudar placar, controlar o tempo e registrar lances. Inclui novos jogos dessas categorias.",championshipOperationPicker(operator),(operator.operatedChampionships||[]).length,true);
+ const matches=authorizationSection("matches","Operar jogos avulsos","Marque aqui os jogos que quer liberar um a um. Um jogo já liberado pelo campeonato dispensa outra marcação.",operatorMatchPicker(operator),(operator.matches||[]).length);
+ const history=authorizationSection("history","Anular lances","Libera anulações com motivo em jogos abertos que o operador já pode operar. O lance original continua no histórico.",`<label class="confirmation-check"><input type="checkbox" name="historyCorrectPermission" ${checked("historyCorrections")}><span>Anular gols, pontos, cartões, faltas, substituições e pedidos de tempo.</span></label>`,permissions.includes("historyCorrections")?1:0);
+ const phases=authorizationSection("phases","Editar grupos e chaves","Vale para as categorias marcadas em Operar campeonatos.",
+  `<label class="confirmation-check"><input type="checkbox" name="phaseEditPermission" ${checked("editMatchPhases")}><span>Mudar fase, grupo, chave ou rodada.</span></label>`,permissions.includes("editMatchPhases")?1:0);
+ const registrations=authorizationSection("records","Fazer cadastros","Cada caixa libera um cadastro. Para operar um jogo criado, marque o jogo ou seu campeonato nas opções acima.",`<label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${checked("rosters")}><span>Criar, editar e importar equipes e jogadores.</span></label><label class="confirmation-check"><input type="checkbox" name="championshipPermission" ${checked("championships")}><span>Criar e editar campeonatos e temporadas.</span></label><label class="confirmation-check"><input type="checkbox" name="matchCreatePermission" ${checked("matchesCreate")}><span>Criar novos jogos.</span></label>`,permissions.filter(id=>["rosters","championships","matchesCreate"].includes(id)).length);
+ const viewing=authorizationSection("view","Só consultar jogos","As opções abaixo liberam consulta. Para registrar lances, use Operar campeonatos ou Operar jogos avulsos.",`<fieldset><legend>Campeonatos para consultar</legend>${editionOptions}<label class="confirmation-check"><input type="checkbox" name="gamesViewPermission" ${checked("gamesView")}><span>Consultar todos os jogos publicados.</span></label></fieldset>`,(operator.followedEditions||[]).length+(permissions.includes("gamesView")?1:0));
  return `<div class="toolbar"><button type="button" data-permissions-expand="true">Expandir autorizações</button><button type="button" data-permissions-expand="false">Recolher autorizações</button></div>${operations}${matches}${history}${phases}${registrations}${viewing}`;
 }
 document.addEventListener("click",event=>{
@@ -3289,7 +3306,8 @@ document.addEventListener("click", async (e) => {
       selected = "";
       pendingImport = null;
       render();
-      if (section === "overview") window.scrollTo({top:0, behavior:"instant"});
+      window.scrollTo({top:0, behavior:"instant"});
+      app.querySelector(".admin-heading h1")?.focus({preventScroll:true});
       if (["matchSheets","reports"].includes(section) && !C.demo) {
         toast("Carregando históricos para as súmulas…");
         await cloud.loadHistory(state.matches.map((m) => m.id));
@@ -4249,12 +4267,12 @@ document.addEventListener("click",async event=>{
 const workspaceDefinitions=[
  {id:"games",title:"Jogos",intro:"Operação, agenda e resultados",sections:["overview","matches","createMatch","standings"]},
  {id:"records",title:"Cadastros",intro:"Equipes, jogadores e importação",sections:["teams","players","imports"]},
- {id:"championships",title:"Campeonatos e fichas",intro:"Temporadas e inscrições",sections:["championships","registrationSheets"]},
+ {id:"championships",title:"Campeonatos",intro:"Temporadas e inscrições",sections:["championships","registrationSheets"]},
  {id:"reports",title:"Relatórios",intro:"Súmulas, resultados e auditoria",sections:["matchSheets","reports","auditReports","accessHistory"]},
- {id:"documents",title:"Documentos",intro:"Certificados",sections:["certificates"]},
+ {id:"documents",title:"Certificados",intro:"Certificados",sections:["certificates"]},
  {id:"sharing",title:"QR codes e links",intro:"Compartilhar o painel e os eventos",sections:["qrCodes"]},
  {id:"credentials",title:"Credenciais",intro:"Identificação da organização e dos eventos",sections:["credentials"]},
- {id:"administration",title:"Administração",intro:"Operadores e permissões",sections:["monitor","users"]},
+ {id:"administration",title:"Acessos",intro:"Permissões e operadores",sections:["users","monitor"]},
  {id:"maintenance",title:"Backups e suporte",intro:"Guias, testes e recuperação",sections:["systemCheck","documentation","testData","cleanup"]}
 ];
 function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","matches","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
@@ -4358,16 +4376,17 @@ function arenaSectionIcon(id) {
 }
 function workspaceNavigation(sections){
  const labels=Object.fromEntries(sections),visible=workspaceDefinitions.filter(g=>allowedWorkspaceSections(g).length);
+ const personal=readPersonalTools();
  const seen=new Set(["overview","account"]);
  const brand=$("#systemBrand")?.innerHTML||esc(systemDisplayName());
  const publicHref=trainingMode?"./index.html?demonstracao=1":"./index.html";
  const footerItem=(id,label,icon)=>`<button type="button" data-section="${id}" title="${esc(label)}" aria-label="${esc(label)}" class="${section===id?"is-current":""}" ${section===id?'aria-current="page"':""}>${arenaIcon(icon)}<span>${esc(label)}</span></button>`;
  const groups=visible.map(group=>{
-   const ids=allowedWorkspaceSections(group).filter(id=>!seen.has(id));ids.forEach(id=>seen.add(id));if(!ids.length)return "";
+   const ids=allowedWorkspaceSections(group).filter(id=>!seen.has(id)&&!personal.hidden.includes(id));ids.forEach(id=>seen.add(id));if(!ids.length)return "";
    const active=ids.includes(section),open=arenaOpenGroups.has(group.id)?arenaOpenGroups.get(group.id):active;
-   return `<details class="arena-side-group" data-layout-group="${group.id}" ${open?"open":""}><summary title="${esc(group.title)}" aria-label="${esc(group.title)}">${arenaIcon(group.id)}<span>${esc(group.title)}</span></summary><nav aria-label="${esc(group.title)}">${ids.map(id=>`<button type="button" data-section="${id}" title="${esc(labels[id]||id)}" class="arena-side-item ${section===id?"is-current":""}" ${section===id?'aria-current="page"':""}>${arenaSectionIcon(id)}<span>${esc(labels[id]||id)}</span></button>${id==="matches"?`<div class="arena-side-scopes" aria-label="Filtrar jogos"><button type="button" data-games-shortcut="live">${arenaIcon("live")}<span>Ao vivo</span></button><button type="button" data-games-shortcut="scheduled">${arenaIcon("calendar")}<span>Agenda</span></button><button type="button" data-games-shortcut="finished">${arenaIcon("results")}<span>Resultados</span></button></div>`:""}`).join("")}</nav></details>`;
+   return `<details class="arena-side-group" data-layout-group="${group.id}" ${open?"open":""}><summary title="${esc(group.title)}" aria-label="${esc(group.title)}">${arenaIcon(group.id)}<span>${esc(group.title)}</span></summary><nav aria-label="${esc(group.title)}">${ids.map(id=>`<button type="button" data-section="${id}" title="${esc(labels[id]||id)}" class="arena-side-item ${section===id?"is-current":""}" ${personal.disabled.includes(id)?'aria-disabled="true"':""} ${section===id?'aria-current="page"':""}>${arenaSectionIcon(id)}<span>${esc(labels[id]||id)}</span></button>${id==="matches"?`<div class="arena-side-scopes" aria-label="Filtrar jogos"><button type="button" data-games-shortcut="live">${arenaIcon("live")}<span>Ao vivo</span></button><button type="button" data-games-shortcut="scheduled">${arenaIcon("calendar")}<span>Agenda</span></button><button type="button" data-games-shortcut="finished">${arenaIcon("results")}<span>Resultados</span></button></div>`:""}`).join("")}</nav></details>`;
  }).join("");
- return `<aside id="arenaSidebar" class="arena-sidebar noprint ${navigationQuery.trim()?"arena-search-active":""}" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link" aria-label="${esc(systemDisplayName())}" title="${esc(systemDisplayName())}">${brand}</a><button type="button" data-layout-rail aria-label="Recolher barra lateral" title="Recolher barra lateral" aria-expanded="true" aria-controls="arenaSidebar">${arenaIcon("collapse")}</button><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><div class="arena-sidebar-pinbar"><button type="button" class="arena-side-pin" data-layout-pin aria-label="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}" aria-pressed="${arenaSidebarPinned}" title="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}">${arenaIcon("pin")}<span>${arenaSidebarPinned?"Barra fixada":"Fixar barra aberta"}</span></button></div><div class="arena-side-search"><button type="button" class="arena-side-search-launch" data-side-search-open aria-label="Pesquisar funções" title="Pesquisar funções (Ctrl+K)">${arenaIcon("search")}</button><label for="sideFunctionSearch">Pesquisar no menu</label><div class="arena-side-search-field"><input id="sideFunctionSearch" type="search" value="${esc(navigationQuery)}" placeholder="Buscar função…" autocomplete="off" aria-controls="arenaSideSearchResults" aria-keyshortcuts="Control+k Meta+k"><button type="button" data-clear-navigation-search data-side-clear aria-label="Limpar pesquisa do menu" title="Limpar pesquisa">${arenaIcon("close")}</button></div></div><div class="arena-sidebar-nav"><div id="arenaSideSearchResults" aria-live="polite">${navigationSearchResults()}</div><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" title="Visão geral" aria-label="Visão geral" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Visão geral</span></button>${groups}</div><div class="arena-sidebar-footer">${footerItem("account","Minha conta","account")}${footerItem(role==="admin"?"settings":"preferences","Configurações","maintenance")}${footerItem("profiles","Trocar perfil / conta","profiles")}<button type="button" data-account-guide title="Demonstração e ajuda" aria-label="Demonstração e ajuda">${arenaIcon("help")}<span>Demonstração e ajuda</span></button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener" title="Abrir painel público" aria-label="Abrir painel público">${arenaIcon("games")}<span>Abrir painel público</span></a><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><div class="arena-toolbar noprint"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button></div>${personalTopShortcuts()}<section class="navigation-finder arena-function-search noprint" aria-label="Encontrar função"><label for="functionSearch">Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
+ return `<aside id="arenaSidebar" class="arena-sidebar noprint ${navigationQuery.trim()?"arena-search-active":""}" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link" aria-label="${esc(systemDisplayName())}" title="${esc(systemDisplayName())}">${brand}</a><button type="button" data-layout-rail aria-label="Recolher barra lateral" title="Recolher barra lateral" aria-expanded="true" aria-controls="arenaSidebar">${arenaIcon("collapse")}</button><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><div class="arena-sidebar-pinbar"><button type="button" class="arena-side-pin" data-layout-pin aria-label="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}" aria-pressed="${arenaSidebarPinned}" title="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}">${arenaIcon("pin")}<span>${arenaSidebarPinned?"Barra fixada":"Fixar barra aberta"}</span></button></div><div class="arena-side-search"><button type="button" class="arena-side-search-launch" data-side-search-open aria-label="Pesquisar funções" title="Pesquisar funções (Ctrl+K)">${arenaIcon("search")}</button><label for="sideFunctionSearch">Pesquisar no menu</label><div class="arena-side-search-field"><input id="sideFunctionSearch" type="search" value="${esc(navigationQuery)}" placeholder="Buscar função…" autocomplete="off" aria-controls="arenaSideSearchResults" aria-keyshortcuts="Control+k Meta+k"><button type="button" data-clear-navigation-search data-side-clear aria-label="Limpar pesquisa do menu" title="Limpar pesquisa">${arenaIcon("close")}</button></div></div><div class="arena-sidebar-nav"><div id="arenaSideSearchResults" aria-live="polite">${navigationSearchResults()}</div><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" title="Início" aria-label="Início" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Início</span></button>${groups}</div><div class="arena-sidebar-footer">${footerItem("account","Minha conta","account")}${footerItem(role==="admin"?"settings":"preferences","Configurações","maintenance")}${footerItem("profiles","Trocar perfil / conta","profiles")}<button type="button" data-account-guide title="Demonstração e ajuda" aria-label="Demonstração e ajuda">${arenaIcon("help")}<span>Demonstração e ajuda</span></button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener" title="Abrir painel público" aria-label="Abrir painel público">${arenaIcon("games")}<span>Abrir painel público</span></a><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><div class="arena-toolbar noprint"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button></div>${personalTopShortcuts()}<section class="navigation-finder arena-function-search noprint" aria-label="Encontrar função"><label for="functionSearch">Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
 }
 function openSideFunctionSearch() {
  arenaRailCollapsed=false;
@@ -4859,6 +4878,27 @@ function teamsDirectoryView(){
  if(teamFormVisible)return `<div class="sectionhead"><h2>${teamEditorId?"Editar equipe":"Nova equipe"}</h2><button type="button" data-team-form-back>← Voltar à lista de equipes</button></div>${teamRegistrationView()}`;
  return `<div class="sectionhead team-directory-heading"><div><h2>Equipes</h2><p>Escolha uma equipe abaixo. Em <strong>Ver dados da equipe</strong> você encontra técnico, modalidades, elenco e jogos.</p></div><div class="toolbar"><button type="button" class="primary" data-new-team-form>+ Nova equipe</button><button type="button" data-section="imports">Importar equipes</button></div></div>${participantDirectory()}${listPanel("teams")}`;
 }
+let arenaPreviousPage = "overview";
+let arenaCurrentPage = "overview";
+let arenaPageAccount = "";
+function arenaPageControls() {
+ const account = (C.demo ? "treino" : user?.uid || "") + ":" + role;
+ if (account !== arenaPageAccount) {
+  arenaPageAccount = account;
+  arenaCurrentPage = "overview";
+  arenaPreviousPage = "overview";
+ }
+ if (section !== arenaCurrentPage) {
+  arenaPreviousPage = arenaCurrentPage;
+  arenaCurrentPage = section;
+ }
+ const detailBack = section === "matches" && selected ? "data-back"
+  : section === "teams" && (teamFormVisible || selectedTeamId) ? "data-profile-back" : "";
+ return `<nav class="toolbar arena-page-actions" aria-label="Atalhos da tela">
+  ${section !== "overview" ? `<button type="button" ${detailBack || `data-section="${arenaPreviousPage}"`}>Voltar</button><button type="button" data-section="overview">Início</button>` : ""}
+  <button type="button" data-personal-settings>Personalizar menu</button>
+ </nav>`;
+}
 function locationTrail(){
  const labels={overview:"Visão geral",matches:"Acompanhar jogos",championships:"Campeonatos",standings:"Classificação",teams:"Equipes",players:"Jogadores",imports:"Importar",documentation:"Guias",matchSheets:"Súmulas",reports:"Relatórios esportivos",auditReports:"Relatório geral",certificates:"Certificados",monitor:"Operadores e partidas",users:"Usuários e permissões",settings:"Configurações",cleanup:"Limpeza de testes",testData:"Visibilidade dos registros",credentials:"Credenciais de eventos",account:"Minha conta"};
  if(["account","profiles","preferences","settings"].includes(section))return '<nav class="location-trail" aria-label="Localização atual"><span>Você está em:</span><strong>'+esc(labels[section]||navigationDescriptions[section]?.label||"Minha conta")+'</strong></nav>';
@@ -5156,7 +5196,7 @@ const navigationDescriptions={
  preferences:{label:"Configurações pessoais",description:"Aparência, leitura e atalhos deste navegador.",keywords:"preferencias configuracoes tema leitura atalhos favoritos"},
  registrationSheets:{label:"Fichas de inscrição",description:"Baixar ou imprimir fichas dos campeonatos autorizados.",keywords:"ficha inscricao campeonato participantes documentos imprimir"},
  accessHistory:{label:"Histórico de permissões",description:"Consultar registros de autorização e alterações de acesso dos operadores.",keywords:"relatorio auditoria permissoes acesso registro operadores historico"},
- overview:{label:"Visão geral",description:"Resumo dos jogos atuais e consulta das finalizadas.",keywords:"inicio home encerradas finalizadas atuais próximas"},
+ overview:{label:"Início",description:"Veja os jogos de hoje e os resultados.",keywords:"inicio home encerradas finalizadas atuais próximas"},
  matches:{label:"Acompanhar jogos",description:"Consultar jogos próximos, ao vivo e encerrados; operar somente os atribuídos.",keywords:"gol gols ponto pontos iniciar tempo relogio pausa intervalo etapa cartao cartões faltas substituicoes var estorno anular arbitragem juiz local futebol basquete volei"},
  createMatch:{label:"Cadastrar partida",description:"Programar uma nova partida (se autorizado).",keywords:"criar cadastrar programar nova jogo partida"},
  championships:{label:"Campeonatos",description:"Cadastrar competições e temporadas (se autorizado).",keywords:"competicao torneio campeonato temporada edicao categoria"},
@@ -5169,7 +5209,7 @@ const navigationDescriptions={
  auditReports:{label:"Relatório geral",description:"Consultar alterações administrativas e exportar em PDF, Excel ou JSON.",keywords:"auditoria alterações historico administrativo acesso permissao pdf excel json"},
  certificates:{label:"Certificados",description:"Emitir certificados e salvar a visualização em PDF ou os dados em JSON.",keywords:"certificado certificação participação institucional atleta equipe campeonato evento pdf json"},
  monitor:{label:"Operadores e partidas",description:"Consultar operadores e distribuição dos jogos.",keywords:"monitoramento operador atribuicao distribuicao responsavel"},
- users:{label:"Usuários e permissões",description:"Aprovar, bloquear e definir acessos dos operadores.",keywords:"usuario conta acesso permissao convite cadastro link aprovar bloquear autorizar"},
+ users:{label:"Permissões",description:"Escolha quem pode entrar e quais ações cada operador pode fazer.",keywords:"usuario conta acesso permissao convite cadastro link aprovar bloquear autorizar"},
  systemCheck:{label:"Verificar sistema",description:"Diagnóstico, testes em memória e consultas ao servidor sem alterar dados.",keywords:"verificar sistema diagnostico teste automatico falha erro monitor validacao funcionamento"},
  settings:{label:"Configurações",description:"Alterar título, cor, capa, logo e identidade visual.",keywords:"logotipo logo favicon icone aba titulo nome cor imagem capa configuracao"},
  testData:{label:"Visibilidade dos registros",description:"Ocultar equipes, jogadores e partidas dos painéis ou restaurar a visibilidade.",keywords:"teste testes ocultar reservar restaurar preparar proteção"},
@@ -5513,14 +5553,17 @@ document.addEventListener("submit",async e=>{
 function personalCatalog() {
   if(!admin)return [["active","Jogos atuais"],["live","Ao vivo"],["schedule","Agenda"],["results","Resultados"],["teams","Equipes"],["standings","Classificação"],["fun","Diversão"]].map(([id,label])=>({id,label,public:true}));
   const items=getShortcutCatalog();
+  for(const id of workspaceDefinitions.flatMap(group=>allowedWorkspaceSections(group))){
+    if(!items.some(item=>item.id===id) && navigationDescriptions[id])items.push({id,label:navigationDescriptions[id].label});
+  }
   for(const [id,label] of [["account","Minha conta"],["documentation","Guias e suporte"]])if(!items.some(i=>i.id===id))items.push({id,label});
   return items;
 }
 function personalStorageKey() { return "arena-personal-tools-v1:"+(admin?"central:":"publico:")+(trainingMode?"treino-"+role:user?.uid||"publico"); }
 function readPersonalTools() {
   try { const data=JSON.parse(localStorage.getItem(personalStorageKey())||"null")||{};
-    return {pins:Array.isArray(data.pins)?data.pins.filter(x=>typeof x==="string"):[],favorites:Array.isArray(data.favorites)?data.favorites.filter(x=>typeof x==="string"):[],colors:data.colors&&typeof data.colors==="object"?data.colors:{}};
-  } catch {return {pins:[],favorites:[],colors:{}};}
+    return {hidden:Array.isArray(data.hidden)?data.hidden:[],disabled:Array.isArray(data.disabled)?data.disabled:[],pins:Array.isArray(data.pins)?data.pins.filter(x=>typeof x==="string"):[],favorites:Array.isArray(data.favorites)?data.favorites.filter(x=>typeof x==="string"):[],colors:data.colors&&typeof data.colors==="object"?data.colors:{}};
+  } catch {return {hidden:[],disabled:[],pins:[],favorites:[],colors:{}};}
 }
 function savePersonalTools(value) {try{localStorage.setItem(personalStorageKey(),JSON.stringify(value));}catch{throw Error("O navegador não permitiu salvar suas preferências.");}}
 function personalTopShortcuts() {
@@ -5550,10 +5593,21 @@ function showPersonalTools(id=null) {
   if(!dialog){dialog=document.createElement("dialog");dialog.id="arenaPersonalTools";dialog.className="personal-tools-dialog noprint";dialog.setAttribute("aria-labelledby","personalToolsTitle");document.body.append(dialog);}
   const data=readPersonalTools(),catalog=personalCatalog(),item=catalog.find(i=>i.id===id);
   const colors=[["#145678","Azul"],["#216b43","Verde"],["#75419b","Roxo"],["#923b41","Vermelho"],["#f0bc42","Amarelo"],["#cf6b28","Laranja"]];
-  dialog.innerHTML=`<h2 id="personalToolsTitle">${item?esc(item.label):"Atalhos e favoritos"}</h2><p>Preferências locais desta conta. As permissões e a aparência global permanecem independentes.</p>${item?`<div class="toolbar"><button type="button" data-personal-toggle="pins" data-personal-id="${esc(id)}">${data.pins.includes(id)?"Retirar dos atalhos":"Adicionar aos atalhos"}</button><button type="button" data-personal-toggle="favorites" data-personal-id="${esc(id)}">${data.favorites.includes(id)?"Retirar dos favoritos":"Adicionar aos favoritos"}</button></div><h3>Cor desta aba</h3><div class="toolbar">${colors.map(([color,label])=>`<button type="button" data-personal-color="${color}" data-personal-id="${esc(id)}" style="border-bottom:5px solid ${color}">${label}</button>`).join("")}<button type="button" data-personal-color="default" data-personal-id="${esc(id)}">Cor padrão</button></div>`:`<div class="tablewrap"><table><thead><tr><th>Função</th><th>Atalho no topo</th><th>Favorito</th><th>Ordem dos atalhos</th><th>Opções</th></tr></thead><tbody>${[...catalog].sort((a,b)=>{const rank=x=>data.pins.includes(x)?data.pins.indexOf(x):999;return rank(a.id)-rank(b.id);}).map(i=>`<tr><td>${esc(i.label)}</td><td><button type="button" data-personal-toggle="pins" data-personal-id="${esc(i.id)}" aria-pressed="${data.pins.includes(i.id)}">${data.pins.includes(i.id)?"Retirar":"Adicionar"}</button></td><td><button type="button" data-personal-toggle="favorites" data-personal-id="${esc(i.id)}" aria-pressed="${data.favorites.includes(i.id)}">${data.favorites.includes(i.id)?"★ Sim":"☆ Não"}</button></td><td>${data.pins.includes(i.id)?`<button type="button" data-personal-move="-1" data-personal-id="${esc(i.id)}" aria-label="Mover ${esc(i.label)} para cima">↑</button><button type="button" data-personal-move="1" data-personal-id="${esc(i.id)}" aria-label="Mover ${esc(i.label)} para baixo">↓</button>`:""}</td><td><button type="button" data-personal-options="${esc(i.id)}">Cor e opções</button></td></tr>`).join("")}</tbody></table></div>`}<div class="toolbar">${item?'<button type="button" data-personal-settings>Todos os atalhos</button>':""}<button type="button" data-personal-close>Fechar</button></div>`;
+  const sidebarOptions=item && admin && id!=="overview" && workspaceDefinitions.some(group=>group.sections.includes(id))
+    ? `<div class="toolbar"><button type="button" data-personal-toggle="hidden" data-personal-id="${esc(id)}">${data.hidden.includes(id)?"Mostrar no menu":"Ocultar do menu"}</button><button type="button" data-personal-toggle="disabled" data-personal-id="${esc(id)}">${data.disabled.includes(id)?"Ativar botão do menu":"Desativar botão do menu"}</button></div>` : "";
+  dialog.innerHTML=`<h2 id="personalToolsTitle">${item?esc(item.label):"Atalhos e favoritos"}</h2><p>Os ajustes do menu valem para esta conta neste navegador.</p>${item?`${sidebarOptions}<div class="toolbar"><button type="button" data-personal-toggle="pins" data-personal-id="${esc(id)}">${data.pins.includes(id)?"Desafixar":"Fixar no topo"}</button><button type="button" data-personal-toggle="favorites" data-personal-id="${esc(id)}">${data.favorites.includes(id)?"Retirar dos favoritos":"Adicionar aos favoritos"}</button></div><h3>Cor desta aba</h3><div class="toolbar">${colors.map(([color,label])=>`<button type="button" data-personal-color="${color}" data-personal-id="${esc(id)}" style="border-bottom:5px solid ${color}">${label}</button>`).join("")}<button type="button" data-personal-color="default" data-personal-id="${esc(id)}">Cor padrão</button></div>`:`<div class="tablewrap"><table><thead><tr><th>Função</th><th>Atalho no topo</th><th>Favorito</th><th>Ordem dos atalhos</th><th>Opções</th></tr></thead><tbody>${[...catalog].sort((a,b)=>{const rank=x=>data.pins.includes(x)?data.pins.indexOf(x):999;return rank(a.id)-rank(b.id);}).map(i=>`<tr><td>${esc(i.label)}</td><td><button type="button" data-personal-toggle="pins" data-personal-id="${esc(i.id)}" aria-pressed="${data.pins.includes(i.id)}">${data.pins.includes(i.id)?"Retirar":"Adicionar"}</button></td><td><button type="button" data-personal-toggle="favorites" data-personal-id="${esc(i.id)}" aria-pressed="${data.favorites.includes(i.id)}">${data.favorites.includes(i.id)?"★ Sim":"☆ Não"}</button></td><td>${data.pins.includes(i.id)?`<button type="button" data-personal-move="-1" data-personal-id="${esc(i.id)}" aria-label="Mover ${esc(i.label)} para cima">↑</button><button type="button" data-personal-move="1" data-personal-id="${esc(i.id)}" aria-label="Mover ${esc(i.label)} para baixo">↓</button>`:""}</td><td><button type="button" data-personal-options="${esc(i.id)}">Cor e opções</button></td></tr>`).join("")}</tbody></table></div>`}<div class="toolbar">${item?'<button type="button" data-personal-settings>Todos os atalhos</button>':""}<button type="button" data-personal-close>Fechar</button></div>`;
   dialog.dataset.item=id||"";if(!dialog.open)dialog.showModal();
 }
 document.addEventListener("contextmenu",e=>{const target=personalTarget(e.target);if(!target)return;e.preventDefault();showPersonalTools(target.id);});
+document.addEventListener("keydown",e=>{
+ if(e.key!=="ContextMenu" && !(e.shiftKey&&e.key==="F10"))return;
+ const target=personalTarget(e.target);if(!target)return;
+ e.preventDefault();showPersonalTools(target.id);
+});
+document.addEventListener("click",e=>{
+ if(!e.target.closest('.arena-side-item[aria-disabled="true"]'))return;
+ e.preventDefault();e.stopImmediatePropagation();
+},true);
 let personalPressTimer=null,personalPress=null,personalSuppressUntil=0;
 document.addEventListener("pointerdown",e=>{
  if(!["touch","pen"].includes(e.pointerType)||e.isPrimary===false)return;const target=personalTarget(e.target);if(!target)return;
@@ -5572,7 +5626,7 @@ document.addEventListener("click",e=>{
   if(b.dataset.personalOptions){showPersonalTools(b.dataset.personalOptions);return;}
   const id=b.dataset.personalId;if(!personalCatalog().some(i=>i.id===id))throw Error("Função não disponível para sua conta.");
   const data=readPersonalTools(),dialog=$("#arenaPersonalTools"),current=dialog?.dataset.item||null;
-  if(b.dataset.personalToggle){const key=b.dataset.personalToggle;if(!["pins","favorites"].includes(key))return;data[key]=data[key].includes(id)?data[key].filter(x=>x!==id):[...data[key],id];}
+  if(b.dataset.personalToggle){const key=b.dataset.personalToggle;if(!["pins","favorites","hidden","disabled"].includes(key))return;data[key]=data[key].includes(id)?data[key].filter(x=>x!==id):[...data[key],id];}
   if(b.dataset.personalColor){if(b.dataset.personalColor==="default")delete data.colors[id];else data.colors[id]=b.dataset.personalColor;}
   if(b.dataset.personalMove){const i=data.pins.indexOf(id),j=Math.max(0,Math.min(data.pins.length-1,i+Number(b.dataset.personalMove)));if(i>=0)[data.pins[i],data.pins[j]]=[data.pins[j],data.pins[i]];}
   savePersonalTools(data);render();applyPersonalColors();showPersonalTools(current);
