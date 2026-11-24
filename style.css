@@ -2597,3 +2597,11 @@ body.arena-layout-v2 .admin-heading {
 }
 body.arena-layout-v2 .admin-heading > div { min-width:0; }
 body.arena-layout-v2 .admin-heading h1 { overflow-wrap:anywhere; font-size:clamp(1.65rem,4vw,2.7rem); }
+
+.arena-icon-action { display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+label.arena-icon-action,.navigation-search-results .arena-icon-action { justify-content:flex-start; }
+.arena-icon-action .arena-icon,
+#arenaPersonalTools [data-personal-toggle="favorites"] .arena-icon {
+  inline-size:18px; block-size:18px; flex:none; vertical-align:middle;
+}
+#arenaPersonalTools [data-personal-toggle="favorites"][aria-pressed="true"] .arena-icon { fill:currentColor; }
