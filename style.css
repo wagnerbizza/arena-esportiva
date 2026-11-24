@@ -2641,3 +2641,19 @@ button.arena-close-x:hover,button.arena-close-x:focus-visible { color:var(--acce
   .preferences-dialog-heading { flex-wrap:nowrap; }
   #arenaTourPanel .arena-close-x { flex:0 0 44px; }
 }
+
+.arena-team-identity {
+  display:grid;
+  align-content:center;
+  gap:.2rem;
+  min-width:0;
+  width:100%;
+  padding:.45rem .55rem;
+  border:1px solid var(--line);
+  border-radius:.55rem;
+  background:var(--panel);
+  text-align:center;
+  overflow-wrap:anywhere;
+}
+.arena-team-identity .name { font-size:1rem; line-height:1.2; }
+.arena-team-identity > span { color:var(--muted,var(--text)); font-size:.875rem; line-height:1.25; }

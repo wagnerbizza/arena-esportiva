@@ -1163,6 +1163,17 @@ const team = (id) =>
     badge: "",
   };
 const name = (id) => team(id).name;
+function matchTeamIdentity(match, id, standby = false) {
+  const {name: teamName, short} = standby ? {name:"Sem equipe"} : team(id);
+  const teamClass = standby ? "" : reportTeamClass(match, id);
+  const label = teamClass === "Não informada"
+    ? (short && short !== "?" && short !== teamName ? "Sigla " + short : "Turma não informada")
+    : teamClass && "Turma " + teamClass;
+  return `<div class="arena-team-identity"><strong class="name">${esc(teamName)}</strong>${label ? `<span>${esc(label)}</span>` : ""}</div>`;
+}
+function matchTeamReportLabel(match, id) {
+  return name(id) + " (Turma: " + reportTeamClass(match, id) + ")";
+}
 const format = (d) => new Date(d).toLocaleString("pt-BR");
 const options = (arr, value, label) =>
   arr
@@ -1248,8 +1259,8 @@ function floatingGameClock() {
   </aside>`;
   const lastEvent = monitorLastEvent(match);
   return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock noprint ${pinned ? "is-pinned" : ""}" aria-label="Barra de jogos">
-    <strong>${esc(name(match.home))} × ${esc(name(match.away))}</strong>
-    <p class="arena-followed-score"><b>${esc(gameResult(match).join(" × "))}</b> <span>${esc(match.status)}</span></p>
+    <div class="arena-monitor-teams">${matchTeamIdentity(match, match.home)}<b>${esc(gameResult(match).join(" × "))}</b>${matchTeamIdentity(match, match.away)}</div>
+    <p class="arena-followed-score">${esc(match.status)}</p>
     ${lastEvent ? `<p class="arena-op-monitor-event">Último lance: ${esc(lastEvent)}</p>` : ""}
     ${clockMarkup(match)}
     <div class="toolbar"><button type="button" class="arena-icon-action" data-open="${esc(match.id)}" ${finalStatuses.includes(match.status)?"":"data-cabin-match"}>${arenaIcon(finalStatuses.includes(match.status)?"results":"live")}<span>${finalStatuses.includes(match.status)?"Ver partida":"Abrir operação"}</span></button></div>${gameBarPinButton(pinned)}
@@ -1839,7 +1850,7 @@ function matchCard(m, button = false, standby = false) {
     const goal = activeNotice?.kind === "goal" && animationOffset < 950;
     return `<div class="arena-score-team">${activeNotice
       ? `<span class="arena-match-notice" data-notice="${activeNotice.kind}" role="status">${activeNotice.label}</span>` : ""}
-      ${badge(teamData)}<div class="name">${esc(teamData.name)}</div>
+      ${teamData.badge ? badge(teamData) : ""}${matchTeamIdentity(m, side === 0 ? m.home : m.away, standby)}
       <strong class="arena-score-number${goal ? " arena-score-goal" : ""}"${goal ? ` style="--arena-goal-delay:-${animationOffset}ms"` : ""}>
         <span class="arena-score-value">${sc[side]}</span>${goal ? '<span class="arena-goal-ball" aria-hidden="true">⚽</span>' : ""}
       </strong></div>`;
@@ -2401,7 +2412,7 @@ function reportRosterClass(player) {
 function reportTeamClass(match, teamId) {
   const registered = team(teamId).className?.trim();
   if (registered) return registered;
-  return [...new Set(match.roster.filter(player => player.team === teamId && !player.originTeam)
+  return [...new Set((match.roster || []).filter(player => player.team === teamId && !player.originTeam)
     .map(reportRosterClass).filter(label => label !== "Não informada"))].join(", ") || "Não informada";
 }
 function reportPDFData(m,branding=state.partners) {
@@ -2659,11 +2670,11 @@ async function prepareReportImages(selector) {
 function sportsReportPreview(){
  const matches=documentMatches();
  if(!matches.length)return `<section class="card">${documentReportHeader("Relatório esportivo","reports")}${empty("Nenhuma partida corresponde à seleção.")}${partnerMarkup("reports")}</section>`;
- return `<section class="card">${documentReportHeader("Relatório esportivo","reports")}<h3>Resultados das partidas • ${matches.length}</h3>${table(["Modalidade","Campeonato","Partida","Placar","Data","Local","Situação"],matches.map(m=>tr([m.sport,matchCompetitionLabel(m),name(m.home)+" × "+name(m.away),gameResult(m).join(" × "),format(m.date),m.place||"Não informado",m.status])))}${partnerMarkup("reports")}</section>`;
+ return `<section class="card">${documentReportHeader("Relatório esportivo","reports")}<h3>Resultados das partidas • ${matches.length}</h3>${table(["Modalidade","Campeonato","Equipe da casa","Equipe visitante","Placar","Data","Local","Situação"],matches.map(m=>tr([m.sport,matchCompetitionLabel(m),matchTeamReportLabel(m,m.home),matchTeamReportLabel(m,m.away),gameResult(m).join(" × "),format(m.date),m.place||"Não informado",m.status])))}${partnerMarkup("reports")}</section>`;
 }
 const reportCenterSections = {
   games: { title: "Jogos e resultados", columns: ["Jogo", "Esporte", "Data", "Situação", "Placar"] },
-  teams: { title: "Equipes nos jogos", columns: ["Equipe", "Jogos na seleção"] },
+  teams: { title: "Equipes nos jogos", columns: ["Equipe", "Turma", "Jogos na seleção"] },
   cards: { title: "Cartões recentes", columns: ["Jogo", "Equipe", "Cartão", "Jogador"] },
 };
 const reportCenterOrder = Object.keys(reportCenterSections);
@@ -2677,9 +2688,13 @@ function reportCenterRows() {
   const cards = [];
   for (const match of games) {
     for (const id of new Set([match.home, match.away])) {
-      teamCounts.set(id, (teamCounts.get(id) || 0) + 1);
+      const entry = teamCounts.get(id) || {count:0, classes:new Set()};
+      entry.count++;
+      const teamClass = reportTeamClass(match,id);
+      if (teamClass !== "Não informada") entry.classes.add(teamClass);
+      teamCounts.set(id, entry);
     }
-    const label = name(match.home) + " × " + name(match.away);
+    const label = matchTeamReportLabel(match,match.home) + " × " + matchTeamReportLabel(match,match.away);
     const events = match.publicEvents || [];
     const corrected = new Set(events.map(event => event.correctionOf).filter(Boolean));
     for (const event of events) {
@@ -2689,8 +2704,8 @@ function reportCenterRows() {
     }
   }
   return {
-    games: games.map(m => [name(m.home) + " × " + name(m.away), m.sport, format(m.date), m.status, gameResult(m).join(" × ")]),
-    teams: [...teamCounts].map(([id, count]) => [name(id), count]).sort((a,b) => a[0].localeCompare(b[0], "pt-BR")),
+    games: games.map(m => [matchTeamReportLabel(m,m.home) + " × " + matchTeamReportLabel(m,m.away), m.sport, format(m.date), m.status, gameResult(m).join(" × ")]),
+    teams: [...teamCounts].map(([id, entry]) => [name(id), [...entry.classes].join(", ") || "Não informada", entry.count]).sort((a,b) => a[0].localeCompare(b[0], "pt-BR")),
     cards,
   };
 }
@@ -2812,7 +2827,9 @@ function exportExcel() {
       "Grupo ou chave": matchPhase(m)?.group || "",
       "Rodada ou confronto": matchPhase(m)?.round || "",
       "Equipe da casa": name(m.home),
+      "Turma da casa": reportTeamClass(m,m.home),
       "Equipe visitante": name(m.away),
+      "Turma visitante": reportTeamClass(m,m.away),
       "Pontos casa": D.score(m)[0],
       "Pontos visitante": D.score(m)[1],
       "Sets casa": m.sets.filter((s) => s.score[0] > s.score[1]).length,
@@ -2830,7 +2847,9 @@ function exportExcel() {
       "Modalidade",
       "Competição",
       "Equipe da casa",
+      "Turma da casa",
       "Equipe visitante",
+      "Turma visitante",
       "Pontos casa",
       "Pontos visitante",
       "Sets casa",
@@ -3819,7 +3838,10 @@ document.addEventListener("click", async (e) => {
       if(!matches.length)throw Error("Não há partidas para exportar nesta seleção.");
       download(b.hasAttribute("data-match-json")?"sumulas-esportivas.json":"relatorio-esportivo.json",JSON.stringify({
         formato:b.hasAttribute("data-match-json")?"arena-sumulas-v1":"arena-relatorio-esportivo-v1",
-        geradoEm:new Date().toISOString(),partidas:matches.map(match=>({...match,faseCampeonato:matchPhase(match)}))
+        geradoEm:new Date().toISOString(),partidas:matches.map(match=>({...match,faseCampeonato:matchPhase(match),
+          equipeCasa:{nome:name(match.home),turma:reportTeamClass(match,match.home)},
+          equipeVisitante:{nome:name(match.away),turma:reportTeamClass(match,match.away)}
+        }))
       },(_key,value)=>value?.toDate?value.toDate().toISOString():value,2));
     } else if (b.hasAttribute("data-report-excel")) {
       if (role !== "admin" || !documentPreviewReady()) return;

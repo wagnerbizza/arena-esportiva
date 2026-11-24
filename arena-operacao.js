@@ -184,10 +184,14 @@
   strip.className='arena-op-strip';
   strip.classList.toggle('is-pinned',prefs.scorePinned);
   strip.setAttribute('aria-label','Monitor da partida');
-  const teams=[...score.querySelectorAll('.score .name')].map(node=>node.textContent);
+  const teams=[...score.querySelectorAll('.arena-team-identity')];
   const scores=[...score.querySelectorAll('.arena-score-value')].map(node=>node.textContent);
-  const result=scores.length===2?scores.join(' × '):score.querySelector('.score>strong')?.textContent||'';
-  strip.innerHTML='<div><strong>'+escape(teams.join(' × '))+'</strong><b>'+escape(result)+'</b></div>';
+  const scoreboard=document.createElement('div');
+  scoreboard.className='arena-monitor-teams';
+  const result=document.createElement('b');
+  result.textContent=scores.join(' × ');
+  scoreboard.append(teams[0].cloneNode(true),result,teams[1].cloneNode(true));
+  strip.append(scoreboard);
   const clock=score.querySelector('.game-clock');if(clock)strip.append(clock.cloneNode(true));
   const pin=document.createElement('button');
   pin.type='button';pin.dataset.opPinScore='';pin.className='arena-op-score-pin';

@@ -161,3 +161,22 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 .arena-followed-clock.arena-monitor-waiting { grid-template-columns:minmax(0,1fr); }
 .arena-monitor-waiting p { margin:4px 0 0; overflow-wrap:anywhere; }
 .arena-monitor-waiting .toolbar .button { min-block-size:44px; }
+
+.arena-op-strip > .arena-monitor-teams,
+.arena-followed-clock > .arena-monitor-teams {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  align-items:stretch;
+  gap:clamp(4px,1vw,12px);
+  min-width:0;
+}
+.arena-monitor-teams > b { align-self:center; white-space:nowrap; font-size:clamp(1rem,3vw,1.5rem); }
+.arena-op-strip > .arena-monitor-teams { flex:1 1 280px; }
+.arena-followed-clock > .arena-monitor-teams { grid-column:1 / span 2; }
+@media(max-width:767px) {
+  .arena-followed-clock > .arena-monitor-teams { grid-column:1 / -1; }
+  .arena-followed-clock:not(.arena-monitor-waiting) > .game-clock { grid-row:auto; }
+}
+@media(max-width:480px) {
+  .arena-op-strip > .arena-monitor-teams { flex-basis:100%; }
+}
