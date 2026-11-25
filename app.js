@@ -2744,7 +2744,14 @@ function certificateDocument(data, exportData, layoutOnly = false) {
     main.sheet[data-logo-size] .certificate-logo {
       width:var(--certificate-logo-size); max-height:24mm;
     }
-    @media screen { main.sheet { zoom:var(--certificate-preview-scale,1); } }
+    @media screen {
+      main.sheet { zoom:var(--certificate-preview-scale,1); }
+      [data-certificate-movable] { cursor:grab; touch-action:none; user-select:none; position:relative; z-index:1; }
+      [data-certificate-movable]:active { cursor:grabbing; }
+      .sheet .certificate-logo[data-certificate-movable] { position:absolute; }
+      [data-certificate-selected] { outline:2px dashed #1687a4; outline-offset:3px; }
+    }
+    .certificate-preview-tools + .sheet .bottom { width:100%; grid-template-columns:minmax(0,1fr); }
     @media print { .certificate-preview-tools { display:none; } }
   </style><section class="certificate-preview-tools" aria-label="Editor do certificado">
     <div class="certificate-preview-actions">
@@ -2759,6 +2766,13 @@ function certificateDocument(data, exportData, layoutOnly = false) {
         <label>Tamanho dos logos
           <select id="certificate-logo-size"><option value="">Padrão</option><option value="14">Pequeno</option><option value="22">Médio</option><option value="30">Grande</option></select>
         </label>
+      </div>
+      <p>Segure e arraste um logo ou uma assinatura na folha. Use os controles para ajustar a posição com precisão.</p>
+      <div class="certificate-layout-controls">
+        <label>Elemento<select id="certificate-move-target"></select></label>
+        <label>Posição horizontal<input type="range" id="certificate-move-x" min="-100" max="100" step="0.5"></label>
+        <label>Posição vertical<input type="range" id="certificate-move-y" min="-100" max="100" step="0.5"></label>
+        <button type="button" id="certificate-reset-position">Restaurar posição</button>
       </div>
       <div id="certificate-signature-editor"></div>
       <div class="certificate-preview-actions">
@@ -2814,8 +2828,11 @@ function setupCertificateLayout(doc, sheet) {
   bottom.append(signatures);
   const key = "arena-certificate-layout-v1:" + JSON.stringify([user?.uid || "local", !!C.demo]);
   let rows = [];
+  let logos = [];
+  const positionEditor = setupCertificatePositionEditor(doc,sheet,find);
+  const logoElements = [...sheet.querySelectorAll(".certificate-logo,.arena-doc-brand:not(.arena-doc-background) img")];
   function readLayout() {
-    return {alignment:alignment.value,size:size.value,signatures:rows.map(row => ({...row}))};
+    return {alignment:alignment.value,size:size.value,logos,signatures:rows.map(row => ({...row}))};
   }
   function update() {
     const value = alignment.value;
@@ -2826,14 +2843,19 @@ function setupCertificateLayout(doc, sheet) {
     sheet.style.setProperty("--certificate-logo-right", value === "right" ? "12mm" : "auto");
     sheet.style.setProperty("--certificate-logo-shift", value === "center" ? "-50%" : "0%");
     sheet.style.setProperty("--certificate-logo-size", size.value ? size.value + "mm" : "");
+    const movable = logoElements.map((element,index) => ({
+      element, label:(element.alt || "Logo") + " " + (index + 1), position:logos[index]
+    }));
     const filled = rows.filter(row => row.name.trim() || row.title.trim());
     signatures.style.setProperty("--signature-count", String(Math.max(1, filled.length)));
     signatures.replaceChildren(...filled.map(row => {
       const line = doc.createElement("div");
       line.className = "signature";
       line.textContent = [row.name.trim(), row.title.trim()].filter(Boolean).join("\n");
+      movable.push({element:line,label:row.name.trim() || row.title.trim(),position:row});
       return line;
     }));
+    positionEditor(movable);
   }
   function drawEditor() {
     editor.innerHTML = rows.map((row, index) => `<div class="certificate-signature-editor">
@@ -2858,8 +2880,10 @@ function setupCertificateLayout(doc, sheet) {
   function load(layout = {}) {
     alignment.value = ["left","center","right"].includes(layout.alignment) ? layout.alignment : "left";
     size.value = ["14","22","30"].includes(layout.size) ? layout.size : "";
+    const offset = value => Number.isFinite(value) ? Math.max(-100,Math.min(100,value)) : 0;
+    logos = logoElements.map((_,index) => ({x:offset(layout.logos?.[index]?.x),y:offset(layout.logos?.[index]?.y)}));
     rows = (Array.isArray(layout.signatures) ? layout.signatures : defaults).slice(0,4).map(row => ({
-      name:String(row?.name ?? "").slice(0,80),title:String(row?.title ?? "").slice(0,80)
+      name:String(row?.name ?? "").slice(0,80),title:String(row?.title ?? "").slice(0,80),x:offset(row?.x),y:offset(row?.y)
     }));
     drawEditor();
   }
@@ -2869,7 +2893,7 @@ function setupCertificateLayout(doc, sheet) {
   alignment.onchange = size.onchange = update;
   add.onclick = () => {
     if (rows.length >= 4) return;
-    rows.push({name:"",title:""});
+    rows.push({name:"",title:"",x:0,y:0});
     drawEditor();
     editor.lastElementChild.querySelector("input").focus();
   };
@@ -2887,6 +2911,73 @@ function setupCertificateLayout(doc, sheet) {
     } catch { status.textContent = "Modelo restaurado nesta prévia."; }
   };
   return readLayout;
+}
+
+function setupCertificatePositionEditor(doc, sheet, find) {
+  const target = find("move-target");
+  const horizontal = find("move-x");
+  const vertical = find("move-y");
+  const reset = find("reset-position");
+  let items = [];
+  const paint = ({element,position}) => {
+    element.style.translate = `${position.x * sheet.offsetWidth / 100}px ${position.y * sheet.offsetHeight / 100}px`;
+  };
+  function select() {
+    const item = items[target.selectedIndex];
+    for (const entry of items) entry.element.toggleAttribute("data-certificate-selected", entry === item);
+    horizontal.disabled = vertical.disabled = reset.disabled = !item;
+    horizontal.value = item?.position.x ?? 0;
+    vertical.value = item?.position.y ?? 0;
+  }
+  function move(item,x,y) {
+    const bounds = sheet.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+    const rect = item.element.getBoundingClientRect();
+    const baseX = rect.left - bounds.left - item.position.x * bounds.width / 100;
+    const baseY = rect.top - bounds.top - item.position.y * bounds.height / 100;
+    const clamp = (value,start,length,total) =>
+      Math.max(-start / total * 100, Math.min((total - length - start) / total * 100,value));
+    item.position.x = clamp(x,baseX,rect.width,bounds.width);
+    item.position.y = clamp(y,baseY,rect.height,bounds.height);
+    paint(item);
+    select();
+  }
+  target.onchange = select;
+  horizontal.oninput = vertical.oninput = () => move(items[target.selectedIndex],+horizontal.value,+vertical.value);
+  reset.onclick = () => move(items[target.selectedIndex],0,0);
+  return next => {
+    const previous = items[target.selectedIndex]?.position;
+    items = next;
+    target.replaceChildren(...items.map(item => {
+      const option = doc.createElement("option");
+      option.textContent = item.label;
+      return option;
+    }));
+    target.selectedIndex = Math.max(0,items.findIndex(item => item.position === previous));
+    target.disabled = !items.length;
+    items.forEach((item,index) => {
+      const {element,position} = item;
+      element.dataset.certificateMovable = "";
+      element.draggable = false;
+      paint(item);
+      element.onpointerdown = event => {
+        if (event.button !== 0 || !event.isPrimary) return;
+        event.preventDefault();
+        target.selectedIndex = index;
+        select();
+        element.setPointerCapture(event.pointerId);
+        const start = {x:position.x,y:position.y,clientX:event.clientX,clientY:event.clientY};
+        element.onpointermove = pointer => {
+          if (pointer.pointerId !== event.pointerId) return;
+          const bounds = sheet.getBoundingClientRect();
+          move(item,start.x + (pointer.clientX-start.clientX)*100/bounds.width,
+            start.y + (pointer.clientY-start.clientY)*100/bounds.height);
+        };
+        element.onlostpointercapture = () => { element.onpointermove = null; };
+      };
+    });
+    select();
+  };
 }
 
 function filteredAuditRows(rows=generalAuditRows) {
