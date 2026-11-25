@@ -609,7 +609,7 @@
   const dialog=document.createElement('dialog');
   dialog.className='card arena-op-quick-dialog';
   dialog.setAttribute('aria-labelledby','arenaOpQuickTitle');
-  dialog.innerHTML='<div class="arena-dialog-heading"><h2 id="arenaOpQuickTitle">'+escape(labels[id])+'</h2><button type="button" class="arena-close-x" aria-label="Fechar">×</button></div><p data-op-quick-feedback role="status" hidden></p>';
+  dialog.innerHTML='<div class="arena-dialog-heading"><h2 id="arenaOpQuickTitle">'+escape(labels[id])+'</h2><button type="button" class="arena-close-x" aria-label="Fechar" title="Fechar">×</button></div><p data-op-quick-feedback role="status" hidden></p>';
   const marker=document.createComment('Destino do controle da cabine');
   content.before(marker);
   dialog.append(content);root.append(dialog);
@@ -703,7 +703,8 @@
   const peers=prefs.monitor.filter(key=>!dedicatedCommands.includes(key)&&(prefs.side.includes(key)?'side':'below')===place);
   const index=peers.indexOf(id);
   const reorder=index<0?'':'<button value="earlier" '+(index===0?'disabled':'')+'>Mover para antes</button><button value="later" '+(index===peers.length-1?'disabled':'')+'>Mover para depois</button>';
-  dialog.innerHTML='<form method="dialog"><strong>'+escape(monitorCommands[id][0])+'</strong><div class="toolbar"><button value="side">Ao lado</button><button value="below">Abaixo</button>'+reorder+'<button value="remove">Retirar do visor</button><button value="cancel" class="arena-close-x" aria-label="Fechar">×</button></div></form>';
+  dialog.setAttribute('aria-labelledby','arenaOpDockTitle');
+  dialog.innerHTML='<form method="dialog"><div class="arena-dialog-heading"><h2 id="arenaOpDockTitle">'+escape(monitorCommands[id][0])+'</h2><button value="cancel" class="arena-close-x" aria-label="Fechar" title="Fechar">×</button></div><div class="toolbar"><button value="side">Ao lado</button><button value="below">Abaixo</button>'+reorder+'<button value="remove">Retirar do visor</button></div></form>';
   document.body.append(dialog);
   dialog.addEventListener('close',()=>{
    const action=dialog.returnValue;
