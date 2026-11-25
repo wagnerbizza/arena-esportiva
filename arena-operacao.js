@@ -43,6 +43,8 @@
  const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>Object.hasOwn(panelColors,saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set(saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id)))]:[...defaultMonitor],side:Array.isArray(saved?.side)?saved.side.filter(id=>Object.hasOwn(monitorCommands,id)):[],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
  let syncedLayout=null;
+ const syncMessages=new Map();
+ const pendingLayouts=new Map();
  function currentWorkspace(key){
   return [...document.querySelectorAll('.arena-operation-workspace')].find(root=>root.dataset.opKey===key);
  }
@@ -57,27 +59,58 @@
  function mountCustomization(container){
   const root=container.querySelector('.arena-operation-workspace');
   const settings=root?.querySelector('.arena-op-settings');
-  if(settings)container.querySelector('[data-operation-customization]')?.append(settings);
+  if(settings){
+   container.querySelector('[data-operation-customization]')?.append(settings);
+   const message=syncMessages.get(root.dataset.opKey);
+   if(message)syncStatus(root.dataset.opKey,message);
+  }
  }
  function syncStatus(key,text){
+  syncMessages.set(key,text);
   const label=currentWorkspace(key) && tools(currentWorkspace(key))?.querySelector('[data-op-save-status]');
   if(label)label.textContent=text;
+ }
+ function pendingLayout(key){
+  if(pendingLayouts.has(key))return pendingLayouts.get(key);
+  try{return localStorage.getItem(key+':pending');}catch{return null;}
+ }
+ async function flushLayout(connection){
+  if(!connection||syncedLayout!==connection||connection.writing)return;
+  const {key,remote}=connection,pending=pendingLayout(key);
+  if(!pending)return;
+  connection.writing=true;
+  let saved=false;
+  syncStatus(key,'Sincronizando ajustes da cabine…');
+  try{
+   await remote.write(pending);
+   if(pendingLayout(key)===pending){
+    pendingLayouts.delete(key);
+    try{localStorage.removeItem(key+':pending');}catch{}
+   }
+   saved=true;
+   if(syncedLayout===connection)syncStatus(key,'Preferências sincronizadas com a conta.');
+  }catch{
+   if(syncedLayout===connection)syncStatus(key,'Ajustes pendentes de sincronização. Tente novamente quando estiver conectado.');
+  }finally{
+   connection.writing=false;
+   if(saved && pendingLayout(key))flushLayout(connection);
+  }
  }
  function connectLayout(key,remote){
   if(!remote||!remote.uid)return;
   if(syncedLayout?.key===key&&syncedLayout.remote.uid===remote.uid)return;
   syncedLayout?.stop?.();
-  const connection={key,remote,writes:0};
+  const connection={key,remote,writing:false};
   syncedLayout=connection;
+  syncStatus(key,'Conferindo os ajustes da conta…');
   connection.stop=remote.watch(payload=>{
-   if(syncedLayout!==connection||connection.writes)return;
-   if(payload===null){
-    let local;try{local=localStorage.getItem(key);}catch{}
-    if(local)remote.seed(JSON.stringify(read(key))).catch(()=>{});
+   if(syncedLayout!==connection||connection.writing)return;
+   if(pendingLayout(key)){flushLayout(connection);return;}
+   let stored;try{stored=JSON.parse(payload);}catch{}
+   if(!Array.isArray(stored?.order)){
+    syncStatus(key,'Ainda não há ajustes da cabine salvos na conta.');
     return;
    }
-   let stored;try{stored=JSON.parse(payload);}catch{return;}
-   if(!stored||typeof stored!=='object'||Array.isArray(stored)||!Array.isArray(stored.order))return;
    sessionPreferences.set(key,stored);
    const prefs=read(key);
    try{localStorage.setItem(key,JSON.stringify(prefs));}catch{}
@@ -91,21 +124,23 @@
     apply(root,prefs);
    }
    syncStatus(key,'Preferências sincronizadas com a conta.');
-  },()=>syncStatus(key,'Sincronização indisponível. Preferências mantidas neste navegador.'));
+  },()=>syncStatus(key,'Não foi possível consultar os ajustes da conta. Confira a conexão e o acesso.'));
+  flushLayout(connection);
  }
  function save(root,prefs){
-  const key=root.dataset.opKey;
+  const key=root.dataset.opKey,payload=JSON.stringify(prefs);
   sessionPreferences.set(key,prefs);
-  try{localStorage.setItem(key,JSON.stringify(prefs));}catch{}
-  const connection=syncedLayout;
-  if(connection?.key!==key){syncStatus(key,'Preferências salvas neste navegador.');return;}
-  connection.writes++;
-  connection.remote.write(JSON.stringify(prefs)).then(()=>{
-   if(syncedLayout===connection)syncStatus(key,'Preferências sincronizadas com a conta.');
-  },()=>{
-   if(syncedLayout===connection)syncStatus(key,'Sincronização indisponível. Preferências mantidas neste navegador.');
-  }).finally(()=>connection.writes--);
+  try{localStorage.setItem(key,payload);}catch{}
+  if(key.startsWith('arena-operation-layout-v1:treinamento-')){
+   syncStatus(key,'Ajustes do treinamento salvos neste navegador.');
+   return;
+  }
+  pendingLayouts.set(key,payload);
+  try{localStorage.setItem(key+':pending',payload);}catch{}
+  if(syncedLayout?.key===key)flushLayout(syncedLayout);
+  else syncStatus(key,'Ajustes salvos neste aparelho. Entre com sua conta para sincronizar.');
  }
+ window.addEventListener('online',()=>flushLayout(syncedLayout));
 
  function panel(id,node){if(!node)return null;node.removeAttribute('hidden');node.classList?.remove('card');const section=document.createElement('section');section.id='arena-op-'+id;section.className='card arena-op-panel';section.dataset.opPanel=id;section.tabIndex=-1;section.innerHTML='<div class="arena-op-heading"><h2>'+labels[id]+'</h2><button type="button" data-op-favorite="'+id+'" aria-pressed="false" title="Favoritar '+labels[id]+'">Favoritar</button></div>';const toggle=document.createElement('button');toggle.type='button';toggle.dataset.opFold=id;
   toggle.setAttribute('aria-controls',section.id+'-content');
@@ -320,7 +355,7 @@
   root.append(strip);
   if(config.chooser)root.insertAdjacentHTML("beforeend",config.chooser);
   const timeline=score.querySelector('.match-timeline');if(timeline)timeline.remove();const scoreWrap=document.createElement('section');scoreWrap.className='arena-op-score';const info=document.createElement('details');info.className='arena-op-match-details';info.innerHTML='<summary>Detalhes da partida</summary>';info.append(score);scoreWrap.append(info);const guide=old.querySelector('.match-guide');root.append(scoreWrap);
-  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.innerHTML='<summary>Personalizar a cabine</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Marque a caixa para exibir o atalho. Arraste pela alça até um dos destinos abaixo, ou toque no botão Posicionar, Ao lado ou Abaixo.</p><div class="arena-op-dock-targets"><div data-op-dock="side"><strong>Ao lado do visor</strong><div data-op-dock-preview="side"></div></div><div data-op-dock="below"><strong>Abaixo do visor</strong><div data-op-dock-preview="below"></div></div><button type="button" data-op-view-monitor>Ver o visor</button></div><div data-op-monitor-choices></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
+  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.innerHTML='<summary>Personalizar a cabine</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Marque a caixa para exibir o atalho. Arraste pela alça até um dos destinos abaixo, ou toque no botão Posicionar, Ao lado ou Abaixo.</p><div class="arena-op-dock-targets"><div data-op-dock="side"><strong>Ao lado do visor</strong><div data-op-dock-preview="side"></div></div><div data-op-dock="below"><strong>Abaixo do visor</strong><div data-op-dock-preview="below"></div></div><button type="button" data-op-view-monitor>Ver o visor</button></div><div data-op-monitor-choices></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><button type="button" data-op-sync>Sincronizar ajustes deste aparelho</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
   const nav=document.createElement('nav');nav.className='toolbar arena-op-shortcuts';nav.dataset.opShortcuts='';nav.setAttribute('aria-label','Meus atalhos da operação');settings.append(nav);const grid=document.createElement('div');grid.className='arena-op-grid';grid.dataset.opGrid='';root.append(grid);
   for(const [group,label] of [['pinned','Caixas fixadas no topo'],['regular','Caixas desafixadas']]){
    const lane=document.createElement('div');lane.dataset.opGroup=group;
@@ -670,10 +705,18 @@
   showNoMatch(root,control);
  },true);
  document.addEventListener('click',event=>{
-  const button=event.target.closest('[data-op-monitor-edit],[data-op-monitor-run],[data-op-place],[data-op-view-monitor],[data-op-choose],[data-op-quick-panel],[data-op-unavailable],[data-op-dock-command][data-op-jump="notices"],[data-op-dock-command][data-op-jump="events"]');
+  const button=event.target.closest('[data-op-sync],[data-op-monitor-edit],[data-op-monitor-run],[data-op-place],[data-op-view-monitor],[data-op-choose],[data-op-quick-panel],[data-op-unavailable],[data-op-dock-command][data-op-jump="notices"],[data-op-dock-command][data-op-jump="events"]');
   if(!button||button.disabled)return;
   const root=workspaceFor(button);
   if(!root)return;
+  if(button.hasAttribute('data-op-sync')){
+   if(syncedLayout?.key!==root.dataset.opKey){
+    syncStatus(root.dataset.opKey,'A sincronização exige uma conta conectada.');
+   }else if(pendingLayout(root.dataset.opKey) || confirm('Usar os ajustes deste aparelho como padrão da sua conta?')){
+    save(root,read(root.dataset.opKey));
+   }
+   return;
+  }
   if(button.hasAttribute('data-op-choose')){
    chooseMatch(root);
    return;
