@@ -2657,3 +2657,69 @@ button.arena-close-x:hover,button.arena-close-x:focus-visible { color:var(--acce
 }
 .arena-team-identity .name { font-size:1rem; line-height:1.2; }
 .arena-team-identity > span { color:var(--muted,var(--text)); font-size:.875rem; line-height:1.25; }
+
+/* Navegação, cadastros e controles do espaço de trabalho. */
+.arena-page-actions { margin:0 0 10px; }
+.arena-page-actions:empty { display:none; }
+.location-trail.noprint { margin:0 0 12px; color:var(--text); }
+.location-trail > button { font-weight:500; }
+.arena-ui-customization { margin:0 0 12px; border-color:var(--arena-tools-tint,var(--line)); }
+.arena-ui-customization .personal-shortcuts,
+.arena-ui-customization .arena-op-settings { background:transparent; border:0; box-shadow:none; padding:8px 0; margin:0; }
+.arena-ui-customization[data-align=end] .personal-shortcuts .toolbar { justify-content:flex-end; }
+.arena-ui-customization [data-shortcut-size=large] { min-height:52px; padding-inline:20px; }
+.arena-ui-customization .arena-op-settings { border-top:1px solid var(--line); }
+.arena-ui-customization .arena-toolbar { margin:0; }
+.arena-ui-customization .arena-current-profile { display:none; }
+.arena-function-search { margin-block:0 14px; }
+.arena-related-screens { margin-block:clamp(28px,5vw,60px) 18px; gap:8px; }
+.arena-related-screens > strong { flex-basis:100%; font-weight:600; }
+.arena-related-screens button { font-weight:500; min-block-size:44px; }
+body.arena-layout-v2 :is(button,.button,summary):not(.primary,.is-current,[aria-current=page],.quick-score) { font-weight:500; }
+body.arena-layout-v2 :is(form label,.list-controls label,.navigation-finder label) { font-weight:500; }
+.arena-share-action { margin-block:8px; }
+.arena-share-action > summary { display:inline-flex; min-height:44px; align-items:center; width:fit-content; padding:6px 12px; cursor:pointer; border:1px solid var(--line); border-radius:10px; color:var(--text); }
+.arena-share-action > summary::-webkit-details-marker { display:none; }
+.arena-share-action > summary:hover { border-color:var(--accent); }
+.arena-record-actions .toolbar { margin:0; }
+.arena-record-results { margin-block-start:16px; }
+.arena-header-brief { display:none; }
+.arena-sidebar-resize { display:none; }
+@media screen and (min-width:768px) {
+  body.arena-central-ready:not(.arena-rail-collapsed):not(.arena-rail-peek) { --arena-sidebar-width:var(--arena-user-rail,240px); }
+  body.arena-central-ready:not(.arena-rail-collapsed):not(.arena-rail-peek) .arena-sidebar-resize {
+    display:grid; place-items:center; position:fixed; z-index:25; inset-block-start:45%;
+    left:calc(var(--arena-sidebar-width) - 12px); width:24px; min-width:0; height:52px; padding:0;
+    opacity:0; touch-action:none; cursor:ew-resize;
+  }
+  body.arena-central-ready #arenaSidebar:hover + .arena-sidebar-resize,
+  body.arena-central-ready .arena-sidebar-resize:is(:hover,:focus-visible,:active) { opacity:1; }
+}
+@media screen and (min-width:1100px) {
+  .arena-central-ready .arena-header-brief:not([hidden]) { display:block; margin-inline-end:auto; padding-inline:10px; }
+  .arena-central-ready #sessionIdentity > .account-summary { display:none; }
+}
+@media screen and (min-width:768px) and (pointer:coarse) {
+  body.arena-central-ready:not(.arena-rail-collapsed) .arena-sidebar-resize { opacity:1; }
+}
+
+.arena-access-layout { display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1fr); gap:clamp(16px,4vw,56px); align-items:center; max-width:1100px; margin:clamp(16px,5vw,64px) auto; }
+.arena-access-intro { padding:clamp(16px,4vw,48px); border-inline-start:4px solid var(--accent); background:var(--panel); border-radius:12px; }
+.arena-access-intro h1 { font-size:clamp(2rem,5vw,4rem); overflow-wrap:anywhere; }
+.arena-access-layout .access-card { width:100%; max-width:580px; margin:0; }
+.arena-access-layout form button.primary,.arena-access-layout [data-google] { width:100%; }
+.arena-access-layout button,.arena-access-layout .button { min-block-size:48px; }
+.arena-demo-actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); gap:12px; margin-block:20px; }
+.arena-demo-actions a.button { display:grid; align-content:center; gap:6px; min-height:80px; padding:16px; text-align:left; }
+.arena-demo-actions span { color:var(--muted); font-weight:400; }
+.demo-main .arena-weather-card #arenaWeather > summary { min-height:74px; align-items:center; flex-wrap:wrap; font-size:1.1rem; }
+@media(max-width:767px) {
+  .arena-access-layout { grid-template-columns:minmax(0,1fr); }
+  .arena-access-intro { order:1; }
+}
+#arenaSidebar [data-personal-hidden] { display:none; }
+.personal-shortcuts [data-shortcut-size=large] { min-height:52px; padding-inline:20px; }
+.arena-access-layout [data-google-entry] { width:100%; }
+@media print {
+  .arena-page-actions,.arena-ui-customization,.arena-function-search,.arena-sidebar-resize,.arena-header-brief { display:none!important; }
+}

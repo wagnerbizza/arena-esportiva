@@ -172,7 +172,7 @@ function listPanel(kind) {
   if (kind === "matches") controls += filterSelect(kind, "sport", "Modalidade", D.SPORTS, "Todas as modalidades") + filterSelect(kind, "status", "Situação específica", matchStatuses, "Todas as situações") + filterSelect(kind, "championshipId", "Campeonato / temporada", championshipFilterOptions(), "Todos os campeonatos");
   controls += filterSelect(kind, "order", "Ordenar", [["az","Nome A–Z"],["za","Nome Z–A"]], kind === "matches" ? "Ordem por horário" : "Nome A–Z (padrão)");
   const groups = kind === "matches" ? `<div class="list-groups" aria-label="Visualização das partidas">${[["active", "Em andamento e próximas"], ["finished", "Finalizadas"], ["all", "Todas"]].map(([v, title]) => `<button type="button" data-list-group="${v}" aria-pressed="${f.group === v}" class="${f.group === v ? "primary" : ""}">${title}</button>`).join("")}</div>` : "";
-  return `<section class="card list-filters" aria-label="Filtros de ${titles[kind]}"><h2>${titles[kind]}</h2>${groups}<div class="list-controls">${controls}<button type="button" data-list-reset="${kind}">Limpar filtros</button></div><p class="muted list-count" id="list-count-${kind}" role="status">${listCount(kind)}</p>${kind === "matches" ? '<small>Finalizadas inclui encerradas, homologadas e canceladas. Adiadas e suspensas continuam em andamento e próximas.</small>' : ""}</section><div id="list-results-${kind}" class="${kind === "players" ? "card" : "grid"}">${listResults(kind)}</div>`;
+  return `<section class="card list-filters" aria-label="Filtros de ${titles[kind]}"><h2>${titles[kind]}</h2>${groups}${kind === "teams" ? participantDirectory() : ""}<div class="list-controls">${controls}<button type="button" data-list-reset="${kind}">Limpar filtros</button></div><p class="muted list-count" id="list-count-${kind}" role="status">${listCount(kind)}</p>${kind === "matches" ? '<small>Finalizadas inclui encerradas, homologadas e canceladas. Adiadas e suspensas continuam em andamento e próximas.</small>' : ""}<div id="list-results-${kind}" class="arena-record-results ${kind === "players" ? "tablewrap-list" : "grid"}">${listResults(kind)}</div></section>`;
 }
 function listCount(kind) {
   return `${filteredRecords(kind).length} de ${listSource(kind).length} ${ { teams: "equipes", players: "jogadores", matches: "partidas" }[kind]} nesta visualização`;
@@ -238,7 +238,9 @@ document.addEventListener("change", (e) => { if (e.target.matches('select[data-l
 
 // 2.2 — CAMPEONATOS E TEMPORADAS. O cadastro pode ser delegado pelo administrador.
 // Cada edição tem seu próprio ID. Não são migrados nem apagados jogos antigos.
-let editedChampionshipId = "", championshipDraft = null, championshipQuery = "", championshipStatus = "";
+let personalSync;
+let playerFormOpen = false, editedPlayerId = "";
+let championshipFormOpen = false, editedChampionshipId = "", championshipDraft = null, championshipQuery = "", championshipStatus = "";
 let championshipOrder = "az";
 const championshipTitle = (c) => `${c.name} • ${c.season}`;
 function championshipFilterOptions() {
@@ -335,7 +337,8 @@ function championshipsView() {
   const draft = championshipDraft && championshipDraft.id === (c?.id || "") ? championshipDraft : c;
   const value = (key) => esc(draft?.[key] || "");
   const canChangeSport = c && canChangeChampionshipSport();
-  return `<div class="card"><h2>${c ? "Editar campeonato / temporada" : "Cadastrar campeonato / temporada"}</h2><p class="muted">Cadastre a primeira modalidade e categoria. Depois, use Adicionar modalidade ou categoria no cartão da edição.</p><form id="championship"><input type="hidden" name="recordId" value="${value("id")}"><div class="formgrid">${field("Nome do campeonato", "name", "text", `required maxlength="100" value="${value("name")}"`)}${field("Edição / temporada", "season", "text", `required maxlength="40" placeholder="Ex.: 2026 ou 2º semestre de 2026" value="${value("season")}"`)}<label>Modalidade<select name="sport" required>${D.SPORTS.map((sport) => `<option ${draft?.sport === sport ? "selected" : ""} ${c && !canChangeSport && c.sport !== sport ? "disabled" : ""}>${esc(sport)}</option>`).join("")}</select>${canChangeSport ? "<small>A alteração vale para os próximos jogos.</small>" : ""}</label> ${canChangeSport ? field("Motivo da mudança de modalidade","sportChangeReason","text",`maxlength="300" value="${value("sportChangeReason")}" placeholder="Ex.: modalidade cadastrada incorretamente"`) : ""}${field("Categoria", "category", "text", `maxlength="150" placeholder="Ex.: Livre, Sub-17, Feminino" value="${value("category")}"`)}<label>Situação<select name="status">${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${draft?.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></label></div><button class="primary">${c ? "Salvar alterações" : "Cadastrar campeonato"}</button> ${c ? '<button type="button" data-new-championship>Cancelar edição / novo cadastro</button>' : ""}</form><p class="muted">Encerrar o campeonato impede criar novas partidas vinculadas; não encerra partidas automaticamente. Alterações do nome ou da edição não reescrevem súmulas existentes.</p>${c ? championshipMatchSportForm(c) : ""}</div><section class="card list-filters"><h2>Campeonatos cadastrados</h2><div class="list-controls"><label class="list-search">Buscar campeonato, edição, modalidade ou categoria<input type="search" data-championship-filter="query" value="${esc(championshipQuery)}" placeholder="Digite para buscar…"></label><label>Situação<select data-championship-filter="status"><option value="">Todas as situações</option>${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${championshipStatus === status ? "selected" : ""}>${status}</option>`).join("")}</select></label><label>Ordenar<select data-championship-filter="order"><option value="az" ${championshipOrder==="az"?"selected":""}>A–Z</option><option value="za" ${championshipOrder==="za"?"selected":""}>Z–A</option></select></label><button type="button" data-clear-championship-filters>Limpar filtros</button></div><p id="championship-count" class="muted" role="status">${championshipCount()}</p></section><div class="grid" id="championship-results">${championshipCards()}</div>${phasesView()}`;
+  if (championshipFormOpen || c) return `<div class="card"><h2>${c ? "Editar campeonato / temporada" : "Cadastrar campeonato / temporada"}</h2><p class="muted">Cadastre a primeira modalidade e categoria. Depois, use Adicionar modalidade ou categoria no cartão da edição.</p><form id="championship"><input type="hidden" name="recordId" value="${value("id")}"><div class="formgrid">${field("Nome do campeonato", "name", "text", `required maxlength="100" value="${value("name")}"`)}${field("Edição / temporada", "season", "text", `required maxlength="40" placeholder="Ex.: 2026 ou 2º semestre de 2026" value="${value("season")}"`)}<label>Modalidade<select name="sport" required>${D.SPORTS.map((sport) => `<option ${draft?.sport === sport ? "selected" : ""} ${c && !canChangeSport && c.sport !== sport ? "disabled" : ""}>${esc(sport)}</option>`).join("")}</select>${canChangeSport ? "<small>A alteração vale para os próximos jogos.</small>" : ""}</label> ${canChangeSport ? field("Motivo da mudança de modalidade","sportChangeReason","text",`maxlength="300" value="${value("sportChangeReason")}" placeholder="Ex.: modalidade cadastrada incorretamente"`) : ""}${field("Categoria", "category", "text", `maxlength="150" placeholder="Ex.: Livre, Sub-17, Feminino" value="${value("category")}"`)}<label>Situação<select name="status">${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${draft?.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></label></div><button class="primary">${c ? "Salvar alterações" : "Cadastrar campeonato"}</button> <button type="button" data-back-championships>${arenaIcon("collapse")} Voltar aos campeonatos</button></form><p class="muted">Encerrar o campeonato impede criar novas partidas vinculadas; não encerra partidas automaticamente. Alterações do nome ou da edição não reescrevem súmulas existentes.</p>${c ? championshipMatchSportForm(c) : ""}</div>`;
+  return `<section class="card arena-record-actions"><h2>Cadastro</h2><button type="button" class="primary arena-icon-action" data-new-championship>${arenaIcon("add")} Cadastrar campeonato</button></section><section class="card list-filters"><h2>Campeonatos cadastrados</h2><div class="list-controls"><label class="list-search">Buscar campeonato, edição, modalidade ou categoria<input type="search" data-championship-filter="query" value="${esc(championshipQuery)}" placeholder="Digite para buscar…"></label><label>Situação<select data-championship-filter="status"><option value="">Todas as situações</option>${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${championshipStatus === status ? "selected" : ""}>${status}</option>`).join("")}</select></label><label>Ordenar<select data-championship-filter="order"><option value="az" ${championshipOrder==="az"?"selected":""}>A–Z</option><option value="za" ${championshipOrder==="za"?"selected":""}>Z–A</option></select></label><button type="button" data-clear-championship-filters>Limpar filtros</button></div><p id="championship-count" class="muted" role="status">${championshipCount()}</p><div class="grid arena-record-results" id="championship-results">${championshipCards()}</div></section>${phasesView()}`;
 }
 function visibleChampionships() {
   const q = searchText(championshipQuery);
@@ -383,7 +386,7 @@ function championshipCards() {
 function shareEditionControls(edition = "") {
   const url = new URL("./index.html", location.href);
   if (edition) url.searchParams.set("campeonato", edition);
-  return `<details class="card"><summary>Compartilhar</summary>
+  return `<details class="arena-share-action"><summary class="arena-icon-action">${arenaIcon("shareAction")}<span>Compartilhar</span></summary>
     <div class="toolbar">
       <a href="${esc(url.href)}" target="_blank" rel="noopener">Abrir página pública</a>
       <button type="button" data-share-copy="${esc(url.href)}">Copiar link</button>
@@ -1026,6 +1029,19 @@ function renderBrandAndIdentity() {
   document.body.classList.toggle("has-account-menu",!identity.hidden);
   const signature=JSON.stringify([identity.hidden,user?.uid,user?.email,accountName(),accountRole(),role,C.demo]);
   if(identity.dataset.signature!==signature){identity.dataset.signature=signature;identity.innerHTML=identity.hidden?"":accountMenuMarkup();}
+  if(admin){
+    let brief=$("#arenaHeaderBrief");
+    if(!brief){
+      brief=document.createElement("div");brief.id="arenaHeaderBrief";brief.className="arena-header-brief";
+      document.querySelector("header")?.prepend(brief);
+    }
+    const summary=identity.querySelector(".account-summary");
+    brief.hidden=identity.hidden;
+    if(summary && (brief.dataset.signature!==signature||!brief.firstChild)){
+      brief.dataset.signature=signature;
+      brief.replaceChildren(summary.cloneNode(true));
+    }
+  }
   renderConnectionStatus();
 }
 function settingsView() {
@@ -1693,7 +1709,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=modalidade-campeonato-1");
+    const { connectSpark } = await import("./spark-store.js?v=preferencias-e-cabine-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -1908,6 +1924,8 @@ function liveStatusPanel(context) {
 }
 
 function render() {
+  const openOperationTools = app.querySelector(".arena-op-settings")?.open;
+  const openMatchDetails = app.querySelector(".arena-op-match-details")?.open;
   updateMatchNotices();
   if (timelineOpenId && timelineAppliedSize !== configuredHistoryPageSize()) closeTimeline();
   resetTeamProfileContext();
@@ -1920,6 +1938,7 @@ function render() {
   document.body.classList.toggle("report-mode", admin && ["matchSheets","reports","auditReports"].includes(section));
   $("#logout")?.classList.toggle("hidden", C.demo || !user);
   if (admin && !C.demo && (!user || !role)) {
+    syncPersonalTools();
     app.innerHTML = accessView();
     closeTimeline();
     if (accessBusy) app.querySelectorAll("button").forEach((b) => b.disabled = true);
@@ -1971,7 +1990,16 @@ function render() {
     ["imports", "Importar"],
   ];
   const pageControls = arenaPageControls();
-  app.innerHTML = `${floatingGameClock()}<div class="sectionhead admin-heading noprint"><div>${pageControls}<span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}${workspaceNavigation(sections)}${locationTrail()}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>${relatedArenaScreens()}`;
+  app.innerHTML = `${pageControls}${locationTrail()}${workspaceNavigation(sections)}${floatingGameClock()}<div class="sectionhead admin-heading noprint"><div><span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>${relatedArenaScreens()}`;
+  const playerForm = $("#player");
+  const editingPlayer = playerForm && state.players.find(row=>row.id===editedPlayerId);
+  if (editingPlayer) for (const key of ["id","name","team","number","position","className","reserve"]) {
+    playerForm.elements[key==="id"?"recordId":key].value = String(editingPlayer[key] ?? "");
+  }
+  window.ArenaOperation?.mountCustomization?.(app);
+  if (openOperationTools && app.querySelector(".arena-op-settings")) app.querySelector(".arena-op-settings").open=true;
+  if (openMatchDetails && app.querySelector(".arena-op-match-details")) app.querySelector(".arena-op-match-details").open=true;
+  syncPersonalTools();
   const permissionsForm = app.querySelector("#access-user");
   if (permissionsForm) updateOperationSummary(permissionsForm);
   stopInvisibleTimeline();
@@ -2032,8 +2060,10 @@ function view() {
   if (section === "users" && role === "admin") return usersView();
   if (section === "overview")return overviewMatchView();
   if (section === "teams") return teamsDirectoryView();
+  if (section === "players" && !playerFormOpen)
+    return `<section class="card arena-record-actions"><h2>Cadastro</h2><div class="toolbar"><button type="button" class="primary arena-icon-action" data-player-form="open">${arenaIcon("add")} Cadastrar jogador</button><button type="button" data-section="imports" class="arena-icon-action">${arenaIcon("upload")} Importar jogadores</button></div></section>${listPanel("players")}`;
   if (section === "players")
-    return `<div class="card"><h2>Cadastrar jogador</h2><p class="muted">Cadastre o elenco antes de criar a partida. A súmula preserva uma cópia do elenco daquela data.</p><form id="player"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome", "name", "text", "required")}${select("Equipe", "team", teamOptions())}${field("Número", "number")}${field("Posição (opcional)", "position")}${field("Turma do jogador (opcional)", "className", "text", 'maxlength="150"')}${lineupField("Escalação no cadastro")}</div><button class="primary">Salvar jogador</button> <button type="button" data-section="imports">Importar jogadores</button></form></div>${listPanel("players")}`;
+    return `<div class="card"><h2>${editedPlayerId?"Editar jogador":"Cadastrar jogador"}</h2><p class="muted">Cadastre o elenco antes de criar a partida. A súmula preserva uma cópia do elenco daquela data.</p><form id="player"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome", "name", "text", "required")}${select("Equipe", "team", teamOptions())}${field("Número", "number")}${field("Posição (opcional)", "position")}${field("Turma do jogador (opcional)", "className", "text", 'maxlength="150"')}${lineupField("Escalação no cadastro")}</div><button class="primary">Salvar jogador</button> <button type="button" data-player-form="back">${arenaIcon("collapse")} Voltar aos jogadores</button></form></div>`;
   if (section === "createMatch" && canCreateMatches())
     return `<div class="card"><h2>Cadastrar partida</h2><p class="muted">Programe um jogo novo. Para acompanhar ou operar partidas, use Jogos.</p><form id="match"><div class="formgrid">${championshipSelectForCreate()}${select(
       "Modalidade",
@@ -2971,7 +3001,7 @@ function download(name, value, type = "application/json") {
 let registrationDraft = null;
 let registrationContact = null;
 function accessView() {
-  const wrap = (content) => `<section class="card access-card" style="max-width:520px;margin:40px auto"><span class="tag">ACESSO À CENTRAL</span>${content}</section>`;
+  const wrap = (content) => `<div class="arena-access-layout"><section class="arena-access-intro"><p class="tag">Central esportiva</p><h1>${esc(systemDisplayName())}</h1><p>Organize campeonatos, registre lances e acompanhe os resultados.</p><a class="button arena-icon-action" href="./apresentacao.html">${arenaIcon("training")} Conhecer a Arena</a></section><section class="card access-card">${content}</section></div>`;
   if (user) {
     const messages = {
       loading: "Conferindo sua autorização…",
@@ -3356,7 +3386,8 @@ document.addEventListener("submit", async (e) => {
       }
       await dispatch({ type: f.id, data: d });
       if(f.id==="team"){teamFormVisible=false;teamEditorId="";selectedTeamId=d.id||"";teamProfileTab="data";render();}
-      else if (f.id === "championship") { editedChampionshipId = ""; championshipDraft=null; render(); }
+      else if (f.id === "championship") { championshipFormOpen = false; editedChampionshipId = ""; championshipDraft=null; render(); }
+      else if (f.id === "player") { playerFormOpen=false; editedPlayerId=""; render(); }
       else if (!C.demo) f.reset();
     } else if (f.id === "arena-phase-form") {
       if(C.demo||!canEditMatchPhases(phaseEdition))throw Error("Sem autorização para editar fases nesta edição.");
@@ -3501,7 +3532,8 @@ document.addEventListener("click", async (e) => {
     if (b.dataset.addChampionshipCategory) {
       const edition = (state.championships || []).find((c) => c.id === b.dataset.addChampionshipCategory);
       if (!edition || !canManageChampionships()) return;
-      editedChampionshipId = ""; championshipDraft=null;
+      championshipFormOpen = true; editedChampionshipId = "";
+      championshipDraft={id:"",name:edition.name,season:edition.season};
       render();
       const form = $("#championship");
       if (form) {
@@ -3516,7 +3548,12 @@ document.addEventListener("click", async (e) => {
       editedChampionshipId = b.dataset.editChampionship; championshipDraft=null; render();
       $("#championship")?.scrollIntoView({behavior:"smooth"}); return;
     }
-    if (b.hasAttribute("data-new-championship")) { editedChampionshipId = ""; championshipDraft=null; render(); return; }
+    if (b.matches("[data-new-championship],[data-back-championships]")) {
+      championshipFormOpen = b.hasAttribute("data-new-championship");
+      editedChampionshipId = ""; championshipDraft = null; render();
+      if (championshipFormOpen) $("#championship [name=name]")?.focus();
+      return;
+    }
     if (b.hasAttribute("data-clear-championship-filters")) { championshipQuery = ""; championshipStatus = ""; championshipOrder = "az"; refresh(); return; }
     if (b.dataset.championshipGames) {
       cloud?.stopHistory(); selected = ""; section = "matches";
@@ -3681,24 +3718,18 @@ document.addEventListener("click", async (e) => {
     } else if (b.hasAttribute("data-remove-badge")) {
       setBadgeDraft("");
     } else if(b.dataset.editTeam){openTeamEditor(b.dataset.editTeam);return;
-    } else if (b.dataset.editPlayer) {
-      const kind = b.dataset.editTeam ? "team" : "player",
-        item = (kind === "team" ? state.teams : state.players).find(
-          (x) => x.id === (b.dataset.editTeam || b.dataset.editPlayer),
-        );
-      const f = $("#" + kind);
-      f.elements.className.value = "";
-      f.elements.reserve.value = "";
-      for (const [k, v] of Object.entries(item)) {
-        const control = f.elements[k === "id" ? "recordId" : k];
-        if (control) control.value = String(v ?? "");
-      }
-      if (kind === "team") setBadgeDraft(item.badge || "");
-      f.scrollIntoView({ behavior: "smooth" });
-      toast("Cadastro carregado. Altere e clique em salvar.");
+    } else if (b.dataset.editPlayer || b.dataset.playerForm) {
+      if (section!=="players" || !canManageRosters()) return;
+      editedPlayerId=b.dataset.editPlayer||"";
+      playerFormOpen=b.dataset.playerForm!=="back";
+      render();
+      if(playerFormOpen) $("#player [name=name]")?.focus();
+      else $("#view [data-player-form]")?.focus();
     } else if (b.dataset.section) {
       cloud?.stopHistory();
       section = b.dataset.section;
+      playerFormOpen=false; editedPlayerId="";
+      championshipFormOpen=false; editedChampionshipId=""; championshipDraft=null;
       if(section==="teams"){selectedTeamId="";teamFormVisible=false;teamEditorId="";}
       selected = "";
       pendingImport = null;
@@ -4102,9 +4133,9 @@ if ($("footer"))
 // 13 — PREFERÊNCIAS LOCAIS E AJUDA. Nunca altera placares ou permissões.
 const preferenceKey = "arena-preferencias-v1";
 const preferenceDefaults = { theme: "dark", text: "normal", contrast: false, motion: false, help: true };
-function readPreferences() {
+function readPreferences(saved) {
   try {
-    const p = JSON.parse(localStorage.getItem(preferenceKey) || "null") || {};
+    const p = saved || JSON.parse(localStorage.getItem(preferenceKey) || "null") || {};
     return {theme:["dark","light","auto"].includes(p.theme)?p.theme:"dark",text:["normal","large","larger"].includes(p.text)?p.text:"normal",contrast:p.contrast===true,motion:p.motion===true,help:p.help!==false};
   } catch { return {...preferenceDefaults}; }
 }
@@ -4120,7 +4151,10 @@ function applyPreferences() {
 }
 function savePreferences() {
   applyPreferences();
-  try { localStorage.setItem(preferenceKey,JSON.stringify(preferences)); }
+  try {
+    if (admin && !C.demo && user?.uid && role) savePersonalTools({...readPersonalTools(), reading:preferences});
+    else localStorage.setItem(preferenceKey,JSON.stringify(preferences));
+  }
   catch { toast("Preferência aplicada nesta página. O navegador não permitiu salvá-la."); }
 }
 function helpFor(el) {
@@ -4565,7 +4599,7 @@ document.addEventListener("change",e=>{if(!e.target.hasAttribute("data-removed-s
 // 20 — Menu da conta e preferências. Apenas navegação; conserva autenticação/permissões.
 function accountMenuMarkup(){
  const label=C.demo?"Demonstração local":accountName();
- return `<div class="account-summary"><strong>${esc(label)}</strong><small>${esc(accountRole())}</small></div><div class="account-dropdown"><button type="button" id="accountMenuToggle" data-account-menu-toggle aria-expanded="false" aria-controls="accountPopover">Minha conta <span data-connection-dot class="connection-dot" aria-hidden="true"></span><span aria-hidden="true">▾</span></button><div id="accountPopover" class="account-popover" hidden><div class="account-menu-identity"><strong>${esc(label)}</strong>${!C.demo?`<span>${esc(user?.email||"Sem e-mail informado")}</span>`:""}<small>${esc(accountRole())}</small></div>${connectionAccountPanel()}<nav aria-label="Opções da conta">${C.demo||role?'<button type="button" class="account-feature" data-my-account><strong>Minha conta e segurança</strong><small>Perfil, acesso, senha e vínculo com Google</small></button>':'<button type="button" data-access-refresh>Atualizar situação do acesso</button>'}<button type="button" class="account-feature" data-open-accessibility><strong>Aparência e acessibilidade</strong><small>Tema, tamanho do texto, contraste e movimentos</small></button>${role==="admin"?'<button type="button" data-account-settings>Configurações do sistema</button>':""}<button type="button" data-section="profiles">Trocar perfil / conta</button><button type="button" class="account-feature" data-account-guide><strong>Ajuda e guia de uso</strong><small>Orientações passo a passo para o seu perfil</small></button><a class="button account-feature" href="${esc(new URL("painel.html?demonstracao=1",location.href).href)}" target="_blank" rel="noopener"><strong>Treinamento</strong><small>Pratique em outra aba com dados fictícios</small></a>${C.demo?`<a class="button" href="${esc(new URL("painel.html",location.href).href)}">Sair da demonstração</a>`:'<button type="button" data-account-exit>Sair da conta</button>'}</nav></div></div>`;
+ return `<div class="account-summary"><strong>${esc(label)}</strong><small>${esc(accountRole())} · <span data-connection-label></span></small></div><div class="account-dropdown"><button type="button" id="accountMenuToggle" data-account-menu-toggle aria-expanded="false" aria-controls="accountPopover">Minha conta <span data-connection-dot class="connection-dot" aria-hidden="true"></span><span aria-hidden="true">▾</span></button><div id="accountPopover" class="account-popover" hidden><div class="account-menu-identity"><strong>${esc(label)}</strong>${!C.demo?`<span>${esc(user?.email||"Sem e-mail informado")}</span>`:""}<small>${esc(accountRole())}</small></div>${connectionAccountPanel()}<nav aria-label="Opções da conta">${C.demo||role?'<button type="button" class="account-feature" data-my-account><strong>Minha conta e segurança</strong><small>Perfil, acesso, senha e vínculo com Google</small></button>':'<button type="button" data-access-refresh>Atualizar situação do acesso</button>'}<button type="button" class="account-feature" data-open-accessibility><strong>Aparência e acessibilidade</strong><small>Tema, tamanho do texto, contraste e movimentos</small></button>${role==="admin"?'<button type="button" data-account-settings>Configurações do sistema</button>':""}<button type="button" data-section="profiles">Trocar perfil / conta</button><button type="button" class="account-feature" data-account-guide><strong>Ajuda e guia de uso</strong><small>Orientações passo a passo para o seu perfil</small></button><a class="button account-feature" href="${esc(new URL("painel.html?demonstracao=1",location.href).href)}" target="_blank" rel="noopener"><strong>Treinamento</strong><small>Pratique em outra aba com dados fictícios</small></a>${C.demo?`<a class="button" href="${esc(new URL("painel.html",location.href).href)}">Sair da demonstração</a>`:'<button type="button" data-account-exit>Sair da conta</button>'}</nav></div></div>`;
 }
 function closeAccountMenu(focus=false){
  const toggle=$("#accountMenuToggle"),panel=$("#accountPopover");
@@ -4785,7 +4819,7 @@ function frequentWorkspaceShortcuts(allowed) {
   </div></nav>`;
 }
 function arenaIcon(name) {
- const paths={star:"M12 3l2.8 5.7 6.3.9-4.6 4.4 1.1 6.3-5.6-3-5.6 3 1.1-6.3L3 9.6l6.3-.9L12 3Z",unpin:"M8 3h8 M9 3v6l-4 4v2h14v-2l-4-4V3 M12 15v7 M3 3l18 18",training:"M8 3h8m-6 0v7l-5 8a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-8V3M8 15h8",pin:"M8 3h8 M9 3v6l-4 4v2h14v-2l-4-4V3 M12 15v7",reports:"M4 3h12l4 4v14H4Z M8 16v-3 M12 16V9 M16 16v-5",championships:"M8 3h8v7a4 4 0 0 1-8 0V3Z M8 5H4v3a4 4 0 0 0 4 4 M16 5h4v3a4 4 0 0 1-4 4 M12 14v7 M8 21h8",sharing:"M15 6l-6 4 M9 14l6 4 M8 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M21 4a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M21 20a3 3 0 1 1-6 0 3 3 0 0 1 6 0",credentials:"M8 3h8v5H8Z M5 6H3v16h18V6h-2 M10 12a2 2 0 1 0 4 0 2 2 0 0 0-4 0 M7 20v-1a5 5 0 0 1 10 0v1",calendar:"M5 5h14v16H5Z M8 2v6 M16 2v6 M5 10h14",live:"M9 8l7 4-7 4Z M5 5a10 10 0 0 0 0 14 M19 5a10 10 0 0 1 0 14",results:"M4 4h16v16H4Z M8 9l2 2 5-5 M8 16h8",add:"M12 4v16 M4 12h16",players:"M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M2 21v-3a6 6 0 0 1 12 0v3 M19 11v8 M15 15h8",upload:"M12 16V3 M7 8l5-5 5 5 M4 16v5h16v-5",certificate:"M12 3a6 6 0 1 0 0 12 6 6 0 0 0 0-12 M8 14l-1 8 5-3 5 3-1-8",history:"M4 5v5h5 M4 10a8 8 0 1 1 1 9 M12 7v6l4 2",search:"M21 21l-6-6 M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0",overview:"M3 10 12 3l9 7v11h-6v-7H9v7H3Z",games:"M4 4h16v16H4z M8 4v16 M16 4v16 M4 10h16 M4 14h16",records:"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M20 21v-2a4 4 0 0 0-3-3.87",documents:"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z M14 2v6h6 M8 13h8 M8 17h6",administration:"M12 3 3 7v6c0 5 9 9 9 9s9-4 9-9V7Z M8 12l3 3 5-6",account:"M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M4 22v-3a8 6 0 0 1 16 0v3",menu:"M4 6h16 M4 12h16 M4 18h16",close:"M6 6l12 12 M18 6 6 18",help:"M9 9a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 18h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",reports:"M4 3h16v18H4z M8 16v-3 M12 16V8 M16 16v-6",championships:"M8 3h8v7a4 4 0 0 1-8 0V3Z M8 5H4v3a4 4 0 0 0 4 4 M16 5h4v3a4 4 0 0 1-4 4 M12 14v7 M8 21h8",sharing:"M3 3h6v6H3z M15 3h6v6h-6z M3 15h6v6H3z M15 15h6v6h-6z",credentials:"M4 4h16v17H4z M9 2h6v5H9z M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4 M8 18a4 3 0 0 1 8 0",maintenance:"M12 3v3 M12 18v3 M3 12h3 M18 12h3 M6 6l2 2 M16 16l2 2 M6 18l2-2 M16 8l2-2 M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0",profiles:"M8 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M2 21v-2a6 5 0 0 1 12 0v2 M16 6h6l-3-3 M22 6l-3 3 M22 16h-6l3 3 M16 16l3-3",collapse:"M14 6l-6 6 6 6",qr:"M3 3h6v6H3z M15 3h6v6h-6z M3 15h6v6H3z M15 15h3v3h3v3h-6z",cup:"M8 3h8v7a4 4 0 0 1-8 0V3Z M8 5H4v3a4 4 0 0 0 4 4 M16 5h4v3a4 4 0 0 1-4 4 M12 14v7 M8 21h8"};
+ const paths={shareAction:"M8 12l8-6m-8 6 8 6 M8 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M22 5a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M22 19a3 3 0 1 1-6 0 3 3 0 0 1 6 0",star:"M12 3l2.8 5.7 6.3.9-4.6 4.4 1.1 6.3-5.6-3-5.6 3 1.1-6.3L3 9.6l6.3-.9L12 3Z",unpin:"M8 3h8 M9 3v6l-4 4v2h14v-2l-4-4V3 M12 15v7 M3 3l18 18",training:"M8 3h8m-6 0v7l-5 8a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-8V3M8 15h8",pin:"M8 3h8 M9 3v6l-4 4v2h14v-2l-4-4V3 M12 15v7",reports:"M4 3h12l4 4v14H4Z M8 16v-3 M12 16V9 M16 16v-5",championships:"M8 3h8v7a4 4 0 0 1-8 0V3Z M8 5H4v3a4 4 0 0 0 4 4 M16 5h4v3a4 4 0 0 1-4 4 M12 14v7 M8 21h8",sharing:"M15 6l-6 4 M9 14l6 4 M8 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M21 4a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M21 20a3 3 0 1 1-6 0 3 3 0 0 1 6 0",credentials:"M8 3h8v5H8Z M5 6H3v16h18V6h-2 M10 12a2 2 0 1 0 4 0 2 2 0 0 0-4 0 M7 20v-1a5 5 0 0 1 10 0v1",calendar:"M5 5h14v16H5Z M8 2v6 M16 2v6 M5 10h14",live:"M9 8l7 4-7 4Z M5 5a10 10 0 0 0 0 14 M19 5a10 10 0 0 1 0 14",results:"M4 4h16v16H4Z M8 9l2 2 5-5 M8 16h8",add:"M12 4v16 M4 12h16",players:"M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M2 21v-3a6 6 0 0 1 12 0v3 M19 11v8 M15 15h8",upload:"M12 16V3 M7 8l5-5 5 5 M4 16v5h16v-5",certificate:"M12 3a6 6 0 1 0 0 12 6 6 0 0 0 0-12 M8 14l-1 8 5-3 5 3-1-8",history:"M4 5v5h5 M4 10a8 8 0 1 1 1 9 M12 7v6l4 2",search:"M21 21l-6-6 M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0",overview:"M3 10 12 3l9 7v11h-6v-7H9v7H3Z",games:"M4 4h16v16H4z M8 4v16 M16 4v16 M4 10h16 M4 14h16",records:"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M20 21v-2a4 4 0 0 0-3-3.87",documents:"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z M14 2v6h6 M8 13h8 M8 17h6",administration:"M12 3 3 7v6c0 5 9 9 9 9s9-4 9-9V7Z M8 12l3 3 5-6",account:"M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M4 22v-3a8 6 0 0 1 16 0v3",menu:"M4 6h16 M4 12h16 M4 18h16",close:"M6 6l12 12 M18 6 6 18",help:"M9 9a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 18h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",reports:"M4 3h16v18H4z M8 16v-3 M12 16V8 M16 16v-6",championships:"M8 3h8v7a4 4 0 0 1-8 0V3Z M8 5H4v3a4 4 0 0 0 4 4 M16 5h4v3a4 4 0 0 1-4 4 M12 14v7 M8 21h8",sharing:"M3 3h6v6H3z M15 3h6v6h-6z M3 15h6v6H3z M15 15h6v6h-6z",credentials:"M4 4h16v17H4z M9 2h6v5H9z M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4 M8 18a4 3 0 0 1 8 0",maintenance:"M12 3v3 M12 18v3 M3 12h3 M18 12h3 M6 6l2 2 M16 16l2 2 M6 18l2-2 M16 8l2-2 M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0",profiles:"M8 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M2 21v-2a6 5 0 0 1 12 0v2 M16 6h6l-3-3 M22 6l-3 3 M22 16h-6l3 3 M16 16l3-3",collapse:"M14 6l-6 6 6 6",qr:"M3 3h6v6H3z M15 3h6v6h-6z M3 15h6v6H3z M15 15h3v3h3v3h-6z",cup:"M8 3h8v7a4 4 0 0 1-8 0V3Z M8 5H4v3a4 4 0 0 0 4 4 M16 5h4v3a4 4 0 0 1-4 4 M12 14v7 M8 21h8"};
  return `<svg class="arena-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]||paths.documents}"/></svg>`;
 }
 function arenaSectionIcon(id) {
@@ -4804,7 +4838,7 @@ function workspaceNavigation(sections){
    const active=ids.includes(section),open=arenaOpenGroups.has(group.id)?arenaOpenGroups.get(group.id):active;
    return `<details class="arena-side-group" data-layout-group="${group.id}" ${open?"open":""}><summary title="${esc(group.title)}" aria-label="${esc(group.title)}">${arenaIcon(group.id)}<span>${esc(group.title)}</span></summary><nav aria-label="${esc(group.title)}">${ids.map(id=>`<button type="button" data-section="${id}" title="${esc(labels[id]||id)}" class="arena-side-item ${section===id?"is-current":""}" ${personal.disabled.includes(id)?'aria-disabled="true"':""} ${section===id?'aria-current="page"':""}>${arenaSectionIcon(id)}<span>${esc(labels[id]||id)}</span></button>${id==="matches"?`<div class="arena-side-scopes" aria-label="Filtrar jogos"><button type="button" data-games-shortcut="live">${arenaIcon("live")}<span>Ao vivo</span></button><button type="button" data-games-shortcut="scheduled">${arenaIcon("calendar")}<span>Agenda</span></button><button type="button" data-games-shortcut="finished">${arenaIcon("results")}<span>Resultados</span></button></div>`:""}`).join("")}</nav></details>`;
  }).join("");
- return `<aside id="arenaSidebar" class="arena-sidebar noprint ${navigationQuery.trim()?"arena-search-active":""}" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link" aria-label="${esc(systemDisplayName())}" title="${esc(systemDisplayName())}">${brand}</a><button type="button" data-layout-rail aria-label="Recolher barra lateral" title="Recolher barra lateral" aria-expanded="true" aria-controls="arenaSidebar">${arenaIcon("collapse")}</button><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><div class="arena-sidebar-pinbar"><button type="button" class="arena-side-pin" data-layout-pin aria-label="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}" aria-pressed="${arenaSidebarPinned}" title="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}">${arenaIcon("pin")}<span>${arenaSidebarPinned?"Barra fixada":"Fixar barra aberta"}</span></button></div><div class="arena-side-search"><button type="button" class="arena-side-search-launch" data-side-search-open aria-label="Pesquisar funções" title="Pesquisar funções (Ctrl+K)">${arenaIcon("search")}</button><label for="sideFunctionSearch" class="arena-icon-action">${arenaIcon("search")} Pesquisar no menu</label><div class="arena-side-search-field"><input id="sideFunctionSearch" type="search" value="${esc(navigationQuery)}" placeholder="Buscar função…" autocomplete="off" aria-controls="arenaSideSearchResults" aria-keyshortcuts="Control+k Meta+k"><button type="button" data-clear-navigation-search data-side-clear aria-label="Limpar pesquisa do menu" title="Limpar pesquisa">${arenaIcon("close")}</button></div></div><div class="arena-sidebar-nav"><div id="arenaSideSearchResults" aria-live="polite">${navigationSearchResults()}</div><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" title="Início" aria-label="Início" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Início</span></button>${personal.hidden.includes("operation")?"":`<button type="button" class="arena-side-item ${section==="operation"?"is-current":""}" data-section="operation" title="Cabine de Operação" ${section==="operation"?'aria-current="page"':""} ${personal.disabled.includes("operation")?'aria-disabled="true"':""}>${arenaIcon("live")}<span>Cabine de Operação</span></button>`}${groups}</div><div class="arena-sidebar-footer">${footerItem("account","Minha conta","account")}${footerItem(role==="admin"?"settings":"preferences","Configurações","maintenance")}${footerItem("profiles","Trocar perfil / conta","profiles")}<button type="button" data-account-guide title="Demonstração e ajuda" aria-label="Demonstração e ajuda">${arenaIcon("help")}<span>Demonstração e ajuda</span></button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener" title="Abrir painel público" aria-label="Abrir painel público">${arenaIcon("games")}<span>Abrir painel público</span></a><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><div class="arena-toolbar noprint"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button></div>${personalTopShortcuts()}<section class="navigation-finder arena-function-search noprint" aria-label="Encontrar função"><label for="functionSearch" class="arena-icon-action">${arenaIcon("search")} Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
+ return `<aside id="arenaSidebar" class="arena-sidebar noprint ${navigationQuery.trim()?"arena-search-active":""}" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link" aria-label="${esc(systemDisplayName())}" title="${esc(systemDisplayName())}">${brand}</a><button type="button" data-layout-rail aria-label="Recolher barra lateral" title="Recolher barra lateral" aria-expanded="true" aria-controls="arenaSidebar">${arenaIcon("collapse")}</button><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><div class="arena-sidebar-pinbar"><button type="button" class="arena-side-pin" data-layout-pin aria-label="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}" aria-pressed="${arenaSidebarPinned}" title="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}">${arenaIcon("pin")}<span>${arenaSidebarPinned?"Barra fixada":"Fixar barra aberta"}</span></button></div><div class="arena-side-search"><button type="button" class="arena-side-search-launch" data-side-search-open aria-label="Pesquisar funções" title="Pesquisar funções (Ctrl+K)">${arenaIcon("search")}</button><label for="sideFunctionSearch" class="arena-icon-action">${arenaIcon("search")} Pesquisar no menu</label><div class="arena-side-search-field"><input id="sideFunctionSearch" type="search" value="${esc(navigationQuery)}" placeholder="Buscar função…" autocomplete="off" aria-controls="arenaSideSearchResults" aria-keyshortcuts="Control+k Meta+k"><button type="button" data-clear-navigation-search data-side-clear aria-label="Limpar pesquisa do menu" title="Limpar pesquisa">${arenaIcon("close")}</button></div></div><div class="arena-sidebar-nav"><div id="arenaSideSearchResults" aria-live="polite">${navigationSearchResults()}</div><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" title="Início" aria-label="Início" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Início</span></button>${personal.hidden.includes("operation")?"":`<button type="button" class="arena-side-item ${section==="operation"?"is-current":""}" data-section="operation" title="Cabine de Operação" ${section==="operation"?'aria-current="page"':""} ${personal.disabled.includes("operation")?'aria-disabled="true"':""}>${arenaIcon("live")}<span>Cabine de Operação</span></button>`}${groups}</div><div class="arena-sidebar-footer">${footerItem("account","Minha conta","account")}${footerItem(role==="admin"?"settings":"preferences","Configurações","maintenance")}${footerItem("profiles","Trocar perfil / conta","profiles")}<button type="button" data-account-guide title="Demonstração e ajuda" aria-label="Demonstração e ajuda">${arenaIcon("help")}<span>Demonstração e ajuda</span></button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener" title="Abrir painel público" aria-label="Abrir painel público">${arenaIcon("games")}<span>Abrir painel público</span></a><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><button type="button" class="arena-sidebar-resize noprint" aria-label="Ajustar largura da barra lateral" title="Arraste ou use as setas esquerda e direita">↔</button><section class="card arena-ui-customization noprint" aria-label="Atalhos e personalização"><div class="arena-toolbar"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button></div>${personalTopShortcuts()}<div data-operation-customization></div></section><section class="navigation-finder arena-function-search noprint" aria-label="Encontrar função"><label for="functionSearch" class="arena-icon-action">${arenaIcon("search")} Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
 }
 function openSideFunctionSearch() {
  arenaRailCollapsed=false;
@@ -5298,7 +5332,7 @@ document.addEventListener("click", event => {
 
 function teamsDirectoryView(){
  if(teamFormVisible)return `<div class="sectionhead"><h2>${teamEditorId?"Editar equipe":"Nova equipe"}</h2><button type="button" data-team-form-back>← Voltar à lista de equipes</button></div>${teamRegistrationView()}`;
- return `<div class="sectionhead team-directory-heading"><div><h2>Equipes</h2><p>Escolha uma equipe abaixo. Em <strong>Ver dados da equipe</strong> você encontra técnico, modalidades, elenco e jogos.</p></div><div class="toolbar"><button type="button" class="primary" data-new-team-form>+ Nova equipe</button><button type="button" data-section="imports">Importar equipes</button></div></div>${participantDirectory()}${listPanel("teams")}`;
+ return `<section class="card arena-record-actions"><h2>Cadastro</h2><div class="toolbar"><button type="button" class="primary arena-icon-action" data-new-team-form>${arenaIcon("add")} Nova equipe</button><button type="button" class="arena-icon-action" data-section="imports">${arenaIcon("upload")} Importar equipes</button></div></section>${listPanel("teams")}`;
 }
 let arenaPreviousPage = "overview";
 let arenaCurrentPage = "overview";
@@ -5314,11 +5348,10 @@ function arenaPageControls() {
   arenaPreviousPage = arenaCurrentPage;
   arenaCurrentPage = section;
  }
- const detailBack = isOperationSection() && selected ? "data-back"
+ const detailBack = section === "players" && playerFormOpen ? 'data-player-form="back"' : section === "championships" && (championshipFormOpen || editedChampionshipId) ? "data-back-championships" : isOperationSection() && selected ? "data-back"
   : section === "teams" && (teamFormVisible || selectedTeamId) ? "data-profile-back" : "";
- return `<nav class="toolbar arena-page-actions" aria-label="Atalhos da tela">
-  ${section !== "overview" ? `<button type="button" ${detailBack || `data-section="${arenaPreviousPage}"`}>Voltar</button><button type="button" data-section="overview">Início</button>` : ""}
-  <button type="button" data-personal-settings>Personalizar menu</button>
+ return `<nav class="toolbar arena-page-actions noprint" aria-label="Atalhos da tela">
+  ${section !== "overview" ? `<button type="button" class="arena-icon-action" ${detailBack || `data-section="${arenaPreviousPage}"`}>${arenaIcon("collapse")} Voltar</button><button type="button" class="primary arena-icon-action" data-section="overview">${arenaIcon("overview")} Início</button>` : ""}
  </nav>`;
 }
 function relatedArenaScreens() {
@@ -5335,7 +5368,7 @@ function relatedArenaScreens() {
  const allowed = new Set(workspaceDefinitions.flatMap(allowedWorkspaceSections));
  const links = [...new Set([...group.sections,...(crossLinks[group.id] || [])])]
   .filter(id => id !== section && id !== "overview" && allowed.has(id) && navigationDescriptions[id]);
- return links.length ? `<nav class="toolbar arena-related-screens noprint" aria-label="Telas relacionadas"><strong>Telas relacionadas</strong>${links.map(id=>`<button type="button" data-section="${id}">${esc(navigationDescriptions[id].label)}</button>`).join("")}</nav>` : "";
+ return links.length ? `<nav class="toolbar arena-related-screens noprint" aria-label="Telas relacionadas"><strong>Telas relacionadas</strong>${links.map(id=>`<button type="button" class="arena-icon-action" data-section="${id}">${arenaSectionIcon(id)}${esc(navigationDescriptions[id].label)}</button>`).join("")}</nav>` : "";
 }
 function locationTrail(){
  const labels={overview:"Visão geral",matches:"Acompanhar jogos",championships:"Campeonatos",standings:"Classificação",teams:"Equipes",players:"Jogadores",imports:"Importar",documentation:"Guias",matchSheets:"Súmulas",reports:"Relatórios esportivos",auditReports:"Relatório geral",certificates:"Certificados",monitor:"Operadores e partidas",users:"Usuários e permissões",settings:"Configurações",cleanup:"Limpeza de testes",testData:"Lixeira de registros",credentials:"Credenciais de eventos",account:"Minha conta"};
@@ -5343,7 +5376,7 @@ function locationTrail(){
  const group=workspaceDefinitions.find(g=>g.sections.includes(section));
  const profile=section==="teams"&&selectedTeamId?state.teams.find(t=>t.id===selectedTeamId):null;
  const tabs={data:"Dados e técnico",roster:"Jogadores",games:"Jogos da equipe",stats:"Estatísticas, cartões e faltas",history:"Histórico de alterações"};
- return `<nav class="location-trail noprint" aria-label="Localização atual"><span>Você está em:</span>${group?`<button type="button" data-workspace="${group.id}">${group.title}</button><span aria-hidden="true">›</span>`:""}${profile||section==="teams"&&teamFormVisible?'<button type="button" data-team-form-back>Equipes</button>':`<strong>${esc(labels[section]||navigationDescriptions[section]?.label||section)}</strong>`}${profile?`<span aria-hidden="true">›</span><span>${esc(profile.name)}</span><span aria-hidden="true">›</span><strong>${esc(tabs[teamProfileTab]||"Dados e técnico")}</strong>`:section==="teams"&&teamFormVisible?`<span aria-hidden="true">›</span><strong>${teamEditorId?"Editar equipe":"Nova equipe"}</strong>`:""}</nav>`;
+ return `<nav class="location-trail noprint" aria-label="Localização atual"><button type="button" data-section="overview" aria-label="Início">${arenaIcon("overview")}</button><span>Você está em:</span>${group?`<button type="button" data-workspace="${group.id}">${group.title}</button><span aria-hidden="true">›</span>`:""}${profile||section==="teams"&&teamFormVisible?'<button type="button" data-team-form-back>Equipes</button>':`<strong>${esc(labels[section]||navigationDescriptions[section]?.label||section)}</strong>`}${profile?`<span aria-hidden="true">›</span><span>${esc(profile.name)}</span><span aria-hidden="true">›</span><strong>${esc(tabs[teamProfileTab]||"Dados e técnico")}</strong>`:section==="teams"&&teamFormVisible?`<span aria-hidden="true">›</span><strong>${teamEditorId?"Editar equipe":"Nova equipe"}</strong>`:""}</nav>`;
 }
 document.addEventListener("click",e=>{
  if(!e.target.closest("[data-new-team-form],[data-team-form-back]"))return;
@@ -5727,7 +5760,7 @@ function navigationDestination(control){
  if(control.hasAttribute("data-team-count-link"))return ".team-profile-content";
  const routes=[
   ['data-my-account','#view'],['data-account-settings','#view'],
-  ['data-section','#view'],['data-workspace','#view'],
+  ['data-section','.admin-heading h1'],['data-workspace','.admin-heading h1'],
   ['data-open','#view'],['data-back','#view'],
   ['data-access-mode','#app'],['data-access-edit','#access-user'],
   ['data-access-cancel','#view'],
@@ -6024,23 +6057,109 @@ function personalCatalog() {
 function personalStorageKey() { return "arena-personal-tools-v1:"+(admin?"central:":"publico:")+(trainingMode?"treino-"+role:user?.uid||"publico"); }
 function readPersonalTools() {
   try { const data=JSON.parse(localStorage.getItem(personalStorageKey())||"null")||{};
-    return {hidden:Array.isArray(data.hidden)?data.hidden:[],disabled:Array.isArray(data.disabled)?data.disabled:[],pins:Array.isArray(data.pins)?data.pins.filter(x=>typeof x==="string"):[],favorites:Array.isArray(data.favorites)?data.favorites.filter(x=>typeof x==="string"):[],colors:data.colors&&typeof data.colors==="object"?data.colors:{}};
-  } catch {return {hidden:[],disabled:[],pins:[],favorites:[],colors:{}};}
+    return {hidden:Array.isArray(data.hidden)?data.hidden:[],disabled:Array.isArray(data.disabled)?data.disabled:[],pins:Array.isArray(data.pins)?data.pins.filter(x=>typeof x==="string"):[],favorites:Array.isArray(data.favorites)?data.favorites.filter(x=>typeof x==="string"):[],colors:data.colors&&typeof data.colors==="object"?data.colors:{}, sizes:data.sizes&&typeof data.sizes==="object"?data.sizes:{}, width:Number(data.width)||240, reading:data.reading, railPinned:typeof data.railPinned==="boolean"?data.railPinned:undefined, panelColor:/^#[0-9a-f]{6}$/i.test(data.panelColor||"")?data.panelColor:"", panelAlign:data.panelAlign==="end"?"end":"start"};
+  } catch {return {hidden:[],disabled:[],pins:[],favorites:[],colors:{},sizes:{},width:240,panelColor:"",panelAlign:"start"};}
 }
-function savePersonalTools(value) {try{localStorage.setItem(personalStorageKey(),JSON.stringify(value));}catch{throw Error("O navegador não permitiu salvar suas preferências.");}}
+function syncPersonalTools() {
+  const account = admin && role && !C.demo && user?.uid;
+  if (personalSync?.account === account || !account && !personalSync) return;
+  personalSync?.stop?.();
+  if (personalSync) { preferences=readPreferences(); applyPreferences(); }
+  personalSync = null;
+  const remote = account && cloud?.operationLayout(account);
+  if (!remote) return;
+  const key = personalStorageKey(), sync = {account, remote, key, writing:false};
+  applySyncedInterface(readPersonalTools());
+  personalSync = sync;
+  sync.stop = remote.watch(payload => {
+    if (personalSync !== sync || sync.writing) return;
+    try { if (localStorage.getItem(key+":pending")) { flushPersonalTools(sync); return; } } catch { return; }
+    if (!payload) return;
+    let prefs;
+    try { prefs = JSON.parse(payload).interface; } catch { return; }
+    if (!prefs || !Array.isArray(prefs.pins) || !Array.isArray(prefs.favorites)) return;
+    try {
+      const value = JSON.stringify(prefs);
+      if (localStorage.getItem(key) === value) return;
+      localStorage.setItem(key,value);
+    } catch { return; }
+    const top = app.querySelector(".personal-shortcuts");
+    if (top) top.outerHTML = personalTopShortcuts();
+    const personal = readPersonalTools();
+    for (const button of app.querySelectorAll("#arenaSidebar nav [data-section], #arenaSidebar .arena-sidebar-nav > [data-section]")) {
+      button.toggleAttribute("data-personal-hidden",personal.hidden.includes(button.dataset.section));
+      if (personal.disabled.includes(button.dataset.section)) button.setAttribute("aria-disabled","true");
+      else button.removeAttribute("aria-disabled");
+    }
+    applySyncedInterface(personal);
+  },()=>{});
+}
+function applySyncedInterface(personal) {
+  if (personal.reading) {
+    preferences=readPreferences(personal.reading);
+    applyPreferences();
+    for(const control of document.querySelectorAll("[data-pref]")) {
+      if(control.type==="checkbox")control.checked=preferences[control.dataset.pref];
+      else control.value=preferences[control.dataset.pref];
+    }
+  }
+  if (typeof personal.railPinned==="boolean") {
+    arenaSidebarPinned=personal.railPinned;
+    arenaRailCollapsed=!arenaSidebarPinned;
+    arenaRailPeek=false;
+    syncArenaRail();
+  }
+  applyPersonalColors();
+}
+async function flushPersonalTools(sync) {
+  if (!sync || sync.writing || sync !== personalSync) return;
+  const pendingKey = sync.key+":pending";
+  let pending;
+  try { pending=localStorage.getItem(pendingKey); } catch { return; }
+  if (!pending) return;
+  sync.writing=true;
+  let saved=false;
+  try {
+    await sync.remote.writeInterface(JSON.parse(pending));
+    if (localStorage.getItem(pendingKey)===pending) localStorage.removeItem(pendingKey);
+    saved=true;
+  } catch {
+    if (sync===personalSync) toast("Preferências salvas neste aparelho. Sincronização indisponível.",true);
+  } finally {
+    sync.writing=false;
+    if(saved && localStorage.getItem(pendingKey)) flushPersonalTools(sync);
+  }
+}
+function savePersonalTools(value) {
+  const key=personalStorageKey(), payload=JSON.stringify(value);
+  localStorage.setItem(key,payload);
+  if (admin && !C.demo && user?.uid) {
+    localStorage.setItem(key+":pending",payload);
+    flushPersonalTools(personalSync);
+  }
+}
+window.addEventListener("online",()=>flushPersonalTools(personalSync));
 function personalTopShortcuts() {
   const data=readPersonalTools(),catalog=personalCatalog(),button=(id,favorite=false)=>{
     const item=catalog.find(i=>i.id===id);return item?`<button type="button" class="arena-icon-action" ${item.public?"data-public-area":"data-section"}="${esc(id)}">${favorite?arenaIcon("star"):arenaIcon("pin")} <span>${esc(item.label)}</span></button>`:"";
   };
-  return `<section class="personal-shortcuts noprint" aria-label="Meus atalhos"><div class="toolbar"><strong>Meus atalhos</strong>${data.pins.map(id=>button(id)).join("")}<button type="button" data-personal-settings class="arena-icon-action">${arenaIcon("star")}<span>Escolher atalhos e favoritos</span></button>${admin?'<a class="button" href="./index.html" target="_blank" rel="noopener">Painel público ↗</a>':""}</div>${data.favorites.length?`<div class="toolbar" aria-label="Favoritos">${data.favorites.map(id=>button(id,true)).join("")}</div>`:""}<small>Preferências desta conta neste navegador. Clique com o botão direito, segure uma aba ou use Escolher atalhos e favoritos.</small></section>`;
+  return `<section class="personal-shortcuts noprint" aria-label="Meus atalhos"><div class="toolbar"><strong>Meus atalhos</strong>${data.pins.map(id=>button(id)).join("")}<button type="button" data-personal-settings class="arena-icon-action">${arenaIcon("star")}<span>Escolher atalhos e favoritos</span></button>${admin?'<a class="button" href="./index.html" target="_blank" rel="noopener">Painel público ↗</a>':""}</div>${data.favorites.length?`<div class="toolbar" aria-label="Favoritos">${data.favorites.map(id=>button(id,true)).join("")}</div>`:""}<small>Clique com o botão direito ou mantenha pressionado um atalho para ajustar. Use Escolher atalhos e favoritos para organizar a barra.</small></section>`;
 }
 function personalTarget(el) {
   const b=el?.closest?.("button[data-section],button[data-public-area]");
+  if (!b && el?.closest?.(".personal-shortcuts")) return {id:null};
   if(!b)return null;const id=admin?b.dataset.section:b.dataset.publicArea;
   return personalCatalog().some(item=>item.id===id)?{button:b,id}:null;
 }
 function applyPersonalColors() {
-  const colors=readPersonalTools().colors;
+  const prefs=readPersonalTools(), colors=prefs.colors;
+  document.body.style.setProperty("--arena-user-rail",sidebarWidth(prefs.width)+"px");
+  const panel=app.querySelector(".arena-ui-customization");
+  if(panel){panel.style.setProperty("--arena-tools-tint",prefs.panelColor||"var(--line)");panel.dataset.align=prefs.panelAlign;}
+  for(const button of app.querySelectorAll("[data-section],[data-public-area]")){
+    const id=button.dataset.section||button.dataset.publicArea;
+    button.dataset.shortcutSize = prefs.sizes[id] === "large" ? "large" : "normal";
+  }
   for(const b of app.querySelectorAll("button[data-section],button[data-public-area]")){
     const id=admin?b.dataset.section:b.dataset.publicArea,color=colors[id];
     if(/^#[0-9a-f]{6}$/i.test(color||"")){
@@ -6057,7 +6176,7 @@ function showPersonalTools(id=null) {
   const colors=[["#145678","Azul"],["#216b43","Verde"],["#75419b","Roxo"],["#923b41","Vermelho"],["#f0bc42","Amarelo"],["#cf6b28","Laranja"]];
   const sidebarOptions=item && admin && id!=="overview" && workspaceDefinitions.some(group=>group.sections.includes(id))
     ? `<div class="toolbar"><button type="button" data-personal-toggle="hidden" data-personal-id="${esc(id)}">${data.hidden.includes(id)?"Mostrar no menu":"Ocultar do menu"}</button><button type="button" data-personal-toggle="disabled" data-personal-id="${esc(id)}">${data.disabled.includes(id)?"Ativar botão do menu":"Desativar botão do menu"}</button></div>` : "";
-  dialog.innerHTML=`<div class="arena-dialog-heading"><h2 id="personalToolsTitle">${item?esc(item.label):"Atalhos e favoritos"}</h2><button type="button" class="arena-close-x" data-personal-close aria-label="Fechar atalhos" title="Fechar atalhos">×</button></div><p>Os ajustes do menu valem para esta conta neste navegador.</p><div class="personal-tools-content">${item?`${sidebarOptions}<div class="toolbar"><button type="button" data-personal-toggle="pins" data-personal-id="${esc(id)}">${data.pins.includes(id)?"Desafixar":"Fixar no topo"}</button><button type="button" data-personal-toggle="favorites" data-personal-id="${esc(id)}">${data.favorites.includes(id)?"Retirar dos favoritos":"Adicionar aos favoritos"}</button></div><h3>Cor desta aba</h3><div class="toolbar">${colors.map(([color,label])=>`<button type="button" data-personal-color="${color}" data-personal-id="${esc(id)}" style="border-bottom:5px solid ${color}">${label}</button>`).join("")}<button type="button" data-personal-color="default" data-personal-id="${esc(id)}">Cor padrão</button></div>`:`<div class="tablewrap"><table><thead><tr><th>Função</th><th>Atalho no topo</th><th>Favorito</th><th>Ordem dos atalhos</th><th>Opções</th></tr></thead><tbody>${[...catalog].sort((a,b)=>{const rank=x=>data.pins.includes(x)?data.pins.indexOf(x):999;return rank(a.id)-rank(b.id);}).map(i=>`<tr><td>${esc(i.label)}</td><td><button type="button" data-personal-toggle="pins" data-personal-id="${esc(i.id)}" aria-pressed="${data.pins.includes(i.id)}">${data.pins.includes(i.id)?"Retirar":"Adicionar"}</button></td><td><button type="button" data-personal-toggle="favorites" data-personal-id="${esc(i.id)}" aria-pressed="${data.favorites.includes(i.id)}">${arenaIcon("star")} ${data.favorites.includes(i.id)?"Sim":"Não"}</button></td><td>${data.pins.includes(i.id)?`<button type="button" data-personal-move="-1" data-personal-id="${esc(i.id)}" aria-label="Mover ${esc(i.label)} para cima">↑</button><button type="button" data-personal-move="1" data-personal-id="${esc(i.id)}" aria-label="Mover ${esc(i.label)} para baixo">↓</button>`:""}</td><td><button type="button" data-personal-options="${esc(i.id)}">Cor e opções</button></td></tr>`).join("")}</tbody></table></div>`}</div><div class="toolbar personal-tools-footer">${item?'<button type="button" data-personal-settings>Todos os atalhos</button>':""}</div>`;
+  dialog.innerHTML=`<div class="arena-dialog-heading"><h2 id="personalToolsTitle">${item?esc(item.label):"Atalhos e favoritos"}</h2><button type="button" class="arena-close-x" data-personal-close aria-label="Fechar atalhos" title="Fechar atalhos">×</button></div><p>Organize os atalhos da sua conta.</p><div class="personal-tools-content">${item?`${sidebarOptions}<div class="toolbar"><button type="button" data-personal-toggle="pins" data-personal-id="${esc(id)}">${data.pins.includes(id)?"Desafixar":"Fixar no topo"}</button><button type="button" data-personal-toggle="favorites" data-personal-id="${esc(id)}">${data.favorites.includes(id)?"Retirar dos favoritos":"Adicionar aos favoritos"}</button></div><div class="toolbar"><button type="button" data-personal-size data-personal-id="${esc(id)}">Alternar tamanho do atalho</button></div><h3>Cor desta aba</h3><div class="toolbar">${colors.map(([color,label])=>`<button type="button" data-personal-color="${color}" data-personal-id="${esc(id)}" style="border-bottom:5px solid ${color}">${label}</button>`).join("")}<button type="button" data-personal-color="default" data-personal-id="${esc(id)}">Cor padrão</button></div>`:`<div class="toolbar"><label>Cor da caixa <input type="color" data-personal-panel-color value="${data.panelColor||"#263745"}"></label><button type="button" data-personal-panel="color">Cor padrão</button><button type="button" data-personal-panel="align">Alternar alinhamento</button></div><div class="tablewrap"><table><thead><tr><th>Função</th><th>Atalho no topo</th><th>Favorito</th><th>Ordem dos atalhos</th><th>Opções</th></tr></thead><tbody>${[...catalog].sort((a,b)=>{const rank=x=>data.pins.includes(x)?data.pins.indexOf(x):999;return rank(a.id)-rank(b.id);}).map(i=>`<tr><td>${esc(i.label)}</td><td><button type="button" data-personal-toggle="pins" data-personal-id="${esc(i.id)}" aria-pressed="${data.pins.includes(i.id)}">${data.pins.includes(i.id)?"Retirar":"Adicionar"}</button></td><td><button type="button" data-personal-toggle="favorites" data-personal-id="${esc(i.id)}" aria-pressed="${data.favorites.includes(i.id)}">${arenaIcon("star")} ${data.favorites.includes(i.id)?"Sim":"Não"}</button></td><td>${data.pins.includes(i.id)?`<button type="button" data-personal-move="-1" data-personal-id="${esc(i.id)}" aria-label="Mover ${esc(i.label)} para cima">↑</button><button type="button" data-personal-move="1" data-personal-id="${esc(i.id)}" aria-label="Mover ${esc(i.label)} para baixo">↓</button>`:""}</td><td><button type="button" data-personal-options="${esc(i.id)}">Cor e opções</button></td></tr>`).join("")}</tbody></table></div>`}</div><div class="toolbar personal-tools-footer">${item?'<button type="button" data-personal-settings>Todos os atalhos</button>':""}</div>`;
   dialog.dataset.item=id||"";if(!dialog.open)dialog.showModal();
 }
 document.addEventListener("contextmenu",e=>{const target=personalTarget(e.target);if(!target)return;e.preventDefault();showPersonalTools(target.id);});
@@ -6086,14 +6205,55 @@ document.addEventListener("click",e=>{
   if(b.hasAttribute("data-personal-close")){$("#arenaPersonalTools")?.close();return;}
   if(b.hasAttribute("data-personal-settings")){showPersonalTools();return;}
   if(b.dataset.personalOptions){showPersonalTools(b.dataset.personalOptions);return;}
+  if(b.dataset.personalPanel){
+    const prefs=readPersonalTools();
+    if(b.dataset.personalPanel==="align")prefs.panelAlign=prefs.panelAlign==="end"?"start":"end";
+    else prefs.panelColor="";
+    savePersonalTools(prefs);applyPersonalColors();showPersonalTools();return;
+  }
   const id=b.dataset.personalId;if(!personalCatalog().some(i=>i.id===id))throw Error("Função não disponível para sua conta.");
   const data=readPersonalTools(),dialog=$("#arenaPersonalTools"),current=dialog?.dataset.item||null;
+  if(b.hasAttribute("data-personal-size"))data.sizes[id]=data.sizes[id]==="large"?"normal":"large";
   if(b.dataset.personalToggle){const key=b.dataset.personalToggle;if(!["pins","favorites","hidden","disabled"].includes(key))return;data[key]=data[key].includes(id)?data[key].filter(x=>x!==id):[...data[key],id];}
   if(b.dataset.personalColor){if(b.dataset.personalColor==="default")delete data.colors[id];else data.colors[id]=b.dataset.personalColor;}
   if(b.dataset.personalMove){const i=data.pins.indexOf(id),j=Math.max(0,Math.min(data.pins.length-1,i+Number(b.dataset.personalMove)));if(i>=0)[data.pins[i],data.pins[j]]=[data.pins[j],data.pins[i]];}
   savePersonalTools(data);render();applyPersonalColors();showPersonalTools(current);
  }catch(error){toast(error.message,true);}
 });
+document.addEventListener("change",event=>{
+  if(!event.target.matches("[data-personal-panel-color]"))return;
+  const prefs=readPersonalTools();prefs.panelColor=event.target.value;
+  savePersonalTools(prefs);applyPersonalColors();
+});
+function sidebarWidth(value){
+  return Math.max(180,Math.min(420,Math.floor(innerWidth*.42),Number(value)||240));
+}
+let railDrag;
+function saveSidebarWidth(width){
+  const prefs=readPersonalTools();prefs.width=sidebarWidth(width);
+  savePersonalTools(prefs);applyPersonalColors();
+}
+document.addEventListener("pointerdown",event=>{
+  const handle=event.target.closest(".arena-sidebar-resize");
+  if(!handle || event.button!==0)return;
+  event.preventDefault();
+  railDrag={handle,id:event.pointerId,width:$("#arenaSidebar").offsetWidth};
+  handle.setPointerCapture(event.pointerId);
+});
+document.addEventListener("pointermove",event=>{
+  if(railDrag?.id!==event.pointerId)return;
+  railDrag.width=sidebarWidth(event.clientX);
+  document.body.style.setProperty("--arena-user-rail",railDrag.width+"px");
+});
+document.addEventListener("lostpointercapture",event=>{
+  if(railDrag?.id!==event.pointerId)return;
+  const width=railDrag.width;railDrag=null;saveSidebarWidth(width);
+});
+document.addEventListener("keydown",event=>{
+  if(!event.target.matches(".arena-sidebar-resize") || !["ArrowLeft","ArrowRight"].includes(event.key))return;
+  event.preventDefault();saveSidebarWidth($("#arenaSidebar").offsetWidth+(event.key==="ArrowRight"?16:-16));
+});
+window.addEventListener("resize",()=>applyPersonalColors(),{passive:true});
 new MutationObserver(()=>applyPersonalColors()).observe(app,{childList:true,subtree:true});
 applyPersonalColors();
 

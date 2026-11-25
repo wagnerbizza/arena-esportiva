@@ -172,3 +172,25 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 @media(max-width:480px) {
   .arena-op-strip > .arena-monitor-teams { flex-basis:100%; }
 }
+
+/* Visor compacto e destinos para os atalhos arrastados. */
+.arena-op-strip { justify-content:flex-start; }
+.arena-op-strip > .arena-monitor-teams { flex:0 1 clamp(290px,55%,640px); }
+.arena-op-strip > .game-clock { min-width:92px; }
+.arena-op-monitor { flex:0 1 auto; display:flex; flex-wrap:wrap; overflow:visible; }
+.arena-op-monitor-side { display:flex; flex:1 1 150px; min-width:0; gap:6px; flex-wrap:wrap; }
+.arena-op-monitor-side:empty { display:none; }
+.arena-op-monitor-row > button { flex:none; }
+.arena-op-match-details > summary { cursor:pointer; padding:8px; }
+.arena-op-match-details[open] > summary { margin-block-end:8px; }
+.arena-docking [data-op-dock] { display:flex; min-height:44px; min-width:80px; border:1px dashed var(--accent); border-radius:8px; padding:6px; }
+.arena-docking [data-op-dock]:empty::before { content:"Solte o atalho aqui"; align-self:center; padding:4px; color:var(--muted); }
+[data-op-dock-command][draggable=true] { cursor:grab; }
+.arena-dock-dialog { max-width:min(92vw,460px); }
+@media(max-width:650px) {
+  .arena-op-strip > .arena-monitor-teams { flex:1 1 100%; }
+  .arena-op-monitor-side { order:1; flex-basis:100%; }
+  .arena-op-monitor-row { order:2; }
+}
+.arena-op-score .match-guide { margin-block:0 8px; }
+[data-operation-customization] .arena-op-fold-actions { margin-block:8px 0; }

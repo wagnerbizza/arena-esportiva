@@ -1302,6 +1302,19 @@ export async function connectSpark({
       const allowed = () => {
         if (!authorized() || authentication.currentUser?.uid !== account) throw Error("A sessão mudou.");
       };
+      async function updateLayout(value, interfaceOnly) {
+        allowed();
+        await F.runTransaction(database, async tx => {
+          const snapshot = await tx.get(ref);
+          allowed();
+          let previous = {};
+          try { previous = JSON.parse(snapshot.data()?.payload || "{}") || {}; } catch {}
+          const next = interfaceOnly ? {...previous, interface:value} : {...value, interface:previous.interface};
+          const payload = JSON.stringify(next);
+          if (payload.length > 8192) throw Error("Preferências excedem o limite da conta.");
+          tx.set(ref, {payload, updatedAt:F.serverTimestamp()});
+        });
+      }
       return {
         uid: account,
         watch(update, error) {
@@ -1319,8 +1332,10 @@ export async function connectSpark({
           });
         },
         async write(payload) {
-          allowed();
-          await F.setDoc(ref, {payload, updatedAt:F.serverTimestamp()});
+          await updateLayout(JSON.parse(payload), false);
+        },
+        async writeInterface(preferences) {
+          await updateLayout(preferences, true);
         },
       };
     },

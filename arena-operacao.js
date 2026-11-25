@@ -8,6 +8,8 @@
  const chevron=icon('<path d="m6 9 6 6 6-6"/>');
  const grip=icon('<path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" stroke-width="3.5"/>');
  const monitorCommands = {
+  startClock: ['Iniciar cronômetro', '[data-clock-command="iniciar"]'],
+  stopClock: ['Parar cronômetro', '[data-clock-command="parar"]'],
   end: ['Encerrar', '[data-status="Encerrada"]'],
   resume: ['Iniciar / continuar', '[data-guided-start]'],
   pause: ['Pausar jogo', '[data-status="Pausada"]'],
@@ -38,13 +40,26 @@
  const panelColors={azul:['Azul','#45a4ff'],verde:['Verde','#49c99a'],laranja:['Laranja','#f4a858'],roxo:['Roxo','#b58cff'],rosa:['Rosa','#ee80ac']};
  const panelTitle=(prefs,id)=>prefs.names?.[id]||labels[id];
  const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>Object.hasOwn(panelColors,saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set(saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id)))]:[...defaultMonitor],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
+ function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>Object.hasOwn(panelColors,saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set(saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id)))]:[...defaultMonitor],side:Array.isArray(saved?.side)?saved.side.filter(id=>Object.hasOwn(monitorCommands,id)):[],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
  let syncedLayout=null;
  function currentWorkspace(key){
   return [...document.querySelectorAll('.arena-operation-workspace')].find(root=>root.dataset.opKey===key);
  }
+ function workspaceFor(element){
+  return element.closest('.arena-operation-workspace') ||
+   (element.closest('[data-operation-customization]') && document.querySelector('.arena-operation-workspace'));
+ }
+ function tools(root){
+  return root.querySelector('.arena-op-settings') ||
+   document.querySelector('[data-operation-customization] .arena-op-settings');
+ }
+ function mountCustomization(container){
+  const root=container.querySelector('.arena-operation-workspace');
+  const settings=root?.querySelector('.arena-op-settings');
+  if(settings)container.querySelector('[data-operation-customization]')?.append(settings);
+ }
  function syncStatus(key,text){
-  const label=currentWorkspace(key)?.querySelector('[data-op-save-status]');
+  const label=currentWorkspace(key) && tools(currentWorkspace(key))?.querySelector('[data-op-save-status]');
   if(label)label.textContent=text;
  }
  function connectLayout(key,remote){
@@ -61,14 +76,14 @@
     return;
    }
    let stored;try{stored=JSON.parse(payload);}catch{return;}
-   if(!stored||typeof stored!=='object'||Array.isArray(stored))return;
+   if(!stored||typeof stored!=='object'||Array.isArray(stored)||!Array.isArray(stored.order))return;
    sessionPreferences.set(key,stored);
    const prefs=read(key);
    try{localStorage.setItem(key,JSON.stringify(prefs));}catch{}
    const root=currentWorkspace(key);
    if(root&&!drag){
-    root.querySelector('[data-op-compact]').checked=prefs.compact;
-    root.querySelector('[data-op-columns]').checked=prefs.columns;
+    tools(root).querySelector('[data-op-compact]').checked=prefs.compact;
+    tools(root).querySelector('[data-op-columns]').checked=prefs.columns;
     const strip=root.querySelector('.arena-op-strip');
     strip.classList.toggle('is-pinned',prefs.scorePinned);
     describeScorePin(strip.querySelector('[data-op-pin-score]'),prefs.scorePinned);
@@ -101,8 +116,9 @@
   content.append(node);section.append(content);return section;}
  function monitorToolbar(root,prefs) {
   const menu=root.querySelector('[data-op-monitor]');
-  const choices=root.querySelector('[data-op-monitor-choices]');
-  menu.replaceChildren();
+  const choices=tools(root).querySelector('[data-op-monitor-choices]');
+  const side=root.querySelector('[data-op-monitor-side]');
+  menu.replaceChildren();side.replaceChildren();
   for(const id of prefs.monitor){
    const [label,selector,panelId]=monitorCommands[id];
    const source=selector?root.querySelector(selector):root.querySelector('[data-op-panel="'+panelId+'"]');
@@ -112,12 +128,20 @@
    if(panelId)button.dataset.opJump=panelId;else button.dataset.opMonitorRun=id;
    button.textContent=id==='resume'?(source.textContent.trim().startsWith('Retomar')?'Continuar':source.textContent.trim()):label;
    button.disabled=source.disabled===true;
-   menu.append(button);
+   button.dataset.opDockCommand=id;
+   button.draggable=!button.disabled;
+   (prefs.side.includes(id)?side:menu).append(button);
+  }
+  for(const [id,[,selector,panelId]] of Object.entries(monitorCommands)){
+   const source=selector?root.querySelector(selector):root.querySelector('[data-op-panel="'+panelId+'"] [data-op-drag]');
+   if(!source)continue;
+   source.dataset.opDockCommand=id;
+   if(!panelId)source.draggable=!source.disabled;
   }
   choices.innerHTML=Object.entries(monitorCommands).map(([id,[label]])=>
    '<label><input type="checkbox" data-op-monitor-choice="'+id+'" '+(prefs.monitor.includes(id)?'checked':'')+'> '+escape(label)+'</label>').join('');
  }
- function toolbar(root,prefs){monitorToolbar(root,prefs);const nav=root.querySelector('[data-op-shortcuts]');nav.replaceChildren();const panels=[...root.querySelectorAll('[data-op-panel]')];for(const section of panels){const id=section.dataset.opPanel,fold=section.querySelector('[data-op-fold]'),closed=prefs.collapsed.includes(id);
+ function toolbar(root,prefs){monitorToolbar(root,prefs);const nav=tools(root).querySelector('[data-op-shortcuts]');nav.replaceChildren();const panels=[...root.querySelectorAll('[data-op-panel]')];for(const section of panels){const id=section.dataset.opPanel,fold=section.querySelector('[data-op-fold]'),closed=prefs.collapsed.includes(id);
    const title=panelTitle(prefs,id),color=panelColors[prefs.colors[id]];
    section.querySelector('h2').textContent=title;
    if(color)section.style.setProperty('--arena-op-box-color',color[1]);
@@ -137,7 +161,7 @@
    fold.setAttribute('aria-label',(closed?'Expandir':'Recolher')+' '+title);section.querySelector('[data-op-content]').hidden=closed;
    const favorite=prefs.favorites.includes(id),button=section.querySelector('[data-op-favorite]');button.setAttribute('aria-pressed',String(favorite));button.innerHTML=star;button.title=(favorite?'Remover dos favoritos: ':'Favoritar: ')+title;button.setAttribute('aria-label',button.title);if(favorite){const jump=document.createElement('button');jump.type='button';jump.dataset.opJump=id;jump.textContent=title;nav.append(jump);}}
   if(!nav.children.length)nav.textContent='Marque uma estrela para adicionar um atalho.';
-  const list=root.querySelector('[data-op-order]');list.innerHTML=panels.map(section=>{const id=section.dataset.opPanel,siblings=[...section.parentElement.children],i=siblings.indexOf(section);return '<div class="arena-op-order-row"><span>'+escape(panelTitle(prefs,id))+'</span><button type="button" data-op-favorite="'+id+'" aria-pressed="'+prefs.favorites.includes(id)+'">'+(prefs.favorites.includes(id)?'Favorito':'Favoritar')+'</button><button type="button" data-op-move="'+id+'" data-op-direction="first" '+(i===0?'disabled':'')+'>Colocar primeiro</button><button type="button" data-op-move="'+id+'" data-op-direction="last" '+(i===siblings.length-1?'disabled':'')+'>Colocar por último</button><button type="button" data-op-move="'+id+'" data-op-direction="up" '+(i===0?'disabled':'')+' aria-label="Subir '+labels[id]+'">Subir</button><button type="button" data-op-move="'+id+'" data-op-direction="down" '+(i===siblings.length-1?'disabled':'')+' aria-label="Descer '+labels[id]+'">Descer</button></div>';}).join('');
+  const list=tools(root).querySelector('[data-op-order]');list.innerHTML=panels.map(section=>{const id=section.dataset.opPanel,siblings=[...section.parentElement.children],i=siblings.indexOf(section);return '<div class="arena-op-order-row"><span>'+escape(panelTitle(prefs,id))+'</span><button type="button" data-op-favorite="'+id+'" aria-pressed="'+prefs.favorites.includes(id)+'">'+(prefs.favorites.includes(id)?'Favorito':'Favoritar')+'</button><button type="button" data-op-move="'+id+'" data-op-direction="first" '+(i===0?'disabled':'')+'>Colocar primeiro</button><button type="button" data-op-move="'+id+'" data-op-direction="last" '+(i===siblings.length-1?'disabled':'')+'>Colocar por último</button><button type="button" data-op-move="'+id+'" data-op-direction="up" '+(i===0?'disabled':'')+' aria-label="Subir '+labels[id]+'">Subir</button><button type="button" data-op-move="'+id+'" data-op-direction="down" '+(i===siblings.length-1?'disabled':'')+' aria-label="Descer '+labels[id]+'">Descer</button></div>';}).join('');
  }
  function apply(root,prefs){
   root.classList.toggle('arena-op-compact',prefs.compact);
@@ -203,6 +227,10 @@
   const editMonitor=document.createElement('button');
   editMonitor.type='button';editMonitor.dataset.opMonitorEdit='';editMonitor.textContent='Editar atalhos';
   const monitorRow=document.createElement('div');monitorRow.className='arena-op-monitor-row';monitorRow.append(monitor,editMonitor);
+  monitor.dataset.opDock='below';
+  const side=document.createElement('nav');
+  side.className='arena-op-monitor-side';side.dataset.opMonitorSide='';side.dataset.opDock='side';
+  side.setAttribute('aria-label','Atalhos ao lado do visor');strip.append(side);
   if(back&&!config.standby)monitorRow.prepend(back);
   if(config.followClock){
    const follow=document.createElement('button');
@@ -217,17 +245,17 @@
   activity.textContent=match.status+(config.monitorEvent?' · Último lance: '+config.monitorEvent:'');
   strip.append(activity,monitorRow);
   root.append(strip);
-  const timeline=score.querySelector('.match-timeline');if(timeline)timeline.remove();const scoreWrap=document.createElement('section');scoreWrap.className='arena-op-score';scoreWrap.append(score);const guide=old.querySelector('.match-guide');root.append(scoreWrap);
-  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.innerHTML='<summary>Minha mesa de operação: atalhos e organização</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Marque os atalhos que deseja mostrar. Os botões aparecem quando servem para o jogo e a situação atual.</p><div data-op-monitor-choices></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
-  const nav=document.createElement('nav');nav.className='toolbar arena-op-shortcuts';nav.dataset.opShortcuts='';nav.setAttribute('aria-label','Meus atalhos da operação');root.append(nav);const grid=document.createElement('div');grid.className='arena-op-grid';grid.dataset.opGrid='';root.append(grid);
+  const timeline=score.querySelector('.match-timeline');if(timeline)timeline.remove();const scoreWrap=document.createElement('section');scoreWrap.className='arena-op-score';const info=document.createElement('details');info.className='arena-op-match-details';info.innerHTML='<summary>Detalhes da partida</summary>';info.append(score);scoreWrap.append(info);const guide=old.querySelector('.match-guide');root.append(scoreWrap);
+  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.innerHTML='<summary>Personalizar a cabine</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Arraste um comando para perto do placar ou use clique direito ou toque prolongado. Marque abaixo os atalhos que quer manter.</p><div data-op-monitor-choices></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
+  const nav=document.createElement('nav');nav.className='toolbar arena-op-shortcuts';nav.dataset.opShortcuts='';nav.setAttribute('aria-label','Meus atalhos da operação');settings.append(nav);const grid=document.createElement('div');grid.className='arena-op-grid';grid.dataset.opGrid='';root.append(grid);
   for(const [group,label] of [['pinned','Caixas fixadas no topo'],['regular','Caixas desafixadas']]){
    const lane=document.createElement('div');lane.dataset.opGroup=group;
    lane.setAttribute('role','group');lane.setAttribute('aria-label',label);grid.append(lane);
   }
-  const foldActions=document.createElement('div');foldActions.className='card arena-op-fold-actions';
+  const foldActions=document.createElement('div');foldActions.className='arena-op-fold-actions';
   foldActions.innerHTML='<h2>Ajustes das caixas</h2><p>Clique com o botão direito ou mantenha o dedo pressionado sobre a caixa para personalizar. Use a alça para arrastar.</p><div class="toolbar"><button type="button" data-op-fold-all="open">Expandir todas</button><button type="button" data-op-fold-all="close">Recolher todas</button></div>';
-  strip.before(settings,nav);grid.before(foldActions);
-  if(guide)strip.before(guide);strip.before(anchor);
+  strip.before(settings);settings.append(foldActions);
+  if(guide)scoreWrap.prepend(guide);strip.before(anchor);
   const quick=old.querySelector('.quick-panel'),noticeShortcuts=quick?[...quick.querySelectorAll('.quick-control-group')].find(node=>node.querySelector('h3')?.textContent==='Avisos rápidos'):null;if(noticeShortcuts)noticeShortcuts.remove();if(quick){quick.querySelectorAll('.quick-control-group').forEach(node=>node.remove());quick.querySelector(':scope>h2')?.remove();quick.querySelector(':scope>.tag')?.remove();}
   const time=old.querySelector('#mesa-tempo');if(time){time.removeAttribute('hidden');time.querySelector(':scope>h3')?.remove();}
   const notices=old.querySelector('#mesa-avisos');if(notices){notices.removeAttribute('hidden');notices.querySelector(':scope>h3')?.remove();if(noticeShortcuts)notices.append(noticeShortcuts);}
@@ -265,7 +293,7 @@
     }
    }
   }
-  root.querySelector('[data-op-compact]').checked=prefs.compact;root.querySelector('[data-op-columns]').checked=prefs.columns;apply(root,prefs);return root.outerHTML;
+  tools(root).querySelector('[data-op-compact]').checked=prefs.compact;tools(root).querySelector('[data-op-columns]').checked=prefs.columns;apply(root,prefs);return root.outerHTML;
  }
  function storePanelOrder(root){
   const prefs=read(root.dataset.opKey);
@@ -442,7 +470,7 @@
   }
 
  },true);
- document.addEventListener('click',event=>{const button=event.target.closest('[data-op-favorite],[data-op-move],[data-op-reset],[data-op-jump],[data-op-event-kind],[data-op-pin-score],[data-op-fold],[data-op-fold-all],[data-op-lock]');if(!button)return;const root=button.closest('.arena-operation-workspace');if(!root)return;const prefs=read(root.dataset.opKey);
+ document.addEventListener('click',event=>{const button=event.target.closest('[data-op-favorite],[data-op-move],[data-op-reset],[data-op-jump],[data-op-event-kind],[data-op-pin-score],[data-op-fold],[data-op-fold-all],[data-op-lock]');if(!button)return;const root=workspaceFor(button);if(!root)return;const prefs=read(root.dataset.opKey);
   if(button.dataset.opLock){
    const id=button.dataset.opLock;
    prefs.locked=prefs.locked.includes(id)?prefs.locked.filter(key=>key!==id):[...prefs.locked,id];
@@ -483,16 +511,16 @@
    visible.splice(target,0,id);
    prefs.order=[...visible,...prefs.order.filter(key=>!visible.includes(key))];
   }
-  if(button.hasAttribute('data-op-reset')){prefs.order=[...defaults];prefs.monitor=[...defaultMonitor];prefs.names={};prefs.colors={};prefs.collapsed=[];prefs.locked=[];prefs.favorites=['points','time','events','history'];prefs.compact=false;prefs.columns=false;root.querySelector('[data-op-compact]').checked=false;root.querySelector('[data-op-columns]').checked=false;}
+  if(button.hasAttribute('data-op-reset')){prefs.order=[...defaults];prefs.monitor=[...defaultMonitor];prefs.side=[];prefs.names={};prefs.colors={};prefs.collapsed=[];prefs.locked=[];prefs.favorites=['points','time','events','history'];prefs.compact=false;prefs.columns=false;tools(root).querySelector('[data-op-compact]').checked=false;tools(root).querySelector('[data-op-columns]').checked=false;}
   apply(root,prefs);save(root,prefs);
  });
  document.addEventListener('click',event=>{
   const button=event.target.closest('[data-op-monitor-edit],[data-op-monitor-run]');
   if(!button||button.disabled)return;
-  const root=button.closest('.arena-operation-workspace');
+  const root=workspaceFor(button);
   if(!root)return;
   if(button.hasAttribute('data-op-monitor-edit')){
-   const settings=root.querySelector('.arena-op-settings');
+   const settings=tools(root);
    settings.open=true;
    settings.scrollIntoView({block:'center'});
    settings.querySelector('[data-op-monitor-choice]')?.focus({preventScroll:true});
@@ -504,20 +532,95 @@
  });
  document.addEventListener('change',event=>{
   const input=event.target.closest('[data-op-monitor-choice]');if(!input)return;
-  const root=input.closest('.arena-operation-workspace');if(!root)return;
+  const root=workspaceFor(input);if(!root)return;
   const prefs=read(root.dataset.opKey),id=input.dataset.opMonitorChoice;
   if(!Object.hasOwn(monitorCommands,id))return;
   prefs.monitor=input.checked?[...new Set([...prefs.monitor,id])]:prefs.monitor.filter(key=>key!==id);
   monitorToolbar(root,prefs);
-  root.querySelector('[data-op-monitor-choice="'+id+'"]')?.focus({preventScroll:true});
+  tools(root).querySelector('[data-op-monitor-choice="'+id+'"]')?.focus({preventScroll:true});
   save(root,prefs);
  });
- document.addEventListener('change',event=>{if(!event.target.matches('[data-op-compact],[data-op-columns]'))return;const root=event.target.closest('.arena-operation-workspace');if(!root)return;const prefs=read(root.dataset.opKey);prefs.compact=root.querySelector('[data-op-compact]').checked;prefs.columns=root.querySelector('[data-op-columns]').checked;apply(root,prefs);save(root,prefs);});
+ document.addEventListener('change',event=>{if(!event.target.matches('[data-op-compact],[data-op-columns]'))return;const root=workspaceFor(event.target);if(!root)return;const prefs=read(root.dataset.opKey);prefs.compact=tools(root).querySelector('[data-op-compact]').checked;prefs.columns=tools(root).querySelector('[data-op-columns]').checked;apply(root,prefs);save(root,prefs);});
  window.addEventListener('storage',event=>{if(event.key?.startsWith('arena-operation-layout-v1:'))sessionPreferences.delete(event.key);});
  function preview(account) {
   const prefs=read('arena-operation-layout-v1:'+encodeURIComponent(account||'sem-conta'));
   const shortcuts=prefs.monitor.map(id=>escape(monitorCommands[id][0])).join(' · ');
   return '<details><summary>Ajustes atuais da mesa</summary><p><strong>Atalhos no monitor:</strong> '+(shortcuts||'Nenhum')+'</p><p><strong>Controles:</strong> '+(prefs.compact?'compactos':'tamanho padrão')+' · '+(prefs.columns?'duas colunas em tela larga':'uma coluna')+'</p><p><strong>Ordem das caixas:</strong> '+prefs.order.map(id=>escape(panelTitle(prefs,id))).join(' · ')+'</p><p>Para mudar esses ajustes, abra uma partida e use Minha mesa de operação.</p></details>';
  }
- window.ArenaOperation=Object.freeze({build,preview});
+ function dockCommand(root,id,place,before){
+  const prefs=read(root.dataset.opKey);
+  prefs.monitor=prefs.monitor.filter(key=>key!==id);
+  prefs.side=prefs.side.filter(key=>key!==id);
+  if(place!=='remove') {
+   const at=prefs.monitor.indexOf(before);
+   prefs.monitor.splice(at<0?prefs.monitor.length:at,0,id);
+  }
+  if(place==='side')prefs.side.push(id);
+  monitorToolbar(root,prefs);save(root,prefs);
+ }
+ function dockMenu(root,source){
+  const id=source.dataset.opDockCommand;
+  const dialog=document.createElement('dialog');
+  dialog.className='card arena-dock-dialog';
+  dialog.innerHTML='<form method="dialog"><strong>'+escape(monitorCommands[id][0])+'</strong><div class="toolbar"><button value="side">Ao lado</button><button value="below">Abaixo</button><button value="remove">Retirar do visor</button><button value="cancel" class="arena-close-x" aria-label="Fechar">×</button></div></form>';
+  document.body.append(dialog);
+  dialog.addEventListener('close',()=>{
+   if(root.isConnected&&['side','below','remove'].includes(dialog.returnValue))dockCommand(root,id,dialog.returnValue);
+   dialog.remove();
+  },{once:true});
+  dialog.showModal();
+ }
+ let dockDrag, dockPress, dockTimer, dockSuppressedUntil=0;
+ document.addEventListener('dragstart',event=>{
+  const source=event.target.closest('[data-op-dock-command][draggable="true"]');
+  const root=source&&workspaceFor(source);
+  if(!root)return;
+  dockDrag={root,id:source.dataset.opDockCommand};
+  root.classList.add('arena-docking');
+  event.dataTransfer.effectAllowed='copy';
+  event.dataTransfer.setData('text/plain',source.textContent.trim());
+ });
+ document.addEventListener('dragover',event=>{
+  const destination=event.target.closest('[data-op-dock]');
+  if(!dockDrag||!destination||workspaceFor(destination)!==dockDrag.root)return;
+  event.preventDefault();event.dataTransfer.dropEffect='copy';
+ });
+ document.addEventListener('drop',event=>{
+  const destination=event.target.closest('[data-op-dock]');
+  if(!dockDrag||!destination||workspaceFor(destination)!==dockDrag.root)return;
+  event.preventDefault();
+  const {root,id}=dockDrag;root.classList.remove('arena-docking');dockDrag=null;
+  const target=event.target.closest('[data-op-dock-command]');
+  dockCommand(root,id,destination.dataset.opDock,target?.dataset.opDockCommand);
+ });
+ document.addEventListener('dragend',()=>{dockDrag?.root.classList.remove('arena-docking');dockDrag=null;});
+ function openDockOptions(event){
+  const source=event.target.closest('[data-op-dock-command]');
+  const root=source&&workspaceFor(source);
+  if(!root||source.hasAttribute('data-op-drag'))return;
+  event.preventDefault();dockMenu(root,source);
+ }
+ document.addEventListener('contextmenu',openDockOptions);
+ document.addEventListener('keydown',event=>{
+  if(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10')openDockOptions(event);
+ });
+ document.addEventListener('pointerdown',event=>{
+  const source=event.target.closest('[data-op-dock-command]');
+  const root=source&&workspaceFor(source);
+  if(!root||!event.isPrimary||event.pointerType==='mouse'||source.hasAttribute('data-op-drag'))return;
+  cancelDockPress();
+  dockPress={x:event.clientX,y:event.clientY};
+  dockTimer=setTimeout(()=>{dockSuppressedUntil=Date.now()+850;dockMenu(root,source);},600);
+ },{passive:true});
+ const cancelDockPress=()=>{clearTimeout(dockTimer);dockPress=null;};
+ document.addEventListener('pointermove',event=>{
+  if(dockPress&&Math.hypot(event.clientX-dockPress.x,event.clientY-dockPress.y)>10)cancelDockPress();
+ },{passive:true});
+ for(const type of ['pointerup','pointercancel','scroll'])document.addEventListener(type,cancelDockPress,{passive:true,capture:true});
+ document.addEventListener('click',event=>{
+  if(Date.now()<dockSuppressedUntil&&event.target.closest('[data-op-dock-command]')){
+   event.preventDefault();event.stopImmediatePropagation();
+  }
+ },true);
+ window.ArenaOperation=Object.freeze({build,preview,mountCustomization});
 })();
