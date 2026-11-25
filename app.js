@@ -1182,6 +1182,12 @@ function refresh() {
   }
 }
 function toast(t, error = false) {
+  const feedback = $(".arena-op-quick-dialog[open] [data-op-quick-feedback]");
+  if (feedback) {
+    feedback.textContent=t;
+    feedback.hidden=false;
+    feedback.classList.toggle("error",error);
+  }
   const n = $("#notice");
   n.textContent = t;
   n.className = error ? "error" : "";
@@ -2169,7 +2175,7 @@ function cabinView() {
   }
   const games = state.matches.filter(item => canUseCabin(item) && !finalStatuses.includes(item.status))
     .sort((a,b) => Number(b.status === "Ao vivo") - Number(a.status === "Ao vivo") || String(a.date).localeCompare(String(b.date)));
-  return cabinStandby(`<details class="card arena-cabin-picker"><summary>Partidas disponíveis</summary><div class="toolbar"><button type="button" data-section="matches">Ver jogos</button>${canCreateMatches()?'<button type="button" data-section="createMatch">Agendar partida</button>':""}</div><div class="grid cabin-games">${games.map(item => `<button type="button" class="shortcut-primary" data-open="${esc(item.id)}" data-cabin-match><strong>${esc(name(item.home))} × ${esc(name(item.away))}</strong><small>${esc(item.sport)} · ${esc(item.status)} · ${esc(format(item.date))}</small></button>`).join("") || empty("Nenhum jogo em aberto autorizado para esta conta.")}</div></details>`);
+  return cabinStandby(`<details class="card arena-cabin-picker"><summary>Partidas disponíveis</summary><div class="toolbar"><button type="button" data-section="matches">Ver jogos</button>${canCreateMatches()?'<button type="button" data-section="createMatch">Agendar partida</button>':""}</div><div class="grid cabin-games">${games.map(item => `<button type="button" class="shortcut-primary" data-open="${esc(item.id)}" data-cabin-match><strong>${esc(name(item.home))} × ${esc(name(item.away))}</strong><small>${esc(item.sport)} · ${esc(item.status)} · ${esc(format(item.date))}</small></button>`).join("") || empty("Não há partidas disponíveis no momento. Aguarde uma partida autorizada.")}</div></details>`);
 }
 document.addEventListener("click", event => {
   const button = event.target.closest("[data-cabin-keyboard]");

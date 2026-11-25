@@ -256,3 +256,12 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 [data-op-dock-command][aria-disabled=true] { opacity:.65; }
 [data-op-dock-command][aria-disabled=true][draggable=true] { pointer-events:auto; cursor:grab; }
 .arena-operation-workspace.arena-docking .arena-op-monitor-row:not(:has(button)) { display:flex; }
+
+[data-op-unavailable] { opacity:.68; }
+.arena-op-quick-dialog { width:min(680px,calc(100% - 24px)); max-height:85dvh; overflow:auto; margin:auto; }
+.arena-op-quick-dialog::backdrop { background:#0008; }
+.arena-op-quick-dialog [data-op-quick-feedback] { padding:8px; color:var(--text); border:1px solid var(--line); }
+body.arena-central-ready.arena-operation-page main > .arena-weather-card.is-pinned { position:static; }
+body.arena-central-ready.arena-operation-page:has(#arenaMenuToggle:not([hidden])) main .arena-operation-workspace {
+  --arena-op-stack-top:var(--arena-op-sticky-offset,6px);
+}

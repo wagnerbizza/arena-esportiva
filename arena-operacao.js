@@ -152,10 +152,10 @@
    preview.dataset.opPlace='';
    (beside?sidePreview:belowPreview).append(preview);
    if(root.hasAttribute('data-op-standby') || !source || source.disabled){
-    button.setAttribute('aria-disabled','true');
-    button.title='Comando indisponível nesta partida. Clique para ajustar a posição.';
-    button.dataset.opPlace='';
-   }else if(panelId)button.dataset.opJump=panelId;
+    button.dataset.opUnavailable='';
+    button.title=root.hasAttribute('data-op-standby')?'Escolha uma partida para usar este comando':'Comando indisponível na situação atual';
+   }else if(['notices','events'].includes(panelId))button.dataset.opQuickPanel=panelId;
+   else if(panelId)button.dataset.opJump=panelId;
    else button.dataset.opMonitorRun=id;
    (beside?side:menu).append(button);
   }
@@ -269,6 +269,12 @@
   const controls=document.createElement('div');
   controls.className='arena-op-display-controls';
   controls.append(editMonitor,pin);
+  if(match.status==='Ao vivo' && !config.standby){
+   const events=document.createElement('button');
+   events.type='button';events.dataset.opQuickPanel='events';
+   events.textContent='Cartões e faltas';
+   controls.prepend(events);
+  }
   if(config.standby){
    const choose=document.createElement('button');
    choose.type='button';choose.className='primary';choose.dataset.opChoose='';
@@ -589,18 +595,49 @@
   if(button.hasAttribute('data-op-reset')){prefs.order=[...defaults];prefs.monitor=[...defaultMonitor];prefs.side=[];prefs.names={};prefs.colors={};prefs.collapsed=[];prefs.locked=[];prefs.favorites=['points','time','events','history'];prefs.compact=false;prefs.columns=false;tools(root).querySelector('[data-op-compact]').checked=false;tools(root).querySelector('[data-op-columns]').checked=false;}
   apply(root,prefs);save(root,prefs);
  });
+ function chooseMatch(root){
+  const picker=root.querySelector('.arena-cabin-picker');
+  if(!picker)return;
+  picker.open=true;
+  picker.querySelector('summary').focus({preventScroll:true});
+  picker.scrollIntoView({block:'start'});
+ }
+ function openQuickPanel(root,id,opener){
+  const panel=root.querySelector('[data-op-panel="'+id+'"]');
+  const content=id==='pauses'?panel?.querySelector('#interruption'):panel?.querySelector('[data-op-content] > div');
+  if(!content || root.querySelector('.arena-op-quick-dialog[open]'))return;
+  const dialog=document.createElement('dialog');
+  dialog.className='card arena-op-quick-dialog';
+  dialog.setAttribute('aria-labelledby','arenaOpQuickTitle');
+  dialog.innerHTML='<div class="arena-dialog-heading"><h2 id="arenaOpQuickTitle">'+escape(labels[id])+'</h2><button type="button" class="arena-close-x" aria-label="Fechar">×</button></div><p data-op-quick-feedback role="status" hidden></p>';
+  const marker=document.createComment('Destino do controle da cabine');
+  content.before(marker);
+  dialog.append(content);root.append(dialog);
+  dialog.querySelector('.arena-close-x').onclick=()=>dialog.close();
+  dialog.addEventListener('close',()=>{
+   marker.replaceWith(content);dialog.remove();
+   if(opener.isConnected)opener.focus({preventScroll:true});
+  },{once:true});
+  dialog.showModal();
+ }
  document.addEventListener('click',event=>{
-  const button=event.target.closest('[data-op-monitor-edit],[data-op-monitor-run],[data-op-place],[data-op-view-monitor],[data-op-choose]');
+  const button=event.target.closest('[data-op-monitor-edit],[data-op-monitor-run],[data-op-place],[data-op-view-monitor],[data-op-choose],[data-op-quick-panel],[data-op-unavailable],[data-op-dock-command][data-op-jump="notices"],[data-op-dock-command][data-op-jump="events"]');
   if(!button||button.disabled)return;
   const root=workspaceFor(button);
   if(!root)return;
-  if(button.hasAttribute('data-op-choose')){
-   const picker=root.querySelector('.arena-cabin-picker');
-   if(picker){
-    picker.open=true;
-    picker.querySelector('summary').focus({preventScroll:true});
-    picker.scrollIntoView({block:'start'});
-   }
+  if(button.hasAttribute('data-op-choose') ||
+     (button.hasAttribute('data-op-unavailable') && root.hasAttribute('data-op-standby'))){
+   chooseMatch(root);
+   return;
+  }
+  if(button.hasAttribute('data-op-unavailable')){
+   const status=root.querySelector('.arena-op-monitor-event');
+   if(status)status.textContent=button.title;
+   return;
+  }
+  const quickPanel=button.dataset.opQuickPanel || button.dataset.opJump;
+  if(quickPanel==='notices' || quickPanel==='events'){
+   openQuickPanel(root,quickPanel,button);
    return;
   }
   if(button.hasAttribute('data-op-place')){
@@ -620,6 +657,10 @@
    settings.open=true;
    settings.scrollIntoView({block:'center'});
    settings.querySelector('[data-op-monitor-choice]')?.focus({preventScroll:true});
+   return;
+  }
+  if(['pause','suspend'].includes(button.dataset.opMonitorRun)){
+   openQuickPanel(root,'pauses',button);
    return;
   }
   const command=monitorCommands[button.dataset.opMonitorRun];
