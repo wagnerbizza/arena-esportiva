@@ -197,7 +197,8 @@ function listPanel(kind) {
   if (kind === "matches") controls += filterSelect(kind, "sport", "Modalidade", D.SPORTS, "Todas as modalidades") + filterSelect(kind, "status", "Situação específica", matchStatuses, "Todas as situações") + filterSelect(kind, "championshipId", "Campeonato / temporada", championshipFilterOptions(), "Todos os campeonatos");
   controls += filterSelect(kind, "order", "Ordenar", [["az","Nome A–Z"],["za","Nome Z–A"]], kind === "matches" ? "Ordem por horário" : "Nome A–Z (padrão)");
   const groups = kind === "matches" ? `<div class="list-groups" aria-label="Visualização das partidas">${[["active", "Em andamento e próximas"], ["finished", "Finalizadas"], ["all", "Todas"]].map(([v, title]) => `<button type="button" data-list-group="${v}" aria-pressed="${f.group === v}" class="${f.group === v ? "primary" : ""}">${title}</button>`).join("")}</div>` : "";
-  return `<section class="card list-filters" aria-label="Filtros de ${titles[kind]}"><h2>${titles[kind]}</h2>${groups}${kind === "teams" ? participantDirectory() : ""}<div class="list-controls">${controls}<button type="button" data-list-reset="${kind}">Limpar filtros</button></div><p class="muted list-count" id="list-count-${kind}" role="status">${listCount(kind)}</p>${kind === "matches" ? '<small>Finalizadas inclui encerradas, homologadas e canceladas. Adiadas e suspensas continuam em andamento e próximas.</small>' : ""}<div id="list-results-${kind}" class="arena-record-results ${kind === "players" ? "tablewrap-list" : "grid"}">${listResults(kind)}</div></section>`;
+  const actions=kind==="teams"?`<button type="button" class="primary arena-icon-action" data-new-team-form>${arenaIcon("add")} Nova equipe</button><button type="button" class="arena-icon-action" data-section="imports">${arenaIcon("upload")} Importar equipes</button>`:kind==="players"?`<button type="button" class="primary arena-icon-action" data-player-form="open">${arenaIcon("add")} Cadastrar jogador</button><button type="button" data-section="imports" class="arena-icon-action">${arenaIcon("upload")} Importar jogadores</button>`:canCreateMatches()?'<button type="button" class="primary" data-section="createMatch">Cadastrar partida</button>':"";
+  return `<section class="card list-filters" data-custom-area="list:${kind}" aria-label="Filtros de ${titles[kind]}"><div class="arena-list-heading"><h2>${titles[kind]}</h2>${gameBarSettingsButton("list:"+kind)}</div>${actions?`<div class="toolbar">${actions}</div>`:""}${groups}${kind === "teams" ? participantDirectory() : ""}<div class="list-controls">${controls}<button type="button" data-list-reset="${kind}">Limpar filtros</button></div><p class="muted list-count" id="list-count-${kind}" role="status">${listCount(kind)}</p>${kind === "matches" ? '<small>Finalizadas inclui encerradas, homologadas e canceladas. Adiadas e suspensas continuam em andamento e próximas.</small>' : ""}<div id="list-results-${kind}" class="arena-record-results ${kind === "players" ? "tablewrap-list" : "grid"}">${listResults(kind)}</div></section>`;
 }
 function listCount(kind) {
   return `${filteredRecords(kind).length} de ${listSource(kind).length} ${ { teams: "equipes", players: "jogadores", matches: "partidas" }[kind]} nesta visualização`;
@@ -363,7 +364,7 @@ function championshipsView() {
   const value = (key) => esc(draft?.[key] || "");
   const canChangeSport = c && canChangeChampionshipSport();
   if (championshipFormOpen || c) return `<div class="card"><h2>${c ? "Editar campeonato / temporada" : "Cadastrar campeonato / temporada"}</h2><p class="muted">Cadastre a primeira modalidade e categoria. Depois, use Adicionar modalidade ou categoria no cartão da edição.</p><form id="championship"><input type="hidden" name="recordId" value="${value("id")}"><div class="formgrid">${field("Nome do campeonato", "name", "text", `required maxlength="100" value="${value("name")}"`)}${field("Edição / temporada", "season", "text", `required maxlength="40" placeholder="Ex.: 2026 ou 2º semestre de 2026" value="${value("season")}"`)}<label>Modalidade<select name="sport" required>${D.SPORTS.map((sport) => `<option ${draft?.sport === sport ? "selected" : ""} ${c && !canChangeSport && c.sport !== sport ? "disabled" : ""}>${esc(sport)}</option>`).join("")}</select>${canChangeSport ? "<small>A alteração vale para os próximos jogos.</small>" : ""}</label> ${canChangeSport ? field("Motivo da mudança de modalidade","sportChangeReason","text",`maxlength="300" value="${value("sportChangeReason")}" placeholder="Ex.: modalidade cadastrada incorretamente"`) : ""}${field("Categoria", "category", "text", `maxlength="150" placeholder="Ex.: Livre, Sub-17, Feminino" value="${value("category")}"`)}<label>Situação<select name="status">${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${draft?.status === status ? "selected" : ""}>${status}</option>`).join("")}</select></label></div><button class="primary">${c ? "Salvar alterações" : "Cadastrar campeonato"}</button> <button type="button" data-back-championships>${arenaIcon("collapse")} Voltar aos campeonatos</button></form><p class="muted">Encerrar o campeonato impede criar novas partidas vinculadas; não encerra partidas automaticamente. Alterações do nome ou da edição não reescrevem súmulas existentes.</p>${c ? championshipMatchSportForm(c) : ""}</div>`;
-  return `<section class="card arena-record-actions"><h2>Cadastro</h2><button type="button" class="primary arena-icon-action" data-new-championship>${arenaIcon("add")} Cadastrar campeonato</button></section><section class="card list-filters"><h2>Campeonatos cadastrados</h2><div class="list-controls"><label class="list-search">Buscar campeonato, edição, modalidade ou categoria<input type="search" data-championship-filter="query" value="${esc(championshipQuery)}" placeholder="Digite para buscar…"></label><label>Situação<select data-championship-filter="status"><option value="">Todas as situações</option>${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${championshipStatus === status ? "selected" : ""}>${status}</option>`).join("")}</select></label><label>Ordenar<select data-championship-filter="order"><option value="az" ${championshipOrder==="az"?"selected":""}>A–Z</option><option value="za" ${championshipOrder==="za"?"selected":""}>Z–A</option></select></label><button type="button" data-clear-championship-filters>Limpar filtros</button></div><p id="championship-count" class="muted" role="status">${championshipCount()}</p><div class="grid arena-record-results" id="championship-results">${championshipCards()}</div></section>${phasesView()}`;
+  return `<section class="card list-filters" data-custom-area="list:championships"><div class="arena-list-heading"><h2>Campeonatos cadastrados</h2>${gameBarSettingsButton("list:championships")}</div><div class="toolbar"><button type="button" class="primary arena-icon-action" data-new-championship>${arenaIcon("add")} Cadastrar campeonato</button></div><div class="list-controls"><label class="list-search">Buscar campeonato, edição, modalidade ou categoria<input type="search" data-championship-filter="query" value="${esc(championshipQuery)}" placeholder="Digite para buscar…"></label><label>Situação<select data-championship-filter="status"><option value="">Todas as situações</option>${["Planejado","Em andamento","Encerrado"].map((status) => `<option ${championshipStatus === status ? "selected" : ""}>${status}</option>`).join("")}</select></label><label>Ordenar<select data-championship-filter="order"><option value="az" ${championshipOrder==="az"?"selected":""}>A–Z</option><option value="za" ${championshipOrder==="za"?"selected":""}>Z–A</option></select></label><button type="button" data-clear-championship-filters>Limpar filtros</button></div><p id="championship-count" class="muted" role="status">${championshipCount()}</p><div class="grid arena-record-results" id="championship-results">${championshipCards()}</div></section>${phasesView()}`;
 }
 function visibleChampionships() {
   const q = searchText(championshipQuery);
@@ -1308,6 +1309,57 @@ function gameBarPinButton(pinned) {
   const label = gameBarPinLabel(pinned);
   return `<button type="button" class="arena-game-bar-pin" data-game-bar-pin aria-pressed="${pinned}" aria-label="${label}" title="${label}">${arenaIcon(pinned ? "pin" : "unpin")}</button>`;
 }
+function gameBarSettingsButton(key="games") {
+  return `<button type="button" class="arena-game-bar-settings" data-game-bar-settings="${esc(key)}" aria-label="Personalizar esta área" title="Personalizar esta área">${arenaIcon("maintenance")}</button>`;
+}
+function applyGameBarPreferences(prefs, bar=$("#arenaTopMatchMonitor")) {
+  if(!bar)return;
+  bar.classList.toggle("arena-game-bar-compact",prefs.compact===true);
+  bar.style.setProperty("--game-bar-border",/^#[0-9a-f]{6}$/i.test(prefs.color||"")?prefs.color:"var(--accent)");
+  bar.classList.toggle("arena-custom-large-buttons",prefs.large===true);
+  const last=bar.querySelector(".arena-op-monitor-event");
+  if(last)last.hidden=prefs.hideLast===true;
+}
+function showGameBarSettings(key="games") {
+  if($("#arenaGameBarSettings")?.open)return;
+  const dialog=document.createElement("dialog");
+  dialog.id="arenaGameBarSettings";dialog.className="card";
+  dialog.setAttribute("aria-labelledby","arenaGameBarSettingsTitle");
+  const personal=readPersonalTools();
+  const prefs=key==="games"?personal.gameBar:personal.customAreas[key]||{};
+  const names={games:"Barra de jogos",weather:"Previsão do tempo",navigation:"Atalhos e personalização",location:"Você está em",search:"Busca de funções"};
+  const title=names[key]||(key.startsWith("title:")?"Título da tela":"Seção de cadastros");
+  const opener=document.activeElement;
+  dialog.innerHTML=`<div class="arena-dialog-heading"><h2 id="arenaGameBarSettingsTitle">${title}</h2><button type="button" class="arena-close-x" aria-label="Fechar" title="Fechar">×</button></div>
+  <form><label>Cor da borda <input name="color" type="color" value="${esc(/^#[0-9a-f]{6}$/i.test(prefs.color||"")?prefs.color:state.settings.color||"#16c4eb")}"></label>
+  <label><input name="compact" type="checkbox" ${prefs.compact?"checked":""}> Espaçamento compacto</label>
+  <label><input name="large" type="checkbox" ${prefs.large?"checked":""}> Botões maiores</label>
+  ${key==="games"?`<label><input name="hideLast" type="checkbox" ${prefs.hideLast?"checked":""}> Ocultar último lance</label>`:""}
+  <div class="toolbar"><button type="submit" class="primary">Salvar ajustes</button><button type="button" data-game-bar-reset>Restaurar padrão</button></div></form>`;
+  dialog.querySelector(".arena-close-x").onclick=()=>dialog.close();
+  const form=dialog.querySelector("form");
+  function saveGameBar(gameBar){
+    try{
+      const latest=readPersonalTools();
+      if(key==="games")latest.gameBar=gameBar;
+      else if(Object.keys(gameBar).length)latest.customAreas[key]=gameBar;
+      else delete latest.customAreas[key];
+      savePersonalTools(latest);
+      applyPersonalColors();
+      dialog.close();
+    }catch(error){toast(error.message,true);}
+  }
+  form.onsubmit=event=>{
+    event.preventDefault();event.stopPropagation();
+    saveGameBar({color:form.elements.color.value,compact:form.elements.compact.checked,large:form.elements.large.checked,hideLast:form.elements.hideLast?.checked===true});
+  };
+  dialog.querySelector("[data-game-bar-reset]").onclick=()=>saveGameBar({});
+  dialog.addEventListener("close",()=>{
+    dialog.remove();
+    if(opener?.isConnected)opener.focus({preventScroll:true});
+  },{once:true});
+  document.body.append(dialog);dialog.showModal();
+}
 function floatingGameClock() {
   if (section === "operation" || (isOperationSection() && selected)) return "";
   const followed = followedGameClock();
@@ -1320,7 +1372,7 @@ function floatingGameClock() {
     <div><strong class="arena-icon-action">${arenaIcon("games")} Barra de jogos</strong><p>Aguardando partida</p></div>
     <div class="toolbar">${section !== "operation" ? `<button type="button" class="arena-icon-action" data-section="operation">${arenaIcon("live")}<span>Abrir operação</span></button>` : ""}
     ${canCreateMatches() ? `<button type="button" class="arena-icon-action" data-section="createMatch">${arenaIcon("calendar")}<span>Agendar partida</span></button>` : ""}
-    ${trainingMode ? "" : `<a class="button arena-icon-action" href="./painel.html?demonstracao=1&amp;inicio=operacao">${arenaIcon("training")}<span>Simular partida</span></a>`}</div>${gameBarPinButton(pinned)}
+    ${trainingMode ? "" : `<a class="button arena-icon-action" href="./painel.html?demonstracao=1&amp;inicio=operacao">${arenaIcon("training")}<span>Simular partida</span></a>`}</div>${gameBarSettingsButton()}${gameBarPinButton(pinned)}
   </aside>`;
   const lastEvent = monitorLastEvent(match);
   return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock noprint ${pinned ? "is-pinned" : ""}" aria-label="Barra de jogos">
@@ -1328,10 +1380,12 @@ function floatingGameClock() {
     <p class="arena-followed-score">${esc(match.status)}</p>
     ${lastEvent ? `<p class="arena-op-monitor-event">Último lance: ${esc(lastEvent)}</p>` : ""}
     ${clockMarkup(match)}
-    <div class="toolbar"><button type="button" class="arena-icon-action" data-open="${esc(match.id)}" ${finalStatuses.includes(match.status)?"":"data-cabin-match"}>${arenaIcon(finalStatuses.includes(match.status)?"results":"live")}<span>${finalStatuses.includes(match.status)?"Ver partida":"Abrir operação"}</span></button></div>${gameBarPinButton(pinned)}
+    <div class="toolbar"><button type="button" class="arena-icon-action" data-open="${esc(match.id)}" ${finalStatuses.includes(match.status)?"":"data-cabin-match"}>${arenaIcon(finalStatuses.includes(match.status)?"results":"live")}<span>${finalStatuses.includes(match.status)?"Ver partida":"Abrir operação"}</span></button></div>${gameBarSettingsButton()}${gameBarPinButton(pinned)}
   </aside>`;
 }
 document.addEventListener("click", event => {
+  const settings=event.target.closest("[data-game-bar-settings]");
+  if(settings){showGameBarSettings(settings.dataset.gameBarSettings);return;}
   const toggle = event.target.closest("[data-game-bar-pin]");
   if (toggle && admin) {
     const bar = toggle.closest("#arenaTopMatchMonitor");
@@ -2022,7 +2076,7 @@ function render() {
     ["imports", "Importar"],
   ];
   const pageControls = arenaPageControls();
-  app.innerHTML = `${pageControls}${locationTrail()}${workspaceNavigation(sections)}${floatingGameClock()}<div class="sectionhead admin-heading noprint"><div><span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span></div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>${relatedArenaScreens()}`;
+  app.innerHTML = `${pageControls}${locationTrail()}${workspaceNavigation(sections)}${floatingGameClock()}<div class="sectionhead admin-heading noprint" data-custom-area="title:${esc(section)}"><div><span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span>${gameBarSettingsButton("title:"+section)}</div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>${relatedArenaScreens()}`;
   const playerForm = $("#player");
   const editingPlayer = playerForm && state.players.find(row=>row.id===editedPlayerId);
   if (editingPlayer) for (const key of ["id","name","team","number","position","className","reserve"]) {
@@ -2094,7 +2148,7 @@ function view() {
   if (section === "overview")return overviewMatchView();
   if (section === "teams") return teamsDirectoryView();
   if (section === "players" && !playerFormOpen)
-    return `<section class="card arena-record-actions"><h2>Cadastro</h2><div class="toolbar"><button type="button" class="primary arena-icon-action" data-player-form="open">${arenaIcon("add")} Cadastrar jogador</button><button type="button" data-section="imports" class="arena-icon-action">${arenaIcon("upload")} Importar jogadores</button></div></section>${listPanel("players")}`;
+    return listPanel("players");
   if (section === "players")
     return `<div class="card"><h2>${editedPlayerId?"Editar jogador":"Cadastrar jogador"}</h2><p class="muted">Cadastre o elenco antes de criar a partida. A súmula preserva uma cópia do elenco daquela data.</p><form id="player"><input name="recordId" type="hidden"><div class="formgrid">${field("Nome", "name", "text", "required")}${select("Equipe", "team", teamOptions())}${field("Número", "number")}${field("Posição (opcional)", "position")}${field("Turma do jogador (opcional)", "className", "text", 'maxlength="150"')}${lineupField("Escalação no cadastro")}</div><button class="primary">Salvar jogador</button> <button type="button" data-player-form="back">${arenaIcon("collapse")} Voltar aos jogadores</button></form></div>`;
   if (section === "createMatch" && canCreateMatches())
@@ -4868,7 +4922,7 @@ function workspaceNavigation(sections){
    const active=ids.includes(section),open=arenaOpenGroups.has(group.id)?arenaOpenGroups.get(group.id):active;
    return `<details class="arena-side-group" data-layout-group="${group.id}" ${open?"open":""}><summary title="${esc(group.title)}" aria-label="${esc(group.title)}">${arenaIcon(group.id)}<span>${esc(group.title)}</span></summary><nav aria-label="${esc(group.title)}">${ids.map(id=>`<button type="button" data-section="${id}" title="${esc(labels[id]||id)}" class="arena-side-item ${section===id?"is-current":""}" ${personal.disabled.includes(id)?'aria-disabled="true"':""} ${section===id?'aria-current="page"':""}>${arenaSectionIcon(id)}<span>${esc(labels[id]||id)}</span></button>${id==="matches"?`<div class="arena-side-scopes" aria-label="Filtrar jogos"><button type="button" data-games-shortcut="live">${arenaIcon("live")}<span>Ao vivo</span></button><button type="button" data-games-shortcut="scheduled">${arenaIcon("calendar")}<span>Agenda</span></button><button type="button" data-games-shortcut="finished">${arenaIcon("results")}<span>Resultados</span></button></div>`:""}`).join("")}</nav></details>`;
  }).join("");
- return `<aside id="arenaSidebar" class="arena-sidebar noprint ${navigationQuery.trim()?"arena-search-active":""}" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link" aria-label="${esc(systemDisplayName())}" title="${esc(systemDisplayName())}">${brand}</a><button type="button" data-layout-rail aria-label="Recolher barra lateral" title="Recolher barra lateral" aria-expanded="true" aria-controls="arenaSidebar">${arenaIcon("collapse")}</button><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><div class="arena-sidebar-pinbar"><button type="button" class="arena-side-pin" data-layout-pin aria-label="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}" aria-pressed="${arenaSidebarPinned}" title="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}">${arenaIcon(arenaSidebarPinned?"pin":"unpin")}</button></div><div class="arena-side-search"><button type="button" class="arena-side-search-launch" data-side-search-open aria-label="Pesquisar funções" title="Pesquisar funções (Ctrl+K)">${arenaIcon("search")}</button><label for="sideFunctionSearch" class="arena-icon-action">${arenaIcon("search")} Pesquisar no menu</label><div class="arena-side-search-field"><input id="sideFunctionSearch" type="search" value="${esc(navigationQuery)}" placeholder="Buscar função…" autocomplete="off" aria-controls="arenaSideSearchResults" aria-keyshortcuts="Control+k Meta+k"><button type="button" data-clear-navigation-search data-side-clear aria-label="Limpar pesquisa do menu" title="Limpar pesquisa">${arenaIcon("close")}</button></div></div><div class="arena-sidebar-nav"><div id="arenaSideSearchResults" aria-live="polite">${navigationSearchResults()}</div><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" title="Início" aria-label="Início" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Início</span></button>${personal.hidden.includes("operation")?"":`<button type="button" class="arena-side-item ${section==="operation"?"is-current":""}" data-section="operation" title="Cabine de Operação" ${section==="operation"?'aria-current="page"':""} ${personal.disabled.includes("operation")?'aria-disabled="true"':""}>${arenaIcon("live")}<span>Cabine de Operação</span></button>`}${groups}</div><div class="arena-sidebar-footer">${footerItem("account","Minha conta","account")}${footerItem(role==="admin"?"settings":"preferences","Configurações","maintenance")}${footerItem("profiles","Trocar perfil / conta","profiles")}<button type="button" data-account-guide title="Demonstração e ajuda" aria-label="Demonstração e ajuda">${arenaIcon("help")}<span>Demonstração e ajuda</span></button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener" title="Abrir painel público" aria-label="Abrir painel público">${arenaIcon("games")}<span>Abrir painel público</span></a><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><button type="button" class="arena-sidebar-resize noprint" aria-label="Ajustar largura da barra lateral" title="Arraste ou use as setas esquerda e direita">↔</button><section class="card arena-ui-customization noprint" aria-label="Atalhos e personalização"><div class="arena-toolbar"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button></div>${personalTopShortcuts()}</section><section class="navigation-finder arena-function-search noprint" aria-label="Encontrar função"><label for="functionSearch" class="arena-icon-action">${arenaIcon("search")} Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
+ return `<aside id="arenaSidebar" class="arena-sidebar noprint ${navigationQuery.trim()?"arena-search-active":""}" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link" aria-label="${esc(systemDisplayName())}" title="${esc(systemDisplayName())}">${brand}</a><button type="button" data-layout-rail aria-label="Recolher barra lateral" title="Recolher barra lateral" aria-expanded="true" aria-controls="arenaSidebar">${arenaIcon("collapse")}</button><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><div class="arena-sidebar-pinbar"><button type="button" class="arena-side-pin" data-layout-pin aria-label="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}" aria-pressed="${arenaSidebarPinned}" title="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}">${arenaIcon(arenaSidebarPinned?"pin":"unpin")}</button></div><div class="arena-side-search"><button type="button" class="arena-side-search-launch" data-side-search-open aria-label="Pesquisar funções" title="Pesquisar funções (Ctrl+K)">${arenaIcon("search")}</button><label for="sideFunctionSearch" class="arena-icon-action">${arenaIcon("search")} Pesquisar no menu</label><div class="arena-side-search-field"><input id="sideFunctionSearch" type="search" value="${esc(navigationQuery)}" placeholder="Buscar função…" autocomplete="off" aria-controls="arenaSideSearchResults" aria-keyshortcuts="Control+k Meta+k"><button type="button" data-clear-navigation-search data-side-clear aria-label="Limpar pesquisa do menu" title="Limpar pesquisa">${arenaIcon("close")}</button></div></div><div class="arena-sidebar-nav"><div id="arenaSideSearchResults" aria-live="polite">${navigationSearchResults()}</div><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" title="Início" aria-label="Início" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Início</span></button>${personal.hidden.includes("operation")?"":`<button type="button" class="arena-side-item ${section==="operation"?"is-current":""}" data-section="operation" title="Cabine de Operação" ${section==="operation"?'aria-current="page"':""} ${personal.disabled.includes("operation")?'aria-disabled="true"':""}>${arenaIcon("live")}<span>Cabine de Operação</span></button>`}${groups}</div><div class="arena-sidebar-footer">${footerItem("account","Minha conta","account")}${footerItem(role==="admin"?"settings":"preferences","Configurações","maintenance")}${footerItem("profiles","Trocar perfil / conta","profiles")}<button type="button" data-account-guide title="Demonstração e ajuda" aria-label="Demonstração e ajuda">${arenaIcon("help")}<span>Demonstração e ajuda</span></button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener" title="Abrir painel público" aria-label="Abrir painel público">${arenaIcon("games")}<span>Abrir painel público</span></a><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><button type="button" class="arena-sidebar-resize noprint" aria-label="Ajustar largura da barra lateral" title="Arraste ou use as setas esquerda e direita">↔</button><section class="card arena-ui-customization noprint" data-custom-area="navigation" aria-label="Atalhos e personalização">${gameBarSettingsButton("navigation")}<div class="arena-toolbar"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button></div>${personalTopShortcuts()}</section><section class="navigation-finder arena-function-search noprint" data-custom-area="search" aria-label="Encontrar função">${gameBarSettingsButton("search")}<label for="functionSearch" class="arena-icon-action">${arenaIcon("search")} Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button></div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
 }
 function openSideFunctionSearch() {
  arenaRailCollapsed=false;
@@ -5365,7 +5419,7 @@ document.addEventListener("click", event => {
 
 function teamsDirectoryView(){
  if(teamFormVisible)return `<div class="sectionhead"><h2>${teamEditorId?"Editar equipe":"Nova equipe"}</h2><button type="button" data-team-form-back>← Voltar à lista de equipes</button></div>${teamRegistrationView()}`;
- return `<section class="card arena-record-actions"><h2>Cadastro</h2><div class="toolbar"><button type="button" class="primary arena-icon-action" data-new-team-form>${arenaIcon("add")} Nova equipe</button><button type="button" class="arena-icon-action" data-section="imports">${arenaIcon("upload")} Importar equipes</button></div></section>${listPanel("teams")}`;
+ return listPanel("teams");
 }
 let arenaPreviousPage = "overview";
 let arenaCurrentPage = "overview";
@@ -5409,7 +5463,7 @@ function locationTrail(){
  const group=workspaceDefinitions.find(g=>g.sections.includes(section));
  const profile=section==="teams"&&selectedTeamId?state.teams.find(t=>t.id===selectedTeamId):null;
  const tabs={data:"Dados e técnico",roster:"Jogadores",games:"Jogos da equipe",stats:"Estatísticas, cartões e faltas",history:"Histórico de alterações"};
- return `<nav class="location-trail noprint" aria-label="Localização atual"><button type="button" data-section="overview" aria-label="Início">${arenaIcon("overview")}</button><span>Você está em:</span>${group?`<button type="button" data-workspace="${group.id}">${group.title}</button><span aria-hidden="true">›</span>`:""}${profile||section==="teams"&&teamFormVisible?'<button type="button" data-team-form-back>Equipes</button>':`<strong>${esc(labels[section]||navigationDescriptions[section]?.label||section)}</strong>`}${profile?`<span aria-hidden="true">›</span><span>${esc(profile.name)}</span><span aria-hidden="true">›</span><strong>${esc(tabs[teamProfileTab]||"Dados e técnico")}</strong>`:section==="teams"&&teamFormVisible?`<span aria-hidden="true">›</span><strong>${teamEditorId?"Editar equipe":"Nova equipe"}</strong>`:""}</nav>`;
+ return `<nav class="location-trail noprint" data-custom-area="location" aria-label="Localização atual">${gameBarSettingsButton("location")}<button type="button" data-section="overview" aria-label="Início">${arenaIcon("overview")}</button><span>Você está em:</span>${group?`<button type="button" data-workspace="${group.id}">${group.title}</button><span aria-hidden="true">›</span>`:""}${profile||section==="teams"&&teamFormVisible?'<button type="button" data-team-form-back>Equipes</button>':`<strong>${esc(labels[section]||navigationDescriptions[section]?.label||section)}</strong>`}${profile?`<span aria-hidden="true">›</span><span>${esc(profile.name)}</span><span aria-hidden="true">›</span><strong>${esc(tabs[teamProfileTab]||"Dados e técnico")}</strong>`:section==="teams"&&teamFormVisible?`<span aria-hidden="true">›</span><strong>${teamEditorId?"Editar equipe":"Nova equipe"}</strong>`:""}</nav>`;
 }
 document.addEventListener("click",e=>{
  if(!e.target.closest("[data-new-team-form],[data-team-form-back]"))return;
@@ -6099,8 +6153,8 @@ function personalCatalog() {
 function personalStorageKey() { return "arena-personal-tools-v1:"+(admin?"central:":"publico:")+(trainingMode?"treino-"+role:user?.uid||"publico"); }
 function readPersonalTools() {
   try { const data=JSON.parse(localStorage.getItem(personalStorageKey())||"null")||{};
-    return {hidden:Array.isArray(data.hidden)?data.hidden:[],disabled:Array.isArray(data.disabled)?data.disabled:[],pins:Array.isArray(data.pins)?data.pins.filter(x=>typeof x==="string"):[],favorites:Array.isArray(data.favorites)?data.favorites.filter(x=>typeof x==="string"):[],colors:data.colors&&typeof data.colors==="object"?data.colors:{}, sizes:data.sizes&&typeof data.sizes==="object"?data.sizes:{}, width:Number(data.width)||240, reading:data.reading, railPinned:typeof data.railPinned==="boolean"?data.railPinned:undefined, panelColor:/^#[0-9a-f]{6}$/i.test(data.panelColor||"")?data.panelColor:"", panelAlign:data.panelAlign==="end"?"end":"start"};
-  } catch {return {hidden:[],disabled:[],pins:[],favorites:[],colors:{},sizes:{},width:240,panelColor:"",panelAlign:"start"};}
+    return {hidden:Array.isArray(data.hidden)?data.hidden:[],disabled:Array.isArray(data.disabled)?data.disabled:[],pins:Array.isArray(data.pins)?data.pins.filter(x=>typeof x==="string"):[],favorites:Array.isArray(data.favorites)?data.favorites.filter(x=>typeof x==="string"):[],colors:data.colors&&typeof data.colors==="object"?data.colors:{}, sizes:data.sizes&&typeof data.sizes==="object"?data.sizes:{}, width:Number(data.width)||240, gameBar:data.gameBar&&typeof data.gameBar==="object"?data.gameBar:{},customAreas:data.customAreas&&typeof data.customAreas==="object"?data.customAreas:{}, reading:data.reading, railPinned:typeof data.railPinned==="boolean"?data.railPinned:undefined, panelColor:/^#[0-9a-f]{6}$/i.test(data.panelColor||"")?data.panelColor:"", panelAlign:data.panelAlign==="end"?"end":"start"};
+  } catch {return {hidden:[],disabled:[],pins:[],favorites:[],colors:{},sizes:{},width:240,gameBar:{},customAreas:{},panelColor:"",panelAlign:"start"};}
 }
 function syncPersonalTools() {
   const account = admin && role && !C.demo && user?.uid;
@@ -6188,6 +6242,10 @@ function personalTopShortcuts() {
   return `<section class="personal-shortcuts noprint" aria-label="Meus atalhos"><div class="toolbar"><strong>Meus atalhos</strong>${data.pins.map(id=>button(id)).join("")}<button type="button" data-personal-settings class="arena-icon-action">${arenaIcon("star")}<span>Escolher atalhos e favoritos</span></button>${admin?'<a class="button" href="./index.html" target="_blank" rel="noopener">Painel público ↗</a>':""}</div>${data.favorites.length?`<div class="toolbar" aria-label="Favoritos">${data.favorites.map(id=>button(id,true)).join("")}</div>`:""}<small>Clique com o botão direito ou mantenha pressionado um atalho para ajustar. Use Escolher atalhos e favoritos para organizar a barra.</small></section>`;
 }
 function personalTarget(el) {
+  if(el?.closest?.("#arenaTopMatchMonitor"))return {id:"game-bar:games"};
+  const area=el?.closest?.("[data-custom-area]");
+  if(area && !el.closest("button[data-section],button[data-public-area],input,select,textarea"))
+    return {id:"game-bar:"+area.dataset.customArea};
   const b=el?.closest?.("button[data-section],button[data-public-area]");
   if (!b && el?.closest?.(".personal-shortcuts")) return {id:null};
   if(!b)return null;const id=admin?b.dataset.section:b.dataset.publicArea;
@@ -6195,6 +6253,14 @@ function personalTarget(el) {
 }
 function applyPersonalColors() {
   const prefs=readPersonalTools(), colors=prefs.colors;
+  applyGameBarPreferences(prefs.gameBar);
+  const weather=admin?document.querySelector(".arena-weather-card"):null;
+  if(weather && !weather.querySelector("[data-game-bar-settings]")){
+    weather.dataset.customArea="weather";
+    weather.insertAdjacentHTML("beforeend",gameBarSettingsButton("weather"));
+  }
+  for(const area of document.querySelectorAll("[data-custom-area]"))
+    applyGameBarPreferences(prefs.customAreas[area.dataset.customArea]||{},area);
   document.body.style.setProperty("--arena-user-rail",sidebarWidth(prefs.width)+"px");
   const panel=app.querySelector(".arena-ui-customization");
   if(panel){panel.style.setProperty("--arena-tools-tint",prefs.panelColor||"var(--line)");panel.dataset.align=prefs.panelAlign;}
@@ -6212,6 +6278,7 @@ function applyPersonalColors() {
   }
 }
 function showPersonalTools(id=null) {
+  if(id?.startsWith("game-bar:")){showGameBarSettings(id.slice(9));return;}
   let dialog=$("#arenaPersonalTools");
   if(!dialog){dialog=document.createElement("dialog");dialog.id="arenaPersonalTools";dialog.className="personal-tools-dialog noprint";dialog.setAttribute("aria-labelledby","personalToolsTitle");document.body.append(dialog);}
   const data=readPersonalTools(),catalog=personalCatalog(),item=catalog.find(i=>i.id===id);
@@ -6240,7 +6307,7 @@ document.addEventListener("pointerdown",e=>{
 const cancelPersonalPress=()=>{clearTimeout(personalPressTimer);personalPress=null;};
 document.addEventListener("pointermove",e=>{if(personalPress&&Math.hypot(e.clientX-personalPress.x,e.clientY-personalPress.y)>10)cancelPersonalPress();},{passive:true});
 for(const event of ["pointerup","pointercancel","scroll"])document.addEventListener(event,cancelPersonalPress,{passive:true,capture:true});
-document.addEventListener("click",e=>{if(Date.now()<personalSuppressUntil && !e.target.closest("#arenaPersonalTools")){e.preventDefault();e.stopImmediatePropagation();}},true);
+document.addEventListener("click",e=>{if(Date.now()<personalSuppressUntil && !e.target.closest("#arenaPersonalTools,#arenaGameBarSettings")){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-personal-settings],#arenaPersonalTools button");if(!b)return;
  try{

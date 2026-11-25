@@ -2743,3 +2743,32 @@ label[for="sideFunctionSearch"] > .arena-icon { display:none; }
   padding-block-start:12px;
   border-block-start:1px solid var(--line);
 }
+
+#arenaTopMatchMonitor { border-color:var(--game-bar-border,var(--accent)); min-block-size:102px; }
+#arenaTopMatchMonitor :is(.arena-game-bar-settings,.arena-game-bar-pin) {
+  position:absolute; inset-inline-end:5px; inset-block-start:5px;
+  transform:none; display:grid; place-items:center; inline-size:44px; min-block-size:44px;
+  padding:0; border:1px solid transparent; background:transparent; color:var(--text);
+}
+#arenaTopMatchMonitor .arena-game-bar-pin { inset-block-start:49px; }
+#arenaTopMatchMonitor .arena-game-bar-settings:is(:hover,:focus-visible) { color:var(--accent); border-color:var(--line); }
+#arenaTopMatchMonitor.arena-game-bar-compact { padding-block:6px; gap:4px 8px; }
+#arenaTopMatchMonitor.arena-game-bar-compact .toolbar > :is(button,.button) { padding:5px 10px; }
+#arenaGameBarSettings { width:min(460px,calc(100% - 24px)); }
+#arenaGameBarSettings form { display:grid; gap:10px; }
+#arenaGameBarSettings label { display:flex; align-items:center; gap:8px; }
+#arenaGameBarSettings input { width:auto; }
+
+[data-custom-area] > .arena-game-bar-settings,
+.arena-list-heading > .arena-game-bar-settings {
+  display:inline-grid; place-items:center; inline-size:44px; min-block-size:44px;
+  padding:0; flex:none; margin-inline-start:auto;
+}
+.arena-list-heading { display:flex; align-items:start; justify-content:space-between; gap:8px; }
+:is([data-custom-area].card,[data-custom-area].location-trail,[data-custom-area].navigation-finder,.arena-weather-card[data-custom-area]) {
+  border-color:var(--game-bar-border,var(--line));
+}
+[data-custom-area].arena-game-bar-compact { padding-block:8px; }
+.arena-custom-large-buttons .toolbar > :is(button,.button) { min-block-size:52px; padding-inline:18px; }
+.arena-weather-card[data-custom-area] > #arenaWeather > summary { padding-inline-end:100px; }
+.arena-weather-card > .arena-game-bar-settings { position:absolute; inset-inline-end:50px; inset-block-start:4px; z-index:1; }
