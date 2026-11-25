@@ -283,3 +283,18 @@ body.arena-central-ready.arena-operation-page:has(#arenaMenuToggle:not([hidden])
 .arena-op-layout-options { min-width:0; display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
 .arena-op-layout-options label { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
 .arena-op-layout-options input[type=checkbox],.arena-op-layout-options select { width:auto; }
+
+.arena-operation-workspace { width:var(--arena-cabin-width,100%); max-width:100%; min-width:min(100%,300px); }
+.arena-op-strip { padding-inline-end:34px; }
+.arena-op-strip .arena-op-resize {
+  position:absolute; inset-inline-end:3px; inset-block-start:8px; width:27px; min-width:27px;
+  min-height:44px; padding:0; cursor:ew-resize; touch-action:none; user-select:none;
+}
+.arena-op-strip :is(.arena-op-monitor,.arena-op-monitor-side):not(:empty) {
+  grid-template-columns:repeat(auto-fill,minmax(0,min(100%,10rem)));
+}
+.arena-op-strip :is(.arena-op-monitor,.arena-op-monitor-side,.arena-op-primary) button,
+.arena-op-display-controls > button:not(.arena-op-score-pin,.arena-op-settings-trigger) {
+  inline-size:min(100%,10rem); block-size:76px; overflow-wrap:anywhere;
+  padding:8px; line-height:1.2;
+}

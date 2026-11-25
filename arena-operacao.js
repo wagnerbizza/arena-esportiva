@@ -41,7 +41,7 @@
  const panelColors={azul:['Azul','#45a4ff'],verde:['Verde','#49c99a'],laranja:['Laranja','#f4a858'],roxo:['Roxo','#b58cff'],rosa:['Rosa','#ee80ac']};
  const panelTitle=(prefs,id)=>prefs.names?.[id]||labels[id];
  const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>Object.hasOwn(panelColors,saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set(saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id)))]:[...defaultMonitor],displayWidth:[35,40,45,50,55,60,65].includes(saved?.displayWidth)?saved.displayWidth:45,stackMonitor:saved?.stackMonitor===true,side:Array.isArray(saved?.side)?saved.side.filter(id=>Object.hasOwn(monitorCommands,id)):[],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
+ function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>Object.hasOwn(panelColors,saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set(saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id)))]:[...defaultMonitor],displayWidth:[35,40,45,50,55,60,65].includes(saved?.displayWidth)?saved.displayWidth:45,stackMonitor:saved?.stackMonitor===true,cabinWidth:Number.isInteger(saved?.cabinWidth)?Math.max(40,Math.min(100,saved.cabinWidth)):100,side:Array.isArray(saved?.side)?saved.side.filter(id=>Object.hasOwn(monitorCommands,id)):[],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
  let syncedLayout=null;
  const syncMessages=new Map();
  const pendingLayouts=new Map();
@@ -238,7 +238,12 @@
   if(!nav.children.length)nav.textContent='Marque uma estrela para adicionar um atalho.';
   const list=tools(root).querySelector('[data-op-order]');list.innerHTML=panels.map(section=>{const id=section.dataset.opPanel,siblings=[...section.parentElement.children],i=siblings.indexOf(section);return '<div class="arena-op-order-row"><span>'+escape(panelTitle(prefs,id))+'</span><button type="button" data-op-favorite="'+id+'" aria-pressed="'+prefs.favorites.includes(id)+'">'+(prefs.favorites.includes(id)?'Favorito':'Favoritar')+'</button><button type="button" data-op-move="'+id+'" data-op-direction="first" '+(i===0?'disabled':'')+'>Colocar primeiro</button><button type="button" data-op-move="'+id+'" data-op-direction="last" '+(i===siblings.length-1?'disabled':'')+'>Colocar por último</button><button type="button" data-op-move="'+id+'" data-op-direction="up" '+(i===0?'disabled':'')+' aria-label="Subir '+labels[id]+'">Subir</button><button type="button" data-op-move="'+id+'" data-op-direction="down" '+(i===siblings.length-1?'disabled':'')+' aria-label="Descer '+labels[id]+'">Descer</button></div>';}).join('');
  }
+ function sizeCabin(root,width){
+  root.style.setProperty('--arena-cabin-width',width+'%');
+  root.querySelector('[data-op-resize]').setAttribute('aria-valuenow',String(width));
+ }
  function apply(root,prefs){
+  sizeCabin(root,prefs.cabinWidth);
   root.style.setProperty('--arena-display-width',prefs.displayWidth+'%');
   root.classList.toggle('arena-op-stack-monitor',prefs.stackMonitor);
   tools(root).querySelector('[data-op-display-width]').value=String(prefs.displayWidth);
@@ -361,6 +366,12 @@
   primary.className='arena-op-primary';primary.dataset.opPrimary='';
   monitorRow.prepend(primary);
   strip.append(activity,monitorRow);
+  const resize=document.createElement('button');
+  resize.type='button';resize.dataset.opResize='';resize.className='arena-op-resize';
+  resize.setAttribute('role','slider');resize.setAttribute('aria-label','Largura da cabine em porcentagem');
+  resize.setAttribute('aria-valuemin','40');resize.setAttribute('aria-valuemax','100');
+  resize.title='Arraste para ajustar a largura da cabine';resize.textContent='↔';
+  strip.append(resize);
   root.append(strip);
   if(config.chooser)root.insertAdjacentHTML("beforeend",config.chooser);
   const timeline=score.querySelector('.match-timeline');if(timeline)timeline.remove();const scoreWrap=document.createElement('section');scoreWrap.className='arena-op-score';const info=document.createElement('details');info.className='arena-op-match-details';info.innerHTML='<summary>Detalhes da partida</summary>';info.append(score);scoreWrap.append(info);const guide=old.querySelector('.match-guide');root.append(scoreWrap);
@@ -646,7 +657,7 @@
    visible.splice(target,0,id);
    prefs.order=[...visible,...prefs.order.filter(key=>!visible.includes(key))];
   }
-  if(button.hasAttribute('data-op-reset')){prefs.order=[...defaults];prefs.monitor=[...defaultMonitor];prefs.side=[];prefs.displayWidth=45;prefs.stackMonitor=false;prefs.names={};prefs.colors={};prefs.collapsed=[];prefs.locked=[];prefs.favorites=['points','time','events','history'];prefs.compact=false;prefs.columns=false;tools(root).querySelector('[data-op-compact]').checked=false;tools(root).querySelector('[data-op-columns]').checked=false;}
+  if(button.hasAttribute('data-op-reset')){prefs.order=[...defaults];prefs.monitor=[...defaultMonitor];prefs.side=[];prefs.displayWidth=45;prefs.stackMonitor=false;prefs.cabinWidth=100;prefs.names={};prefs.colors={};prefs.collapsed=[];prefs.locked=[];prefs.favorites=['points','time','events','history'];prefs.compact=false;prefs.columns=false;tools(root).querySelector('[data-op-compact]').checked=false;tools(root).querySelector('[data-op-columns]').checked=false;}
   apply(root,prefs);save(root,prefs);
  });
  function chooseMatch(root){
@@ -802,6 +813,40 @@
   if(place==='side')prefs.side.push(id);
   monitorToolbar(root,prefs);save(root,prefs);
  }
+ let cabinResize;
+ document.addEventListener('pointerdown',event=>{
+  const handle=event.target.closest('[data-op-resize]');
+  if(!handle || !event.isPrimary || event.button!==0)return;
+  const root=workspaceFor(handle), width=read(root.dataset.opKey).cabinWidth;
+  const fullWidth=root.parentElement.clientWidth;
+  if(!fullWidth)return;
+  event.preventDefault();
+  cabinResize={handle,root,id:event.pointerId,x:event.clientX,initial:width,width,fullWidth};
+  handle.setPointerCapture(event.pointerId);
+ });
+ document.addEventListener('pointermove',event=>{
+  if(cabinResize?.id!==event.pointerId)return;
+  const {root,x,initial,fullWidth}=cabinResize;
+  cabinResize.width=Math.max(40,Math.min(100,Math.round(initial+(event.clientX-x)*100/fullWidth)));
+  sizeCabin(root,cabinResize.width);
+ });
+ document.addEventListener('lostpointercapture',event=>{
+  if(cabinResize?.id!==event.pointerId)return;
+  const {root,width}=cabinResize;
+  cabinResize=null;
+  if(!root.isConnected)return;
+  const prefs=read(root.dataset.opKey);
+  prefs.cabinWidth=width;save(root,prefs);
+ });
+ document.addEventListener('keydown',event=>{
+  const handle=event.target.closest('[data-op-resize]');
+  if(!handle || !['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+  event.preventDefault();
+  const root=workspaceFor(handle),prefs=read(root.dataset.opKey);
+  const width={Home:40,End:100,ArrowLeft:prefs.cabinWidth-5,ArrowRight:prefs.cabinWidth+5}[event.key];
+  prefs.cabinWidth=Math.max(40,Math.min(100,width));
+  sizeCabin(root,prefs.cabinWidth);save(root,prefs);
+ });
  function dockMenu(root,source){
   const id=source.dataset.opDockCommand;
   const dialog=document.createElement('dialog');
