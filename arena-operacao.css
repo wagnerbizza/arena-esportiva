@@ -241,7 +241,7 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 .arena-cabin-picker > summary,.arena-op-standby-preview > summary { cursor:pointer; }
 .arena-cabin-picker[open] > summary,.arena-op-standby-preview[open] > summary { margin-block-end:12px; }
 @media(max-width:767px) {
-  body.arena-central-ready.arena-operation-page main > .arena-weather-card.is-pinned { position:static; }
+  body.arena-central-ready.arena-operation-page main > .arena-weather-card.is-pinned { position:relative; top:auto; z-index:auto; }
   body.arena-operation-page main .arena-operation-workspace { --arena-op-stack-top:var(--arena-op-sticky-offset,80px); }
   .arena-op-strip.is-pinned { max-block-size:38dvh; }
   [data-op-standby] .arena-op-strip.is-pinned { position:relative; top:auto; max-block-size:none; overflow:visible; }
@@ -264,7 +264,7 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 .arena-op-quick-dialog { width:min(680px,calc(100% - 24px)); max-height:85dvh; overflow:auto; margin:auto; }
 .arena-op-quick-dialog::backdrop,.arena-dock-dialog::backdrop { background:#0008; }
 .arena-op-quick-dialog [data-op-quick-feedback] { padding:8px; color:var(--text); border:1px solid var(--line); }
-body.arena-central-ready.arena-operation-page main > .arena-weather-card.is-pinned { position:static; }
+body.arena-central-ready.arena-operation-page main > .arena-weather-card.is-pinned { position:relative; top:auto; z-index:auto; }
 body.arena-central-ready.arena-operation-page:has(#arenaMenuToggle:not([hidden])) main .arena-operation-workspace {
   --arena-op-stack-top:var(--arena-op-sticky-offset,6px);
 }

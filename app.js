@@ -1409,7 +1409,7 @@ function floatingGameClock() {
   const lastEvent = monitorLastEvent(match);
   return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock noprint ${pinned ? "is-pinned" : ""}" aria-label="Barra de jogos">
     <div class="arena-monitor-teams">${matchTeamIdentity(match, match.home)}<b>${esc(gameResult(match).join(" × "))}</b>${matchTeamIdentity(match, match.away)}</div>
-    <p class="arena-followed-score">${esc(match.status)}</p>
+    <p class="arena-followed-score">${esc(matchSportLabel(match))} · ${esc(match.status)}</p>
     ${lastEvent ? `<p class="arena-op-monitor-event">Último lance: ${esc(lastEvent)}</p>` : ""}
     ${clockMarkup(match)}
     <div class="toolbar"><button type="button" class="arena-icon-action" data-open="${esc(match.id)}" ${finalStatuses.includes(match.status)?"":"data-cabin-match"}>${arenaIcon(finalStatuses.includes(match.status)?"results":"live")}<span>${finalStatuses.includes(match.status)?"Ver partida":"Abrir operação"}</span></button></div>${gameBarSettingsButton()}${gameBarPinButton(pinned)}
@@ -1986,6 +1986,27 @@ document.addEventListener("click", async (event) => {
     control.disabled = false;
   }
 });
+function matchSportLabel(match) {
+  return String(match.sport || "").trim() || "A definir";
+}
+
+function matchCardDetails(match) {
+  const edition = match.championshipId && state.championships?.find(item => item.id === match.championshipId);
+  const phase = matchPhase(match);
+  const details = [
+    ["Campeonato", match.competition || (edition ? championshipTitle(edition) : "Partida avulsa")],
+    ["Categoria", edition?.category],
+    ["Fase", phase?.phase],
+    ["Grupo / chave", phase?.group],
+    ["Rodada", phase?.round],
+    ["Data e horário", match.date ? format(match.date) : "A definir"],
+    ["Local", match.place || "A definir"]
+  ];
+  return `<dl class="arena-match-details">${details.filter(([, value]) => value).map(([label, value]) =>
+    `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`
+  ).join("")}</dl>`;
+}
+
 function matchCard(m, button = false, standby = false) {
   const points = D.score(m),
     sc = gameResult(m),
@@ -2008,7 +2029,7 @@ function matchCard(m, button = false, standby = false) {
   };
   const result = isFinished ? (sc[0] === sc[1] ? "Resultado final: empate" :
     "Vencedor: " + (sc[0] > sc[1] ? a.name : b.name)) : "";
-  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><span class="tag">${esc(m.sport)}</span><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div><p class="competition-name">${esc(matchCompetitionLabel(m))}</p><div class="score arena-team-scoreboard">${teamScore(a, 0)}<div class="arena-score-center"><span aria-hidden="true">×</span>${liveBall}</div>${teamScore(b, 1)}</div>${result ? `<p class="arena-match-result">${esc(result)}</p>` : ""}${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${m.sport.startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${standby?"":timelineControl(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}<p class="match-meta">${standby?"Data e local a definir":`${esc(format(m.date))}<br>${esc(m.place || "Local a definir")}`}</p><div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && admin && role === "admin" && cloud && !C.demo && finalStatuses.includes(m.status) ? `<details><summary>Mais ações</summary><button type="button" data-public-visibility="${esc(m.id)}">${m.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button></details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
+  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><strong class="arena-match-sport">Modalidade · ${esc(matchSportLabel(m))}</strong><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div>${standby ? '<p class="competition-name">Partida avulsa</p>' : matchCardDetails(m)}<div class="score arena-team-scoreboard">${teamScore(a, 0)}<div class="arena-score-center"><span aria-hidden="true">×</span>${liveBall}</div>${teamScore(b, 1)}</div>${result ? `<p class="arena-match-result">${esc(result)}</p>` : ""}${clockMarkup(m)}<div class="stage-line">Etapa: ${esc(m.stage)} ${matchSportLabel(m).startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div>${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}${standby?"":timelineControl(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}${standby ? '<p class="match-meta">Data e local a definir</p>' : ""}<div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && admin && role === "admin" && cloud && !C.demo && finalStatuses.includes(m.status) ? `<details><summary>Mais ações</summary><button type="button" data-public-visibility="${esc(m.id)}">${m.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button></details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></article>`;
 }
 
 function liveStatusPanel(context) {
@@ -2027,13 +2048,13 @@ function liveStatusPanel(context) {
   const detail = restrictedOperator
     ? "O administrador define as partidas para operar e os campeonatos para acompanhar."
     : upcoming
-    ? `${name(upcoming.home)} × ${name(upcoming.away)} • ${esc(format(upcoming.date))}`
+    ? `Próxima na agenda · ${esc(matchSportLabel(upcoming))} · ${esc(name(upcoming.home))} × ${esc(name(upcoming.away))}${upcoming.date ? " · " + esc(format(upcoming.date)) : ""}${upcoming.place ? " · " + esc(upcoming.place) : ""}`
     : active.length || liveCount
       ? "Confira a situação e os controles da partida."
       : "Não há partidas em andamento ou programadas.";
   const jumpButtons = accessibleActive.map((match) => {
     const attribute = context === "admin" ? `data-live-jump="${esc(match.id)}"` : `data-public-live-jump="${esc(match.id)}"`;
-    return `<button type="button" class="live-jump-button" ${attribute}><span>${esc(name(match.home))} × ${esc(name(match.away))}</span><small>${esc(match.status)} • ${esc(match.sport)}</small></button>`;
+    return `<button type="button" class="live-jump-button" ${attribute}><span>${esc(name(match.home))} × ${esc(name(match.away))}</span><small>${esc(match.status)} • ${esc(matchSportLabel(match))}</small></button>`;
   }).join("");
   const fallback = context === "admin"
     ? '<button type="button" class="live-status-action" data-section="matches">Ver partidas</button>'
@@ -2042,6 +2063,8 @@ function liveStatusPanel(context) {
 }
 
 function render() {
+  const openOverviewTools = app.querySelector(".arena-overview-preferences")?.open;
+  const openOverviewShortcutEditor = !!app.querySelector(".arena-overview-preferences [data-shortcut-editor]");
   const openOperationTools = app.querySelector(".arena-op-settings")?.open;
   const openMatchDetails = app.querySelector(".arena-op-match-details")?.open;
   updateMatchNotices();
@@ -2108,7 +2131,10 @@ function render() {
     ["imports", "Importar"],
   ];
   const pageControls = arenaPageControls();
-  app.innerHTML = `${pageControls}${locationTrail()}${workspaceNavigation(sections)}${floatingGameClock()}<div class="sectionhead admin-heading noprint" data-custom-area="title:${esc(section)}"><div><span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span>${gameBarSettingsButton("title:"+section)}</div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel(true):""}${view()}</div>${relatedArenaScreens()}`;
+  app.innerHTML = `${pageControls}${locationTrail()}${workspaceNavigation(sections)}${floatingGameClock()}<div class="sectionhead admin-heading noprint" data-custom-area="title:${esc(section)}"><div><span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span>${gameBarSettingsButton("title:"+section)}</div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel():""}${view()}</div>${relatedArenaScreens()}`;
+  const overviewTools = app.querySelector(".arena-overview-preferences");
+  if (openOverviewTools && overviewTools) overviewTools.open = true;
+  if (openOverviewShortcutEditor && overviewTools) showShortcutEditor();
   const playerForm = $("#player");
   const editingPlayer = playerForm && state.players.find(row=>row.id===editedPlayerId);
   if (editingPlayer) for (const key of ["id","name","team","number","position","className","reserve"]) {
@@ -4954,7 +4980,7 @@ function workspaceNavigation(sections){
    const active=ids.includes(section),open=arenaOpenGroups.has(group.id)?arenaOpenGroups.get(group.id):active;
    return `<details class="arena-side-group" data-layout-group="${group.id}" ${open?"open":""}><summary title="${esc(group.title)}" aria-label="${esc(group.title)}">${arenaIcon(group.id)}<span>${esc(group.title)}</span></summary><nav aria-label="${esc(group.title)}">${ids.map(id=>`<button type="button" data-section="${id}" title="${esc(labels[id]||id)}" class="arena-side-item ${section===id?"is-current":""}" ${personal.disabled.includes(id)?'aria-disabled="true"':""} ${section===id?'aria-current="page"':""}>${arenaSectionIcon(id)}<span>${esc(labels[id]||id)}</span></button>${id==="matches"?`<div class="arena-side-scopes" aria-label="Filtrar jogos"><button type="button" data-games-shortcut="live">${arenaIcon("live")}<span>Ao vivo</span></button><button type="button" data-games-shortcut="scheduled">${arenaIcon("calendar")}<span>Agenda</span></button><button type="button" data-games-shortcut="finished">${arenaIcon("results")}<span>Resultados</span></button></div>`:""}`).join("")}</nav></details>`;
  }).join("");
- return `<aside id="arenaSidebar" class="arena-sidebar noprint ${navigationQuery.trim()?"arena-search-active":""}" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link" aria-label="${esc(systemDisplayName())}" title="${esc(systemDisplayName())}">${brand}</a><button type="button" data-layout-rail aria-label="Recolher barra lateral" title="Recolher barra lateral" aria-expanded="true" aria-controls="arenaSidebar">${arenaIcon("collapse")}</button><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><div class="arena-sidebar-pinbar"><button type="button" class="arena-side-pin" data-layout-pin aria-label="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}" aria-pressed="${arenaSidebarPinned}" title="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}">${arenaIcon(arenaSidebarPinned?"pin":"unpin")}</button></div><div class="arena-side-search"><button type="button" class="arena-side-search-launch" data-side-search-open aria-label="Pesquisar funções" title="Pesquisar funções (Ctrl+K)">${arenaIcon("search")}</button><label for="sideFunctionSearch" class="arena-icon-action">${arenaIcon("search")} Pesquisar no menu</label><div class="arena-side-search-field"><input id="sideFunctionSearch" type="search" value="${esc(navigationQuery)}" placeholder="Buscar função…" autocomplete="off" aria-controls="arenaSideSearchResults" aria-keyshortcuts="Control+k Meta+k"><button type="button" data-clear-navigation-search data-side-clear aria-label="Limpar pesquisa do menu" title="Limpar pesquisa">${arenaIcon("close")}</button></div></div><div class="arena-sidebar-nav"><div id="arenaSideSearchResults" aria-live="polite">${navigationSearchResults()}</div><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" title="Início" aria-label="Início" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Início</span></button>${personal.hidden.includes("operation")?"":`<button type="button" class="arena-side-item ${section==="operation"?"is-current":""}" data-section="operation" title="Cabine de Operação" ${section==="operation"?'aria-current="page"':""} ${personal.disabled.includes("operation")?'aria-disabled="true"':""}>${arenaIcon("live")}<span>Cabine de Operação</span></button>`}${groups}</div><div class="arena-sidebar-footer">${footerItem("account","Minha conta","account")}${footerItem(role==="admin"?"settings":"preferences","Configurações","maintenance")}${footerItem("profiles","Trocar perfil / conta","profiles")}<button type="button" data-account-guide title="Demonstração e ajuda" aria-label="Demonstração e ajuda">${arenaIcon("help")}<span>Demonstração e ajuda</span></button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener" title="Abrir painel público" aria-label="Abrir painel público">${arenaIcon("games")}<span>Abrir painel público</span></a><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><button type="button" class="arena-sidebar-resize noprint" aria-label="Ajustar largura da barra lateral" title="Arraste ou use as setas esquerda e direita">↔</button><section class="card arena-ui-customization noprint" data-custom-area="navigation" aria-label="Atalhos e personalização"><div class="arena-toolbar"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button>${gameBarSettingsButton("navigation")}</div>${personalTopShortcuts()}</section><section class="navigation-finder arena-function-search noprint" data-custom-area="search" aria-label="Encontrar função"><label for="functionSearch" class="arena-icon-action">${arenaIcon("search")} Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button>${gameBarSettingsButton("search")}</div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
+ return `<aside id="arenaSidebar" class="arena-sidebar noprint ${navigationQuery.trim()?"arena-search-active":""}" aria-label="Navegação da central" tabindex="-1"><div class="arena-sidebar-brand"><a href="./apresentacao.html" class="arena-side-brand-link" aria-label="${esc(systemDisplayName())}" title="${esc(systemDisplayName())}">${brand}</a><button type="button" data-layout-rail aria-label="Recolher barra lateral" title="Recolher barra lateral" aria-expanded="true" aria-controls="arenaSidebar">${arenaIcon("collapse")}</button><button type="button" data-layout-close aria-label="Fechar menu">${arenaIcon("close")}</button></div><div class="arena-sidebar-pinbar"><button type="button" class="arena-side-pin" data-layout-pin aria-label="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}" aria-pressed="${arenaSidebarPinned}" title="${arenaSidebarPinned?"Desafixar barra lateral":"Fixar barra lateral aberta"}">${arenaIcon(arenaSidebarPinned?"pin":"unpin")}</button></div><div class="arena-side-search"><button type="button" class="arena-side-search-launch" data-side-search-open aria-label="Pesquisar funções" title="Pesquisar funções (Ctrl+K)">${arenaIcon("search")}</button><label for="sideFunctionSearch" class="arena-icon-action">${arenaIcon("search")} Pesquisar no menu</label><div class="arena-side-search-field"><input id="sideFunctionSearch" type="search" value="${esc(navigationQuery)}" placeholder="Buscar função…" autocomplete="off" aria-controls="arenaSideSearchResults" aria-keyshortcuts="Control+k Meta+k"><button type="button" data-clear-navigation-search data-side-clear aria-label="Limpar pesquisa do menu" title="Limpar pesquisa">${arenaIcon("close")}</button></div></div><div class="arena-sidebar-nav"><div id="arenaSideSearchResults" aria-live="polite">${navigationSearchResults()}</div><p class="arena-side-caption">ESPAÇO DE TRABALHO</p><button type="button" title="Início" aria-label="Início" class="arena-side-home ${section==="overview"?"is-current":""}" data-section="overview" ${section==="overview"?'aria-current="page"':""}>${arenaIcon("overview")}<span>Início</span></button>${personal.hidden.includes("operation")?"":`<button type="button" class="arena-side-item ${section==="operation"?"is-current":""}" data-section="operation" title="Cabine de Operação" ${section==="operation"?'aria-current="page"':""} ${personal.disabled.includes("operation")?'aria-disabled="true"':""}>${arenaIcon("live")}<span>Cabine de Operação</span></button>`}${groups}</div><div class="arena-sidebar-footer">${footerItem("account","Minha conta","account")}${footerItem(role==="admin"?"settings":"preferences","Configurações","maintenance")}${footerItem("profiles","Trocar perfil / conta","profiles")}<button type="button" data-account-guide title="Demonstração e ajuda" aria-label="Demonstração e ajuda">${arenaIcon("help")}<span>Demonstração e ajuda</span></button><a class="button" href="${esc(publicHref)}" target="_blank" rel="noopener" title="Abrir painel público" aria-label="Abrir painel público">${arenaIcon("games")}<span>Abrir painel público</span></a><small>${esc(C.demo?"Treinamento isolado":accountName())}<br>${esc(accountRole())}</small></div></aside><div class="arena-drawer-backdrop noprint" data-layout-close ${arenaDrawerOpen?"":"hidden"}></div><button type="button" class="arena-sidebar-resize noprint" aria-label="Ajustar largura da barra lateral" title="Arraste ou use as setas esquerda e direita">↔</button><section class="card arena-ui-customization noprint" data-custom-area="navigation" aria-label="Atalhos e personalização"><div class="arena-toolbar"><span class="arena-current-profile">${esc(panelDisplayName())}</span><button type="button" data-account-guide>${arenaIcon("help")} Guia das funções</button>${gameBarSettingsButton("navigation")}</div>${personalTopShortcuts()}${section==="overview"?overviewPersonalization():""}</section><section class="navigation-finder arena-function-search noprint" data-custom-area="search" aria-label="Encontrar função"><label for="functionSearch" class="arena-icon-action">${arenaIcon("search")} Encontrar uma função</label><div class="navigation-search-row"><input id="functionSearch" type="search" placeholder="Ex.: relógio, jogador, súmula ou permissões" value="${esc(navigationQuery)}" autocomplete="off" aria-controls="navigationSearchResults"><button type="button" data-clear-navigation-search>Limpar busca</button>${gameBarSettingsButton("search")}</div><div id="navigationSearchResults" aria-live="polite">${navigationSearchResults()}</div></section>`;
 }
 function openSideFunctionSearch() {
  arenaRailCollapsed=false;
@@ -5713,29 +5739,43 @@ function overviewFirstKey(){
 }
 document.addEventListener("change",e=>{
  const select=e.target.closest("[data-overview-first]");
- if(!select || !admin || !["shortcuts","numbers","games"].includes(select.value))return;
+ if(!select || !admin || !["numbers","games"].includes(select.value))return;
  try { localStorage.setItem(overviewFirstKey(),select.value); }
  catch { toast("O navegador não permitiu salvar a ordem das caixas.",true); return; }
  refresh();
 });
+function overviewFirst(){
+ try {
+  if(localStorage.getItem(overviewFirstKey())==="numbers") return "numbers";
+ } catch {}
+ return "games";
+}
+function overviewPersonalization(){
+ const first = overviewFirst();
+ return `<details class="arena-overview-preferences">
+   <summary>Organizar o Início</summary>
+   <label>Primeira caixa da Visão geral
+     <select data-overview-first>
+       <option value="games" ${first==="games"?"selected":""}>Quadra e campo</option>
+       <option value="numbers" ${first==="numbers"?"selected":""}>Resumo de equipes, jogadores e partidas ao vivo</option>
+     </select>
+   </label>
+   <div data-overview-shortcuts>${quickActionCards()}</div>
+ </details>`;
+}
 function overviewMatchView(){
  const rows=scopeMatches(state.matches,overviewGameScope).slice().sort((a,b)=>{if(overviewGameScope!=="finished"){const priority=m=>m.status==="Ao vivo"?0:m.status==="Pausada"?1:2;const d=priority(a)-priority(b);if(d)return d;}return overviewGameScope==="finished"?new Date(b.date)-new Date(a.date):new Date(a.date)-new Date(b.date);});
- const labels={shortcuts:"Atalhos rápidos",numbers:"Equipes, jogadores e partidas ao vivo",games:"Quadra e campo"};
  const blocks={
-  shortcuts:`<details class="card arena-quick-actions"><summary>Ações rápidas e personalização</summary>${quickActionCards()}</details>`,
   numbers:`<div class="grid">${[["Equipes",state.teams.length,"teams"],["Jogadores",state.players.length,"players"],["Partidas ao vivo",state.matches.filter(m=>m.status==="Ao vivo").length,"live"]].filter(([, , target]) => target === "live" || canManageRosters()).map(([label,n,target]) =>
   `<button type="button" class="card overview-shortcut" ${target === "live" ? 'data-games-shortcut="live"' : `data-section="${target}"`}><span>${label}</span><strong class="kpi">${n}</strong></button>`).join("")}</div>`,
   games:`<section class="card"><h2>Quadra e campo</h2>${matchScopeButtons("overview",overviewGameScope)}<p class="muted">Jogos encerrados ficam em Finalizadas. Esta seleção muda apenas a visualização.</p></section><div class="grid">${rows.slice(0,6).map(m=>matchCard(m,true)).join("")||empty(overviewGameScope==="active"?"Nenhuma partida atual. Consulte Finalizadas ou programe um novo jogo.":"Nenhuma partida nesta seleção.")}</div>${rows.length>6?'<p>Exibindo seis partidas. Abra Jogos → Acompanhar jogos para consultar a lista completa.</p>':""}`
  };
- const key=overviewFirstKey();
- let first="shortcuts";
- try { first=localStorage.getItem(key) || first; } catch {}
- if(!Object.hasOwn(blocks,first)) first="shortcuts";
- const order=[first,...Object.keys(blocks).filter(id=>id!==first)];
- const choices=Object.entries(labels).map(([id,label])=>
-  `<option value="${id}" ${id===first?"selected":""}>${label}</option>`).join("");
- return `<label>Primeira caixa da Visão geral
-   <select data-overview-first>${choices}</select></label>${order.map(id=>blocks[id]).join("")}`;
+ const order = overviewFirst()==="numbers" ? ["numbers","games"] : ["games","numbers"];
+ const notices = scopeMatches(state.matches,"active").filter(match=>String(match.publicNotice || "").trim());
+ const updates = notices.length ? `<section class="card"><h2>Avisos dos jogos</h2><ul>${notices.map(match=>
+  `<li><strong>${esc(name(match.home))} × ${esc(name(match.away))}</strong> · ${esc(match.publicNotice)}</li>`
+ ).join("")}</ul></section>` : "";
+ return order.map(id=>blocks[id]).join("")+updates;
 }
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-match-scope]");if(!b||!admin||!['active','finished','all'].includes(b.dataset.matchScope))return;
@@ -5750,11 +5790,13 @@ function showShortcutEditor(){
     const hidden = stored.hidden || {};
     const ordered = [...current,...all.filter(item=>!current.some(x=>x.id===item.id))];
     const choices = ordered.map((item) => ({ ...item, hidden: !!hidden[item.id] || !current.some((x) => x.id === item.id) }));
-    const html = `<section class="card" data-shortcut-editor><h2>Personalizar atalhos</h2><p class="muted">Ocultar ou reorganizar ações rápidas, sem alterar as permissões da conta.</p><div class="shortcut-config">${choices.map((item) => `<div class="shortcut-config-row ${item.hidden ? "is-hidden" : ""}"><span><strong>${esc(item.label)}</strong><small>${esc(item.detail)}</small></span><div class="shortcut-config-actions">${item.hidden ? "" : `<button type="button" data-shortcut-move="up" data-shortcut-target="${item.id}" ${current[0]?.id===item.id?"disabled":""}>Subir</button><button type="button" data-shortcut-move="down" data-shortcut-target="${item.id}" ${current.at(-1)?.id===item.id?"disabled":""}>Descer</button>`}<button type="button" data-shortcut-hide="${item.id}" ${item.hidden ? "" : "class=\"primary\""}>${item.hidden ? "Mostrar" : "Ocultar"}</button></div></div>`).join("")}</div><div class="toolbar"><button type="button" data-shortcut-reset class="primary">Restaurar padrão</button><button type="button" data-section="overview">Voltar para tela inicial</button></div></section>`;
-    const panel = document.getElementById("view");
+    const html = `<section class="card" data-shortcut-editor><h2>Personalizar atalhos</h2><p class="muted">Ocultar ou reorganizar ações rápidas, sem alterar as permissões da conta.</p><div class="shortcut-config">${choices.map((item) => `<div class="shortcut-config-row ${item.hidden ? "is-hidden" : ""}"><span><strong>${esc(item.label)}</strong><small>${esc(item.detail)}</small></span><div class="shortcut-config-actions">${item.hidden ? "" : `<button type="button" data-shortcut-move="up" data-shortcut-target="${item.id}" ${current[0]?.id===item.id?"disabled":""}>Subir</button><button type="button" data-shortcut-move="down" data-shortcut-target="${item.id}" ${current.at(-1)?.id===item.id?"disabled":""}>Descer</button>`}<button type="button" data-shortcut-hide="${item.id}" ${item.hidden ? "" : "class=\"primary\""}>${item.hidden ? "Mostrar" : "Ocultar"}</button></div></div>`).join("")}</div><div class="toolbar"><button type="button" data-shortcut-reset class="primary">Restaurar padrão</button><button type="button" data-close-overview-shortcut-editor>Voltar aos atalhos</button></div></section>`;
+    const panel = app.querySelector("[data-overview-shortcuts]");
     if (panel) panel.innerHTML = html;
 }
 document.addEventListener("click",e=>{
+  const closeEditor = e.target.closest("[data-close-overview-shortcut-editor]");
+  if(closeEditor){ closeEditor.closest("[data-overview-shortcuts]").innerHTML = quickActionCards(); return; }
   if(e.target.closest("[data-shortcut-customize]")){ showShortcutEditor(); return; }
   const refreshShortcuts=()=>e.target.closest("[data-shortcut-editor]")?showShortcutEditor():render();
   const move = e.target.closest("[data-shortcut-move]");

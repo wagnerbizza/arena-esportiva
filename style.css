@@ -2824,3 +2824,20 @@ button.arena-op-settings-trigger {
   order:1;
   margin-inline-start:auto;
 }
+
+.arena-match-sport {
+  color: var(--accent);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+.match-card .match-top { flex-wrap: wrap; gap: .5rem; }
+.arena-match-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem 1.1rem;
+  margin: .85rem 0 1rem;
+}
+.arena-match-details > div { min-width: 0; }
+.arena-match-details > div:first-child { flex-basis: 100%; }
+.arena-match-details dt { font-size: .8em; }
+.arena-match-details dd { margin: 0; overflow-wrap: anywhere; }
