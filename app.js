@@ -6093,7 +6093,7 @@ function planTestClassification(rows,selected,hidden) {
 function testDetailPanel() {
   const row=testRecords().find(r=>r.entity+"/"+r.id===testDetail);if(!row)return "";
   const events=row.entity==="matches"?(row.data.events||[]):[];
-  return `<section class="card"><h3>Detalhes privados • ${esc(testRecordName(row))}</h3><p>${row.data.testData?"Reservado ao administrador":"Disponível nas telas normais"} • ID ${esc(row.id)}</p>${row.entity==="matches"?`<p>Placar: ${esc((row.data.score||[]).join(" × "))} • Situação: ${esc(row.data.status)}</p><button type="button" data-test-history="${esc(row.id)}">Carregar histórico privado desta partida</button>${table(["Data","Acontecimento","Descrição privada","Responsável"],events.map(e=>tr([format(e.at),eventLabel(e,row.data),eventDescription(e),responsibleLabel(e)])))}`:""}<details><summary>Consultar todos os campos do registro</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(row.data,(_k,v)=>v?.toDate?v.toDate().toISOString():v,2))}</pre></details></section>`;
+  return `<section class="card" aria-labelledby="recordTrashDetailTitle"><h3 id="recordTrashDetailTitle" tabindex="-1">Detalhes privados • ${esc(testRecordName(row))}</h3><p>${row.data.testData?"Reservado ao administrador":"Disponível nas telas normais"} • ID ${esc(row.id)}</p>${row.entity==="matches"?`<p>Placar: ${esc((row.data.score||[]).join(" × "))} • Situação: ${esc(row.data.status)}</p><button type="button" data-test-history="${esc(row.id)}">Carregar histórico privado desta partida</button>${table(["Data","Acontecimento","Descrição privada","Responsável"],events.map(e=>tr([format(e.at),eventLabel(e,row.data),eventDescription(e),responsibleLabel(e)])))}`:""}<details><summary>Consultar todos os campos do registro</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(JSON.stringify(row.data,(_k,v)=>v?.toDate?v.toDate().toISOString():v,2))}</pre></details></section>`;
 }
 const visibilityTypes = [["teams","Equipes completas"],["players","Jogadores"],["matches","Partidas"],
   ["championships","Campeonatos"],["all","Todos os tipos"]];
@@ -6200,7 +6200,13 @@ document.addEventListener("click",async e=>{
  try{
   if(b.hasAttribute("data-test-select-all")){for(const row of visibilityRows())testSelection.add(row.entity+"/"+row.id);testPlan=null;testBackup=false;render();}
   if(b.hasAttribute("data-test-select-clear")){testSelection.clear();testPlan=null;testBackup=false;render();}
-  if(b.dataset.testDetail){testDetail=b.dataset.testDetail;render();}
+  if(b.dataset.testDetail){
+   testDetail=b.dataset.testDetail;
+   render();
+   const heading = $("#recordTrashDetailTitle");
+   heading?.focus({preventScroll:true});
+   scrollBelowPinnedCards(heading);
+  }
   if(b.dataset.testHistory){await cloud.loadHistory([b.dataset.testHistory]);render();}
   if(b.dataset.testScope){testOnlyReserved=b.dataset.testScope==="reserved";testSelection.clear();testPlan=null;testBackup=false;render();}
   if(b.hasAttribute("data-test-preview")){const items=planTestClassification(testRecords(),testSelection,!testOnlyReserved);if(!items.length)throw Error("Nenhum registro precisa mudar.");testPlan={items,hidden:!testOnlyReserved};testBackup=false;render();}
