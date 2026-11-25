@@ -1315,6 +1315,7 @@ function floatingGameClock() {
   const matches = state.matches.filter(item => canUseCabin(item));
   const match = followed || matches.find(item => item.status === "Ao vivo") ||
     matches.find(item => ["Pausada","Suspensa"].includes(item.status));
+  if (!match && ["matchSheets","reports","auditReports","reportCenter"].includes(section)) return "";
   if (!match) return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock arena-monitor-waiting noprint ${pinned ? "is-pinned" : ""}" aria-label="Barra de jogos">
     <div><strong class="arena-icon-action">${arenaIcon("games")} Barra de jogos</strong><p>Aguardando partida</p></div>
     <div class="toolbar">${section !== "operation" ? `<button type="button" class="arena-icon-action" data-section="operation">${arenaIcon("live")}<span>Abrir operação</span></button>` : ""}
