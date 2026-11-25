@@ -1332,6 +1332,11 @@ function applyGameBarPreferences(prefs, bar=$("#arenaTopMatchMonitor")) {
   const last=bar.querySelector(".arena-op-monitor-event");
   if(last)last.hidden=prefs.hideLast===true;
 }
+function colorSwatch(value,fallback){
+  if(/^#[0-9a-f]{6}$/i.test(value||""))return value;
+  const rgb=value?.match(/^rgba?\(\s*(\d+)[, ]+\s*(\d+)[, ]+\s*(\d+)/i);
+  return rgb ? "#"+rgb.slice(1,4).map(n=>Number(n).toString(16).padStart(2,"0")).join("") : fallback;
+}
 function showGameBarSettings(key="games") {
   if($("#arenaGameBarSettings")?.open)return;
   const dialog=document.createElement("dialog");
@@ -1341,17 +1346,30 @@ function showGameBarSettings(key="games") {
   const prefs=key==="games"?personal.gameBar:personal.customAreas[key]||{};
   const names={games:"Barra de jogos",weather:"Previsão do tempo",navigation:"Atalhos e personalização",location:"Você está em",search:"Busca de funções"};
   const title=names[key]||(key.startsWith("title:")?"Título da tela":"Seção de cadastros");
+  const area=key==="games"?$("#arenaTopMatchMonitor"):
+    [...document.querySelectorAll("[data-custom-area]")].find(el=>el.dataset.customArea===key);
+  const computed=area?getComputedStyle(area):null;
+  const sample=area?.querySelector(".toolbar > button,.navigation-search-row > button,.arena-toolbar > button");
+  const border=colorSwatch(prefs.color||computed?.borderTopColor,"#16c4eb");
+  const background=colorSwatch(prefs.background||computed?.backgroundColor,"#14202b");
+  const buttons=colorSwatch(prefs.buttons||(sample&&getComputedStyle(sample).backgroundColor),"#203442");
   const opener=document.activeElement;
   dialog.innerHTML=`<div class="arena-dialog-heading"><h2 id="arenaGameBarSettingsTitle">${title}</h2><button type="button" class="arena-close-x" aria-label="Fechar" title="Fechar">×</button></div>
-  <form><label>Cor da borda <input name="color" type="color" value="${esc(/^#[0-9a-f]{6}$/i.test(prefs.color||"")?prefs.color:state.settings.color||"#16c4eb")}"></label>
-  <label><input name="useBackground" type="checkbox" ${prefs.background?"checked":""}> Personalizar fundo <input name="background" type="color" aria-label="Cor de fundo" value="${esc(/^#[0-9a-f]{6}$/i.test(prefs.background||"")?prefs.background:"#14202b")}"></label>
-  <label><input name="useButtons" type="checkbox" ${prefs.buttons?"checked":""}> Personalizar botões <input name="buttons" type="color" aria-label="Cor dos botões" value="${esc(/^#[0-9a-f]{6}$/i.test(prefs.buttons||"")?prefs.buttons:"#203442")}"></label>
+  <form><label>Cor da borda <input name="color" type="color" value="${border}"></label>
+  <label><input name="useBackground" type="checkbox" ${prefs.background?"checked":""}> Personalizar fundo <input name="background" type="color" aria-label="Cor de fundo" value="${background}"></label>
+  <label><input name="useButtons" type="checkbox" ${prefs.buttons?"checked":""}> Personalizar botões <input name="buttons" type="color" aria-label="Cor dos botões" value="${buttons}"></label>
   <label><input name="compact" type="checkbox" ${prefs.compact?"checked":""}> Espaçamento compacto</label>
   <label><input name="large" type="checkbox" ${prefs.large?"checked":""}> Botões maiores</label>
   ${key==="games"?`<label><input name="hideLast" type="checkbox" ${prefs.hideLast?"checked":""}> Ocultar último lance</label>`:""}
   <div class="toolbar"><button type="submit" class="primary">Salvar ajustes</button><button type="button" data-game-bar-reset>Restaurar padrão</button></div></form>`;
   dialog.querySelector(".arena-close-x").onclick=()=>dialog.close();
   const form=dialog.querySelector("form");
+  let borderChanged=false;
+  form.addEventListener("input",event=>{
+    if(event.target.name==="color")borderChanged=true;
+    if(event.target.name==="background")form.elements.useBackground.checked=true;
+    if(event.target.name==="buttons")form.elements.useButtons.checked=true;
+  });
   function saveGameBar(gameBar){
     try{
       const latest=readPersonalTools();
@@ -1365,7 +1383,7 @@ function showGameBarSettings(key="games") {
   }
   form.onsubmit=event=>{
     event.preventDefault();event.stopPropagation();
-    saveGameBar({color:form.elements.color.value,background:form.elements.useBackground.checked?form.elements.background.value:"",buttons:form.elements.useButtons.checked?form.elements.buttons.value:"",compact:form.elements.compact.checked,large:form.elements.large.checked,hideLast:form.elements.hideLast?.checked===true});
+    saveGameBar({color:borderChanged?form.elements.color.value:prefs.color||"",background:form.elements.useBackground.checked?form.elements.background.value:"",buttons:form.elements.useButtons.checked?form.elements.buttons.value:"",compact:form.elements.compact.checked,large:form.elements.large.checked,hideLast:form.elements.hideLast?.checked===true});
   };
   dialog.querySelector("[data-game-bar-reset]").onclick=()=>saveGameBar({});
   dialog.addEventListener("close",()=>{

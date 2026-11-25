@@ -39,9 +39,10 @@
  const dedicatedCommands = ['end','resume','pause'];
  const sessionPreferences=new Map();
  const panelColors={azul:['Azul','#45a4ff'],verde:['Verde','#49c99a'],laranja:['Laranja','#f4a858'],roxo:['Roxo','#b58cff'],rosa:['Rosa','#ee80ac']};
+ const validPanelColor=value=>Object.hasOwn(panelColors,value)||/^#[0-9a-f]{6}$/i.test(value||'');
  const panelTitle=(prefs,id)=>prefs.names?.[id]||labels[id];
  const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>Object.hasOwn(panelColors,saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set(saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id)))]:[...defaultMonitor],displayWidth:[35,40,45,50,55,60,65].includes(saved?.displayWidth)?saved.displayWidth:45,stackMonitor:saved?.stackMonitor===true,cabinHeight:Number.isInteger(saved?.cabinHeight)?Math.max(0,Math.min(1600,saved.cabinHeight)):0,cabinWidth:Number.isInteger(saved?.cabinWidth)?Math.max(40,Math.min(100,saved.cabinWidth)):null,side:Array.isArray(saved?.side)?saved.side.filter(id=>Object.hasOwn(monitorCommands,id)):[],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
+ function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>validPanelColor(saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set(saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id)))]:[...defaultMonitor],displayWidth:[35,40,45,50,55,60,65].includes(saved?.displayWidth)?saved.displayWidth:45,stackMonitor:saved?.stackMonitor===true,cabinHeight:Number.isInteger(saved?.cabinHeight)?Math.max(0,Math.min(1600,saved.cabinHeight)):0,cabinWidth:Number.isInteger(saved?.cabinWidth)?Math.max(40,Math.min(100,saved.cabinWidth)):null,side:Array.isArray(saved?.side)?saved.side.filter(id=>Object.hasOwn(monitorCommands,id)):[],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
  let syncedLayout=null;
  const syncMessages=new Map();
  const pendingLayouts=new Map();
@@ -217,9 +218,9 @@
   }).join('');
  }
  function toolbar(root,prefs){monitorToolbar(root,prefs);const nav=tools(root).querySelector('[data-op-shortcuts]');nav.replaceChildren();const panels=[...root.querySelectorAll('[data-op-panel]')];for(const section of panels){const id=section.dataset.opPanel,fold=section.querySelector('[data-op-fold]'),closed=prefs.collapsed.includes(id);
-   const title=panelTitle(prefs,id),color=panelColors[prefs.colors[id]];
+   const title=panelTitle(prefs,id),color=panelColors[prefs.colors[id]]?.[1]||prefs.colors[id];
    section.querySelector('h2').textContent=title;
-   if(color)section.style.setProperty('--arena-op-box-color',color[1]);
+   if(color)section.style.setProperty('--arena-op-box-color',color);
    else section.style.removeProperty('--arena-op-box-color');
    const handle=section.querySelector('[data-op-drag]');
    handle.title='Arrastar '+title+' • Alt + ↑ ou ↓ para mover pelo teclado';
@@ -570,14 +571,23 @@
   dialog.setAttribute('aria-labelledby','arenaOpCustomizeTitle');
   dialog.innerHTML='<form><div class="arena-dialog-heading"><h2 id="arenaOpCustomizeTitle">Personalizar caixa</h2><button type="button" class="arena-close-x" data-op-customize-close aria-label="Fechar personalização" title="Fechar personalização">×</button></div>'+
     '<label>Nome<input name="panelName" maxlength="64" placeholder="Nome padrão"></label>'+
-    '<label>Cor<select name="color"><option value="">Padrão</option></select></label>'+
+    '<label>Cor<select name="color"><option value="">Padrão</option></select></label><label>Outra cor<input name="freeColor" type="color"></label>'+
     '<label>Posição<select name="position"></select></label>'+
     '<div class="toolbar"><button class="primary" type="submit">Salvar</button>'+
     '</div></form>';
   const form=dialog.querySelector('form');
   form.elements.panelName.value=prefs.names[id]||'';
   for(const [color,[title]] of Object.entries(panelColors))form.elements.color.add(new Option(title,color));
-  form.elements.color.value=prefs.colors[id]||'';
+  form.elements.color.add(new Option('Cor personalizada','custom'));
+  const currentColor=prefs.colors[id];
+  const custom=/^#[0-9a-f]{6}$/i.test(currentColor||'');
+  form.elements.color.value=custom?'custom':currentColor||'';
+  form.elements.freeColor.value=panelColors[currentColor]?.[1]||(custom?currentColor:'#16c4eb');
+  form.elements.freeColor.addEventListener('input',()=>{form.elements.color.value='custom';});
+  form.elements.color.addEventListener('change',()=>{
+   const preset=panelColors[form.elements.color.value]?.[1];
+   if(preset)form.elements.freeColor.value=preset;
+  });
   const visibleOrder=workspace=>[...workspace.querySelectorAll('[data-op-panel]')].map(panel=>panel.dataset.opPanel);
   const pinned=prefs.locked.includes(id);
   const order=visibleOrder(root).filter(item=>prefs.locked.includes(item)===pinned);
@@ -603,8 +613,8 @@
    current.splice(position,0,id);
    next.order=[...current,...next.order.filter(item=>!current.includes(item))];
    next.names[id]=form.elements.panelName.value.trim().slice(0,64);
-   const color=form.elements.color.value;
-   if(Object.hasOwn(panelColors,color))next.colors[id]=color;
+   const color=form.elements.color.value==='custom'?form.elements.freeColor.value:form.elements.color.value;
+   if(validPanelColor(color))next.colors[id]=color;
    else delete next.colors[id];
    if(active){apply(active,next);save(active,next);}
    dialog.close();

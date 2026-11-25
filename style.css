@@ -2796,3 +2796,24 @@ input[type="search"], #arenaSidebar #sideFunctionSearch, #functionSearch {
   background-repeat:no-repeat; background-position:left .7rem center; background-size:1.15rem;
   padding-inline-start:2.45rem;
 }
+
+/* A amostra de cor usa toda a área do controle nativo. */
+input[type="color"],
+#arenaGameBarSettings input[type="color"] {
+  box-sizing:border-box; appearance:auto; inline-size:64px; min-inline-size:64px;
+  block-size:40px; min-block-size:40px; padding:4px;
+  border:1px solid var(--line); border-radius:8px; cursor:pointer;
+}
+input[type="color"]::-webkit-color-swatch-wrapper { padding:0; }
+input[type="color"]::-webkit-color-swatch { border:0; border-radius:4px; }
+input[type="color"]::-moz-color-swatch { border:0; border-radius:4px; }
+
+button.arena-game-bar-settings,
+button.arena-op-settings-trigger {
+  display:inline-grid; place-items:center; background:transparent!important;
+  border-color:transparent!important; box-shadow:none!important;
+}
+:is(button.arena-game-bar-settings,button.arena-op-settings-trigger):hover { color:var(--accent); }
+:is(button.arena-game-bar-settings,button.arena-op-settings-trigger):focus-visible {
+  outline:2px solid var(--accent); outline-offset:-3px;
+}
