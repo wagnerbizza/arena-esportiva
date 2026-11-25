@@ -2843,3 +2843,19 @@ button.arena-op-settings-trigger {
 .arena-match-details > div:first-child { flex-basis: 100%; }
 .arena-match-details dt { font-size: .8em; }
 .arena-match-details dd { margin: 0; overflow-wrap: anywhere; }
+
+.arena-table-search-field { display: block; position: relative; }
+.arena-table-search-field input[type="search"] {
+  background-image: none !important;
+  padding-inline-start: 2.45rem;
+}
+.arena-table-search-icon {
+  position: absolute;
+  inset-inline-start: .7rem;
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: var(--muted);
+  pointer-events: none;
+}
+.arena-table-search-icon .arena-icon { width: 1.15rem; height: 1.15rem; }

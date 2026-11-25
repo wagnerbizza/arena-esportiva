@@ -1746,7 +1746,7 @@ function table(headers, rows, searchable = true) {
 function tableQueryControls(headers,count) {
   const columns = headers.map((label,index) => label === "Ação" || label === "Ações" ? "" : `<option value="${index}">${esc(label)}</option>`).join("");
   return `<div class="list-controls noprint">
-    <label>Buscar nesta tabela<input type="search" data-table-query-input></label>
+    <label>Buscar nesta tabela<span class="arena-table-search-field"><span class="arena-table-search-icon" aria-hidden="true">${arenaIcon("search")}</span><input type="search" data-table-query-input></span></label>
     <label>Coluna<select data-table-query-column><option value="">Todas na busca</option>${columns}</select></label>
     <label>Ordenação<select data-table-query-order><option value="">Ordem original</option><option value="az">A–Z / crescente</option><option value="za">Z–A / decrescente</option></select></label>
     <button type="button" data-table-query-clear>Limpar</button>
