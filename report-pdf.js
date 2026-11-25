@@ -193,7 +193,7 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
     const labelHeight = logos.some(item=>item.label) ? 5 : 0;
     y = ensure(y, side+labelHeight+4);
     doc.setFontSize(Math.min(8,side*1.15));
-    const start = left+(width-logos.length*side-(logos.length-1)*gap)/2;
+    const start = left;
     logos.forEach(({image,label},i)=>{
       const x=start+i*(side+gap);
       if(label)doc.text(label,x,y+3,{maxWidth:side});
@@ -222,12 +222,11 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
     function drawRow() {
       if (!row.length) return;
       rowY = ensure(rowY, rowHeight);
-      let x = left + (width - rowWidth) / 2;
-      for (const { label, batch, boxWidth, logosWidth } of row) {
-        if (label) doc.text(label, x + boxWidth / 2, rowY, { align: "center" });
-        const logosX = x + (boxWidth - logosWidth) / 2;
+      let x = left;
+      for (const { label, batch, boxWidth } of row) {
+        if (label) doc.text(label, x, rowY);
         batch.forEach((logo, index) => {
-          const imageX = logosX + index * (size + gap) + (size - imageSize) / 2;
+          const imageX = x + index * (size + gap) + (size - imageSize) / 2;
           try { doc.addImage(logo, "PNG", imageX, rowY + 4, imageSize, imageSize, undefined, "FAST"); } catch {}
         });
         x += boxWidth + gap;
@@ -245,7 +244,7 @@ export function buildReportPDF(games, { jsPDF, autoTable }) {
         const boxWidth = Math.max(logosWidth, doc.getTextWidth(label));
         if (row.length && rowWidth + gap + boxWidth > width) drawRow();
         rowWidth += (row.length ? gap : 0) + boxWidth;
-        row.push({ label, batch, boxWidth, logosWidth });
+        row.push({ label, batch, boxWidth });
       }
     }
     drawRow();
