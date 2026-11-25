@@ -134,19 +134,30 @@
     primary.append(button);
    }
   }
+  const settings=tools(root);
+  const sidePreview=settings.querySelector('[data-op-dock-preview="side"]');
+  const belowPreview=settings.querySelector('[data-op-dock-preview="below"]');
+  sidePreview.replaceChildren();belowPreview.replaceChildren();
   for(const id of prefs.monitor){
-   if(dedicatedCommands.includes(id) || root.hasAttribute('data-op-standby'))continue;
+   if(dedicatedCommands.includes(id))continue;
    const [label,selector,panelId]=monitorCommands[id];
    const source=selector?root.querySelector(selector):root.querySelector('[data-op-panel="'+panelId+'"]');
-   if(!source)continue;
+   const beside=prefs.side.includes(id);
    const button=document.createElement('button');
    button.type='button';
-   if(panelId)button.dataset.opJump=panelId;else button.dataset.opMonitorRun=id;
-   button.textContent=id==='resume'?(source.textContent.trim().startsWith('Retomar')?'Continuar':source.textContent.trim()):label;
-   button.disabled=source.disabled===true;
+   button.textContent=label;
    button.dataset.opDockCommand=id;
-   button.draggable=!button.disabled;
-   (prefs.side.includes(id)?side:menu).append(button);
+   button.draggable=true;
+   const preview=button.cloneNode(true);
+   preview.dataset.opPlace='';
+   (beside?sidePreview:belowPreview).append(preview);
+   if(root.hasAttribute('data-op-standby') || !source || source.disabled){
+    button.setAttribute('aria-disabled','true');
+    button.title='Comando indisponível nesta partida. Clique para ajustar a posição.';
+    button.dataset.opPlace='';
+   }else if(panelId)button.dataset.opJump=panelId;
+   else button.dataset.opMonitorRun=id;
+   (beside?side:menu).append(button);
   }
   for(const [id,[,selector,panelId]] of Object.entries(monitorCommands)){
    if(dedicatedCommands.includes(id))continue;
@@ -290,7 +301,7 @@
   root.append(strip);
   if(config.chooser)root.insertAdjacentHTML("beforeend",config.chooser);
   const timeline=score.querySelector('.match-timeline');if(timeline)timeline.remove();const scoreWrap=document.createElement('section');scoreWrap.className='arena-op-score';const info=document.createElement('details');info.className='arena-op-match-details';info.innerHTML='<summary>Detalhes da partida</summary>';info.append(score);scoreWrap.append(info);const guide=old.querySelector('.match-guide');root.append(scoreWrap);
-  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.innerHTML='<summary>Personalizar a cabine</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Marque a caixa para exibir o atalho. Arraste pela alça até um dos destinos abaixo, ou toque no botão Posicionar, Ao lado ou Abaixo.</p><div class="arena-op-dock-targets"><div data-op-dock="side">Ao lado do visor</div><div data-op-dock="below">Abaixo do visor</div><button type="button" data-op-view-monitor>Ver o visor</button></div><div data-op-monitor-choices></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
+  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.innerHTML='<summary>Personalizar a cabine</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Marque a caixa para exibir o atalho. Arraste pela alça até um dos destinos abaixo, ou toque no botão Posicionar, Ao lado ou Abaixo.</p><div class="arena-op-dock-targets"><div data-op-dock="side"><strong>Ao lado do visor</strong><div data-op-dock-preview="side"></div></div><div data-op-dock="below"><strong>Abaixo do visor</strong><div data-op-dock-preview="below"></div></div><button type="button" data-op-view-monitor>Ver o visor</button></div><div data-op-monitor-choices></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
   const nav=document.createElement('nav');nav.className='toolbar arena-op-shortcuts';nav.dataset.opShortcuts='';nav.setAttribute('aria-label','Meus atalhos da operação');settings.append(nav);const grid=document.createElement('div');grid.className='arena-op-grid';grid.dataset.opGrid='';root.append(grid);
   for(const [group,label] of [['pinned','Caixas fixadas no topo'],['regular','Caixas desafixadas']]){
    const lane=document.createElement('div');lane.dataset.opGroup=group;
@@ -647,10 +658,19 @@
   const id=source.dataset.opDockCommand;
   const dialog=document.createElement('dialog');
   dialog.className='card arena-dock-dialog';
-  dialog.innerHTML='<form method="dialog"><strong>'+escape(monitorCommands[id][0])+'</strong><div class="toolbar"><button value="side">Ao lado</button><button value="below">Abaixo</button><button value="remove">Retirar do visor</button><button value="cancel" class="arena-close-x" aria-label="Fechar">×</button></div></form>';
+  const prefs=read(root.dataset.opKey), place=prefs.side.includes(id)?'side':'below';
+  const peers=prefs.monitor.filter(key=>!dedicatedCommands.includes(key)&&(prefs.side.includes(key)?'side':'below')===place);
+  const index=peers.indexOf(id);
+  const reorder=index<0?'':'<button value="earlier" '+(index===0?'disabled':'')+'>Mover para antes</button><button value="later" '+(index===peers.length-1?'disabled':'')+'>Mover para depois</button>';
+  dialog.innerHTML='<form method="dialog"><strong>'+escape(monitorCommands[id][0])+'</strong><div class="toolbar"><button value="side">Ao lado</button><button value="below">Abaixo</button>'+reorder+'<button value="remove">Retirar do visor</button><button value="cancel" class="arena-close-x" aria-label="Fechar">×</button></div></form>';
   document.body.append(dialog);
   dialog.addEventListener('close',()=>{
-   if(root.isConnected&&['side','below','remove'].includes(dialog.returnValue))dockCommand(root,id,dialog.returnValue);
+   const action=dialog.returnValue;
+   if(root.isConnected){
+    if(['side','below','remove'].includes(action))dockCommand(root,id,action);
+    else if(action==='earlier' && index>0)dockCommand(root,id,place,peers[index-1]);
+    else if(action==='later' && index>=0 && index<peers.length-1)dockCommand(root,id,place,peers[index+2]);
+   }
    dialog.remove();
   },{once:true});
   dialog.showModal();
@@ -676,7 +696,7 @@
   event.preventDefault();
   const {root,id}=dockDrag;root.classList.remove('arena-docking');dockDrag=null;
   const target=event.target.closest('[data-op-dock-command]');
-  dockCommand(root,id,destination.dataset.opDock,target?.dataset.opDockCommand);
+  if(target?.dataset.opDockCommand!==id)dockCommand(root,id,destination.dataset.opDock,target?.dataset.opDockCommand);
  });
  document.addEventListener('dragend',()=>{dockDrag?.root.classList.remove('arena-docking');dockDrag=null;});
  function openDockOptions(event){

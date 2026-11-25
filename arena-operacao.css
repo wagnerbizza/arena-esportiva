@@ -249,3 +249,10 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
     --arena-op-stack-top:var(--arena-op-sticky-offset,80px);
   }
 }
+
+[data-op-dock-preview] { display:flex; flex-wrap:wrap; gap:6px; }
+[data-op-dock-preview]:not(:empty) { margin-block-start:8px; }
+.arena-op-dock-targets [data-op-dock] { align-content:start; justify-items:start; }
+[data-op-dock-command][aria-disabled=true] { opacity:.65; }
+[data-op-dock-command][aria-disabled=true][draggable=true] { pointer-events:auto; cursor:grab; }
+.arena-operation-workspace.arena-docking .arena-op-monitor-row:not(:has(button)) { display:flex; }
