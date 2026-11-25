@@ -85,7 +85,7 @@ const key = trainingMode ? "arena-treinamento-isolado-v1" : "arena-demo-v1",
   app = $("#app");
 let documentFilters = {championship:"",sport:"",status:"",query:"",from:"",to:""};
 let reportFilter = "",
-  publicFilter = "";
+  publicFilter = "", publicMatchQuery = "";
 const publicEdition = admin ? "" : new URLSearchParams(location.search).get("campeonato") || "";
 
 function publicEditionState(data) {
@@ -98,7 +98,7 @@ function publicEditionState(data) {
 // Para mudar a visualização inicial de partidas, altere group: "active" abaixo.
 const listDefaults = {
   teams: { query: "", category: "", sport:"",status:"active", order:"" },
-  players: { query: "", team: "", position: "", reserve: "", order:"", teamStatus:"active" },
+  players: { query: "", team: "", category:"", sport:"", className:"", position: "", reserve: "", order:"", teamStatus:"active" },
   matches: { query: "", sport: "", group: "active", status: "", championshipId: "", edition: "", team: "", order:"" },
 };
 const listFilters = Object.fromEntries(Object.entries(listDefaults).map(([k, v]) => [k, { ...v }]));
@@ -113,6 +113,21 @@ function lineupField(label, reserve) {
   return `<label>${label}<select name="reserve">${choices.map(([value,text]) => `<option value="${value}"${value === current ? " selected" : ""}>${text}</option>`).join("")}</select></label>`;
 }
 const searchText = (v) => String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
+const matchesSearch = (query, fields) => {
+  if (!query) return true;
+  const text = searchText(fields.flat(Infinity).join(" "));
+  return query.split(/\s+/).every(word => text.includes(word));
+};
+function teamSearchFields(t) {
+  return t ? [t.name,t.short,t.coach,t.manager,t.school,t.className,t.category,teamSports(t)] : [];
+}
+function matchSearchFields(m) {
+  const edition=(state.championships||[]).find(row=>row.id===m.championshipId);
+  return [m.id,m.competition,m.sport,m.status,m.stage,m.place,m.referees,m.coaches,
+    m.date,m.date ? format(m.date) : "",phaseLabel(m),edition?.name,edition?.season,edition?.category,
+    teamSearchFields(team(m.home)),teamSearchFields(team(m.away)),
+    (m.roster||[]).map(p=>[p.name,p.number,p.position,p.className])];
+}
 const alphabetical = (a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", { numeric: true });
 function playerListTeams(status) {
   const scheduled = new Set(state.matches.filter(match => !match.testData && ["Agendada","Ao vivo","Pausada","Suspensa"].includes(match.status))
@@ -132,9 +147,15 @@ function listSource(kind) {
 function filteredRecords(kind) {
   const f = listFilters[kind], q = searchText(f.query);
   return listSource(kind).filter((r) => {
-    if (kind === "teams") return (!f.sport||teamSports(r).includes(f.sport))&&(!f.status||(f.status==="archived"?r.archived===true:r.archived!==true))&&(!q || searchText([r.name, r.short, r.coach, r.manager, r.school, r.className].join(" ")).includes(q)) && (!f.category || (r.category || "") === f.category);
-    if (kind === "players") return (!q || searchText([r.name, r.number, name(r.team), r.position, r.className, lineupLabel(r.reserve)].join(" ")).includes(q)) && (!f.team || r.team === f.team) && (!f.position || (r.position || "") === f.position) && (!f.reserve || lineupKey(r.reserve) === f.reserve);
-    return (!f.edition || (r.championshipId && r.competition === f.edition)) && (!f.team || [r.home,r.away].includes(f.team)) && (!q || searchText([name(r.home), name(r.away), r.competition, r.place].join(" ")).includes(q)) && (!f.championshipId || (f.championshipId === "__unlinked" ? !r.championshipId : r.championshipId === f.championshipId)) && (!f.sport || r.sport === f.sport) && (!f.status || r.status === f.status) && (f.group === "all" || (f.group === "finished" ? finalStatuses.includes(r.status) : !finalStatuses.includes(r.status)));
+    if (kind === "teams") return (!f.sport||teamSports(r).includes(f.sport))&&(!f.status||(f.status==="archived"?r.archived===true:r.archived!==true))&&matchesSearch(q,teamSearchFields(r)) && (!f.category || (r.category || "") === f.category);
+    if (kind === "players") {
+      const registeredTeam=team(r.team);
+      return matchesSearch(q,[r.name,r.number,r.position,r.className,lineupLabel(r.reserve),teamSearchFields(registeredTeam)]) &&
+        (!f.category || registeredTeam.category===f.category) &&
+        (!f.sport || teamSports(registeredTeam).includes(f.sport)) &&
+        (!f.className || reportRosterClass(r)===f.className) && (!f.team || r.team === f.team) && (!f.position || (r.position || "") === f.position) && (!f.reserve || lineupKey(r.reserve) === f.reserve);
+    }
+    return (!f.edition || (r.championshipId && r.competition === f.edition)) && (!f.team || [r.home,r.away].includes(f.team)) && matchesSearch(q,matchSearchFields(r)) && (!f.championshipId || (f.championshipId === "__unlinked" ? !r.championshipId : r.championshipId === f.championshipId)) && (!f.sport || r.sport === f.sport) && (!f.status || r.status === f.status) && (f.group === "all" || (f.group === "finished" ? finalStatuses.includes(r.status) : !finalStatuses.includes(r.status)));
   }).sort(f.order ? (a,b) => {
     const order = f.order === "za" ? -1 : 1;
     if (kind === "matches") return order * alphabetical({name:name(a.home)}, {name:name(b.home)});
@@ -160,11 +181,15 @@ function listPanel(kind) {
   const unique = (rows, key) => [...new Set(rows.map((r) => r[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
   const f = listFilters[kind];
   const titles = { teams: "Equipes cadastradas", players: "Jogadores cadastrados", matches: role === "admin" ? "Partidas cadastradas" : canViewAllGames() ? "Jogos disponíveis" : "Partidas atribuídas" };
-  let controls = `<label class="list-search">${kind === "matches" ? "Buscar equipe, competição ou local" : kind === "players" ? "Buscar nome, camisa, equipe, posição ou turma" : "Buscar equipe, sigla, técnico, escola, turma ou responsável"}<input type="search" data-list-filter="${kind}" data-filter-key="query" value="${esc(f.query)}" placeholder="Digite para buscar…" autocomplete="off"></label>`;
+  let controls = `<label class="list-search">${kind === "matches" ? "Buscar equipe, campeonato, local ou arbitragem" : kind === "players" ? "Buscar nome, camisa, turma, sigla, modalidade ou técnico" : "Buscar equipe, sigla, técnico, escola, turma ou responsável"}<input type="search" data-list-filter="${kind}" data-filter-key="query" value="${esc(f.query)}" placeholder="Digite para buscar…" autocomplete="off"></label>`;
   if (kind === "teams") controls += filterSelect(kind, "category", "Categoria", unique(state.teams, "category"), "Todas as categorias")+filterSelect(kind,"sport","Modalidade",D.SPORTS,"Todas as modalidades")+filterSelect(kind,"status","Situação da equipe",[["active","Ativas"],["archived","Arquivadas"]],"Todas as equipes");
   if (kind === "players") {
     const teamStates = [["active","Ativas"],["scheduled","Com jogo marcado ou em andamento"],["archived","Arquivadas"]];
-    controls += filterSelect(kind,"teamStatus","Situação da equipe",teamStates,"Todas as não reservadas") +
+    const teams=playerListTeams(f.teamStatus);
+    controls += filterSelect(kind,"category","Categoria",unique(teams,"category"),"Todas as categorias") +
+      filterSelect(kind,"sport","Modalidade",D.SPORTS,"Todas as modalidades") +
+      filterSelect(kind,"className","Turma",unique(listSource(kind).map(p=>({className:reportRosterClass(p)})),"className"),"Todas as turmas") +
+      filterSelect(kind,"teamStatus","Situação da equipe",teamStates,"Todas as não reservadas") +
       filterSelect(kind,"team","Equipe",playerListTeams(f.teamStatus).sort(alphabetical).map(team => [team.id,team.name]),"Todas da seleção") +
       filterSelect(kind,"position","Posição",unique(listSource(kind),"position"),"Todas as posições") +
       filterSelect(kind,"reserve","Escalação",[["pending","A definir"],["false","Titular"],["true","Reserva / banco"]],"Todos");
@@ -196,7 +221,7 @@ function listResults(kind) {
     }).join("");
   }
   if (kind === "teams") return rows.map(teamDirectoryCard).join("");
-  return table(["Nome", "Equipe", "Número", "Posição", "Escalação", "Ação"], rows.map((p) => tr([p.name, name(p.team), p.number, p.position, lineupLabel(p.reserve)]).replace("</tr>", `<td><button data-edit-player="${esc(p.id)}">Editar</button></td></tr>`)));
+  return table(["Nome", "Equipe", "Sigla", "Turma", "Modalidades", "Categoria", "Número", "Posição", "Escalação", "Ação"], rows.map((p) => tr([p.name, name(p.team), team(p.team).short, reportRosterClass(p), teamSports(team(p.team)).join(", "), team(p.team).category, p.number, p.position, lineupLabel(p.reserve)]).replace("</tr>", `<td><button data-edit-player="${esc(p.id)}">Editar</button></td></tr>`)));
 }
 function updateList(kind) {
   const results = document.getElementById(`list-results-${kind}`);
@@ -342,7 +367,7 @@ function championshipsView() {
 }
 function visibleChampionships() {
   const q = searchText(championshipQuery);
-  return (state.championships || []).filter((c) => (!championshipStatus || c.status === championshipStatus) && (!q || searchText([c.name,c.season,c.sport,c.category].join(" ")).includes(q))).sort((a,b) => (championshipOrder === "za" ? -1 : 1) * alphabetical(a,b));
+  return (state.championships || []).filter((c) => (!championshipStatus || c.status === championshipStatus) && matchesSearch(q,[c.name,c.season,c.sport,c.category,c.status])).sort((a,b) => (championshipOrder === "za" ? -1 : 1) * alphabetical(a,b));
 }
 function championshipCount() { return `${visibleChampionships().length} de ${(state.championships || []).length} combinações de modalidade e categoria nesta visualização`; }
 function championshipCards() {
@@ -2028,6 +2053,7 @@ function publicPageHTML() {
 }
 function publicMatches(filter) {
   const list = state.matches.filter(m=>(!filter||m.sport===filter)&&
+    matchesSearch(searchText(publicMatchQuery),[m.competition,m.sport,m.status,m.place,format(m.date),...[m.home,m.away].map(id=>{const t=team(id);return [t.name,t.short,t.category];})])&&
     (publicArea==="live"?m.status==="Ao vivo":publicArea==="schedule"?["Agendada","Adiada"].includes(m.status):publicArea==="results"?finalStatuses.includes(m.status):!finalStatuses.includes(m.status)));
   return list.length
     ? list
@@ -2040,7 +2066,7 @@ function publicMatches(filter) {
         .map((m) => matchCard(m))
         .join("")
      : publicArea==="active"
-      ? `<section class="card public-empty-state"><h3>Nenhum jogo atual nesta seleção</h3><p>Não há partidas agendadas, em andamento ou interrompidas${filter?" nesta modalidade":""}. Consulte os jogos concluídos em Resultados.</p><button type="button" class="primary" data-public-area="results">Ver resultados</button></section>`
+      ? `<section class="card public-empty-state"><h3>Nenhum jogo atual nesta seleção</h3><p>Não há partidas agendadas, em andamento ou interrompidas${filter?" nesta modalidade":""}${publicMatchQuery?" com esses termos":""}. Consulte os jogos concluídos em Resultados.</p><button type="button" class="primary" data-public-area="results">Ver resultados</button></section>`
       : empty("Nenhuma partida publicada para esta seleção.");
 }
 function view() {
@@ -2641,15 +2667,13 @@ function generalAuditPanel(){
 }
 function documentMatches(includeSelection = true) {
  const f=documentFilters;
- const normalize=v=>String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
  return state.matches.filter(m=>{
-  const c=(state.championships||[]).find(c=>c.id===m.championshipId);
   const day=String(m.date||"").slice(0,10);
   return (!includeSelection||!reportFilter||m.id===reportFilter)
    && (!f.championship||m.championshipId===f.championship)
    && (!f.sport||m.sport===f.sport) && (!f.status||m.status===f.status)
    && (!f.from||day>=f.from) && (!f.to||day<=f.to)
-   && (!f.query||normalize([m.id,m.competition,phaseLabel(m),c?.name,c?.season,c?.category,name(m.home),name(m.away),m.place].join(" ")).includes(normalize(f.query)));
+   && matchesSearch(searchText(f.query),matchSearchFields(m));
  }).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
 }
 function responsibleLabel(e) {
@@ -3158,7 +3182,7 @@ function operatorMatchPicker(operator) {
     const teams = name(match.home) + " × " + name(match.away);
     const date = format(match.date);
     return `<label class="confirmation-check" data-assignment-row="${group}" data-assignment-hidden="${Boolean(match.publicHidden)}"
-      data-assignment-search="${esc(searchText([teams,match.competition,match.place,match.sport,match.status,date].join(" ")))}"
+      data-assignment-search="${esc(searchText(matchSearchFields(match).flat(Infinity).join(" ")))}"
       ${group === "scheduled" ? "" : 'hidden style="display:none"'}>
       <input type="checkbox" name="assignedMatches" value="${esc(match.id)}" ${selected.has(match.id) ? "checked" : ""}>
       <span><strong>${esc(teams)}</strong> · ${esc(match.status)} · ${esc(date)}
@@ -3185,7 +3209,7 @@ function updateOperatorMatchPicker(picker) {
   const hiddenOnly = picker.querySelector("[data-assignment-hidden-only]").checked;
   let visible = 0;
   for (const row of picker.querySelectorAll("[data-assignment-row]")) {
-    const show = row.dataset.assignmentRow === group && row.dataset.assignmentSearch.includes(query)
+    const show = row.dataset.assignmentRow === group && matchesSearch(query,[row.dataset.assignmentSearch])
       && (!hiddenOnly || row.dataset.assignmentHidden === "true");
     row.hidden = !show;
     row.style.display = show ? "" : "none";
@@ -4533,7 +4557,7 @@ function removedRows(){
  const q=searchText(removedQuery);
  return logs.filter(r=>{
   const m=r.before||r;
-  return (!removedSport||m.sport===removedSport)&&(!q||searchText([removedTeam(m.home),removedTeam(m.away),m.competition,m.sport,r.reason,r.target,r.actor,removedDate(r.at)].join(" ")).includes(q));
+  return (!removedSport||m.sport===removedSport)&&(!q||matchesSearch(q,[matchSearchFields(m),removedTeam(m.home),removedTeam(m.away),r.reason,r.target,r.actor,removedDate(r.at)]));
  }).slice().sort((a,b)=>removedTime(b.at)-removedTime(a.at));
 }
 function removedResults(){
@@ -5020,7 +5044,7 @@ function publicHubContent(){
  if(publicArea==="teams")return publicTeamsPanel();
  if(publicArea==="fun")return fanZone();
  if(publicArea==="standings")return standingsPanel()||empty("A classificação estará disponível quando houver partidas vinculadas a um campeonato de futebol.");
- return `${publicArea==="active"?'<p class="muted">Partidas encerradas, homologadas e canceladas ficam em <strong>Resultados</strong>.</p>':""}<div id="publicMatches" class="grid">${publicMatches(publicFilter)}</div>${publicArea==="active"?'<section class="card public-locations"><h2>Esporte em diferentes locais</h2><p>Veja o local informado em cada partida. Use a modalidade, a agenda e os jogos ao vivo para acompanhar os eventos publicados pela organização.</p></section>':""}`;
+ return `${publicArea==="active"?'<p class="muted">Partidas encerradas, homologadas e canceladas ficam em <strong>Resultados</strong>.</p>':""}<label class="list-search">Buscar partida<input id="publicMatchSearch" type="search" value="${esc(publicMatchQuery)}" placeholder="Equipe, sigla, modalidade ou local"></label><div id="publicMatches" class="grid">${publicMatches(publicFilter)}</div>${publicArea==="active"?'<section class="card public-locations"><h2>Esporte em diferentes locais</h2><p>Veja o local informado em cada partida. Use a modalidade, a agenda e os jogos ao vivo para acompanhar os eventos publicados pela organização.</p></section>':""}`;
 }
 function publicNews(){
  return `<div class="arena-news-grid"><section class="card"><h2>Manchetes esportivas</h2><p>Agência Brasil · Esportes</p><arena-news>Carregando manchetes…</arena-news><a class="button" href="https://agenciabrasil.ebc.com.br/esportes" target="_blank" rel="noopener noreferrer">Ler na Agência Brasil</a></section><section class="card"><h2>Comunicados oficiais</h2><p>Programas e iniciativas do Ministério do Esporte.</p><a class="button" href="https://www.gov.br/esporte/pt-br/assuntos/noticias" target="_blank" rel="noopener noreferrer">Ler no Ministério do Esporte</a></section></div>`;
@@ -5251,7 +5275,7 @@ function participantFilterRows(rows, form) {
   return rows.filter(row => participantFilters.every(([key]) => {
     const selected = filters.get(key);
     return !selected || (row[key] || "—") === selected;
-  }) && (!query || searchText(participantColumns.map(([key]) => row[key] || "").join(" ")).includes(query)))
+  }) && matchesSearch(query,[participantColumns.map(([key])=>row[key]),teamSearchFields(team(row.teamId))]))
     .sort((a,b) => compare(groupLabel(a), groupLabel(b)) || compare(a[sort],b[sort])
       || direction * compare(a.player,b.player) || compare(a.team,b.team) || compare(a.championship,b.championship));
 }
@@ -6498,3 +6522,11 @@ document.addEventListener("click",async e=>{
     }
   }, true);
 }
+
+document.addEventListener("input",event=>{
+  if(admin || event.target.id!=="publicMatchSearch")return;
+  publicMatchQuery=event.target.value;
+  const results=$("#publicMatches");
+  if(results)results.innerHTML=publicMatches(publicFilter);
+  stopInvisibleTimeline();
+});

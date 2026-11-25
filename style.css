@@ -2723,3 +2723,16 @@ body.arena-layout-v2 :is(form label,.list-controls label,.navigation-finder labe
 @media print {
   .arena-page-actions,.arena-ui-customization,.arena-function-search,.arena-sidebar-resize,.arena-header-brief { display:none!important; }
 }
+
+/* Ícone no próprio campo, com espaço à direita para os botões de limpar. */
+input[type="search"] {
+  padding-inline-start:2.45rem;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2374899e' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='m16 16 4 4'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:left .7rem center;
+  background-size:1.15rem;
+}
+#arenaSidebar #sideFunctionSearch { padding-inline-start:2.45rem; }
+label[for="functionSearch"] > .arena-icon,
+label[for="sideFunctionSearch"] > .arena-icon { display:none; }
+#publicMatchSearch { margin-block:6px 14px; }
