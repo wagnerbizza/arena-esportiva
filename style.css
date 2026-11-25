@@ -2817,3 +2817,10 @@ button.arena-op-settings-trigger {
 :is(button.arena-game-bar-settings,button.arena-op-settings-trigger):focus-visible {
   outline:2px solid var(--accent); outline-offset:-3px;
 }
+
+/* O caminho começa à esquerda e a engrenagem ocupa o fim da barra. */
+.location-trail[data-custom-area="location"] { justify-content:flex-start; }
+.location-trail[data-custom-area="location"] > .arena-game-bar-settings {
+  order:1;
+  margin-inline-start:auto;
+}
