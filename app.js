@@ -1278,7 +1278,7 @@ function gameBarPinButton(pinned) {
   return `<button type="button" class="arena-game-bar-pin" data-game-bar-pin aria-pressed="${pinned}" aria-label="${label}" title="${label}">${arenaIcon(pinned ? "pin" : "unpin")}</button>`;
 }
 function floatingGameClock() {
-  if (isOperationSection() && selected) return "";
+  if (section === "operation" || (isOperationSection() && selected)) return "";
   const followed = followedGameClock();
   const pinned = !unpinnedGameBars.has(followedClockKey());
   const matches = state.matches.filter(item => canUseCabin(item));

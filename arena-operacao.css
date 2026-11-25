@@ -154,7 +154,6 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 .arena-monitor-waiting p { margin:4px 0 0; overflow-wrap:anywhere; }
 .arena-monitor-waiting .toolbar .button { min-block-size:44px; }
 
-.arena-op-strip > .arena-monitor-teams,
 .arena-followed-clock > .arena-monitor-teams {
   display:grid;
   grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
@@ -163,34 +162,61 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
   min-width:0;
 }
 .arena-monitor-teams > b { align-self:center; white-space:nowrap; font-size:clamp(1rem,3vw,1.5rem); }
-.arena-op-strip > .arena-monitor-teams { flex:1 1 280px; }
 .arena-followed-clock > .arena-monitor-teams { grid-column:1 / span 2; }
 @media(max-width:767px) {
   .arena-followed-clock > .arena-monitor-teams { grid-column:1 / -1; }
   .arena-followed-clock:not(.arena-monitor-waiting) > .game-clock { grid-row:auto; }
 }
-@media(max-width:480px) {
-  .arena-op-strip > .arena-monitor-teams { flex-basis:100%; }
-}
 
-/* Visor compacto e destinos para os atalhos arrastados. */
-.arena-op-strip { justify-content:flex-start; }
-.arena-op-strip > .arena-monitor-teams { flex:0 1 clamp(290px,55%,640px); }
-.arena-op-strip > .game-clock { min-width:92px; }
-.arena-op-monitor { flex:0 1 auto; display:flex; flex-wrap:wrap; overflow:visible; }
-.arena-op-monitor-side { display:flex; flex:1 1 150px; min-width:0; gap:6px; flex-wrap:wrap; }
-.arena-op-monitor-side:empty { display:none; }
-.arena-op-monitor-row > button { flex:none; }
+/* O visor fica à esquerda, com controles à direita e comandos de jogo abaixo. */
+.arena-op-strip {
+  display:grid;
+  grid-template-columns:minmax(0,26rem) minmax(0,1fr);
+  grid-template-areas:"display rail" "activity activity" "shortcuts shortcuts";
+  align-items:start;
+  gap:10px 14px;
+}
+.arena-op-display {
+  grid-area:display;
+  display:grid;
+  gap:8px;
+  min-width:0;
+  padding:10px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--bg);
+}
+.arena-op-display > .arena-monitor-teams {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  align-items:center;
+  gap:6px;
+}
+.arena-op-strip .arena-op-display > .game-clock { width:100%; min-width:0; text-align:center; }
+.arena-op-display-rail { grid-area:rail; display:grid; gap:8px; min-width:0; }
+.arena-op-display-controls,.arena-op-monitor-row,.arena-op-monitor,.arena-op-monitor-side {
+  display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-width:0;
+}
+.arena-op-strip:not(.arena-docking) .arena-op-monitor-side:empty { display:none; }
+.arena-op-strip > .arena-op-monitor-event { grid-area:activity; }
+.arena-op-monitor-row { grid-area:shortcuts; }
+.arena-op-monitor { flex:0 1 auto; overflow:visible; }
+.arena-op-strip :is(.arena-op-display-rail,.arena-op-monitor-row) button {
+  flex:none; max-width:100%; min-height:44px; white-space:normal;
+}
+.arena-op-display-controls .arena-op-score-pin { width:44px; }
 .arena-op-match-details > summary { cursor:pointer; padding:8px; }
 .arena-op-match-details[open] > summary { margin-block-end:8px; }
 .arena-docking [data-op-dock] { display:flex; min-height:44px; min-width:80px; border:1px dashed var(--accent); border-radius:8px; padding:6px; }
 .arena-docking [data-op-dock]:empty::before { content:"Solte o atalho aqui"; align-self:center; padding:4px; color:var(--muted); }
 [data-op-dock-command][draggable=true] { cursor:grab; }
 .arena-dock-dialog { max-width:min(92vw,460px); }
-@media(max-width:650px) {
-  .arena-op-strip > .arena-monitor-teams { flex:1 1 100%; }
-  .arena-op-monitor-side { order:1; flex-basis:100%; }
-  .arena-op-monitor-row { order:2; }
+@media(max-width:767px) {
+  .arena-op-strip {
+    grid-template-columns:minmax(0,1fr);
+    grid-template-areas:"display" "rail" "activity" "shortcuts";
+  }
+  .arena-op-strip.is-pinned { max-block-size:48dvh; overflow:auto; }
 }
 .arena-op-score .match-guide { margin-block:0 8px; }
 [data-operation-customization] .arena-op-fold-actions { margin-block:8px 0; }

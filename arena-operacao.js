@@ -215,22 +215,32 @@
   const result=document.createElement('b');
   result.textContent=scores.join(' × ');
   scoreboard.append(teams[0].cloneNode(true),result,teams[1].cloneNode(true));
-  strip.append(scoreboard);
-  const clock=score.querySelector('.game-clock');if(clock)strip.append(clock.cloneNode(true));
+  const display=document.createElement('div');
+  display.className='arena-op-display';
+  display.append(scoreboard);
+  const clock=score.querySelector('.game-clock');if(clock)display.append(clock.cloneNode(true));
+  strip.append(display);
   const pin=document.createElement('button');
   pin.type='button';pin.dataset.opPinScore='';pin.className='arena-op-score-pin';
   pin.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6v6l4 4v2H5v-2l4-4V3Zm3 12v6"/><path data-op-pin-slash d="M3 3l18 18"/></svg>';
-  describeScorePin(pin,prefs.scorePinned);strip.append(pin);
+  describeScorePin(pin,prefs.scorePinned);
   const anchor=document.createElement('div');anchor.dataset.opScoreAnchor='';anchor.setAttribute('aria-hidden','true');
   const monitor=document.createElement('nav');
   monitor.className='arena-op-monitor';monitor.dataset.opMonitor='';monitor.setAttribute('aria-label','Atalhos do placar');
   const editMonitor=document.createElement('button');
   editMonitor.type='button';editMonitor.dataset.opMonitorEdit='';editMonitor.textContent='Editar atalhos';
-  const monitorRow=document.createElement('div');monitorRow.className='arena-op-monitor-row';monitorRow.append(monitor,editMonitor);
+  const monitorRow=document.createElement('div');monitorRow.className='arena-op-monitor-row';monitorRow.append(monitor);
   monitor.dataset.opDock='below';
   const side=document.createElement('nav');
   side.className='arena-op-monitor-side';side.dataset.opMonitorSide='';side.dataset.opDock='side';
-  side.setAttribute('aria-label','Atalhos ao lado do visor');strip.append(side);
+  side.setAttribute('aria-label','Atalhos ao lado do visor');
+  const controls=document.createElement('div');
+  controls.className='arena-op-display-controls';
+  controls.append(editMonitor,pin);
+  const rail=document.createElement('div');
+  rail.className='arena-op-display-rail';
+  rail.append(controls,side);
+  strip.append(rail);
   if(back&&!config.standby)monitorRow.prepend(back);
   if(config.followClock){
    const follow=document.createElement('button');
@@ -238,7 +248,7 @@
    follow.dataset.clockFollow=match.id;
    follow.textContent=config.clockFollowed?'Desafixar monitor':'Fixar monitor';
    follow.setAttribute('aria-pressed',String(config.clockFollowed));
-   monitorRow.append(follow);
+   controls.append(follow);
   }
   const activity=document.createElement('p');
   activity.className='arena-op-monitor-event';
