@@ -1399,7 +1399,7 @@ function floatingGameClock() {
   const matches = state.matches.filter(item => canUseCabin(item));
   const match = followed || matches.find(item => item.status === "Ao vivo") ||
     matches.find(item => ["Pausada","Suspensa"].includes(item.status));
-  if (!match && ["matchSheets","reports","auditReports","reportCenter"].includes(section)) return "";
+  if (!match && ["matchSheets","reports","auditReports","reportCenter","certificates"].includes(section)) return "";
   if (!match) return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock arena-monitor-waiting noprint ${pinned ? "is-pinned" : ""}" aria-label="Barra de jogos">
     <div><strong class="arena-icon-action">${arenaIcon("games")} Barra de jogos</strong><p>Aguardando partida</p></div>
     <div class="toolbar">${section !== "operation" ? `<button type="button" class="arena-icon-action" data-section="operation">${arenaIcon("live")}<span>Abrir operação</span></button>` : ""}
@@ -2711,18 +2711,67 @@ function certificateDocument(data, exportData) {
   const tools = `<style>
     .certificate-preview-tools { display:flex; flex-wrap:wrap; gap:10px; padding:12px; background:#eef1f4; }
     .certificate-preview-tools button { min-height:44px; padding:8px 14px; font:inherit; cursor:pointer; }
+    .certificate-preview-tools { display:block; font:14px Arial,sans-serif; }
+    .certificate-preview-actions, .certificate-layout-controls, .certificate-signature-editor {
+      display:flex; flex-wrap:wrap; align-items:end; gap:10px; margin-block:8px;
+    }
+    .certificate-preview-tools label { display:grid; gap:4px; }
+    .certificate-preview-tools input, .certificate-preview-tools select { padding:7px; font:inherit; }
+    .certificate-preview-tools summary { cursor:pointer; padding:8px 0; font-weight:bold; }
+    .certificate-preview-tools [role="status"] { display:block; margin-top:8px; }
+    .certificate-preview-tools + .sheet .certificate-signatures {
+      width:100%; display:grid; grid-template-columns:repeat(var(--signature-count,2),minmax(0,1fr)); gap:5mm;
+    }
+    .certificate-preview-tools + .sheet .certificate-signatures .signature {
+      min-width:0; overflow-wrap:anywhere; white-space:pre-line;
+    }
+    .certificate-preview-tools + .sheet .bottom { display:grid; gap:3mm; margin-top:8mm; }
+    .sheet[data-logo-align] .arena-doc-brand:not(.arena-doc-background),
+    .sheet[data-logo-align] .arena-doc-adjacent { justify-content:var(--certificate-logo-align); }
+    main.sheet[data-logo-align] .frame > .arena-doc-header { text-align:var(--certificate-logo-align); }
+    .sheet[data-logo-size] .arena-doc-brand:not(.arena-doc-background) img {
+      width:var(--certificate-logo-size); max-width:100%;
+    }
+    main.sheet[data-logo-align] .frame > .arena-doc-header:has(>[data-brand-resource="system"]:only-child),
+    main.sheet[data-logo-align] .certificate-logo {
+      left:var(--certificate-logo-left); right:var(--certificate-logo-right);
+      transform:translateX(var(--certificate-logo-shift));
+    }
+    main.sheet[data-logo-size] .certificate-logo {
+      width:var(--certificate-logo-size); max-height:24mm;
+    }
     @media screen { main.sheet { zoom:var(--certificate-preview-scale,1); } }
     @media print { .certificate-preview-tools { display:none; } }
-  </style><nav class="certificate-preview-tools" aria-label="Ações do certificado">
+  </style><section class="certificate-preview-tools" aria-label="Editor do certificado">
+    <div class="certificate-preview-actions">
     <button type="button" id="certificate-print" disabled>Imprimir ou salvar PDF</button>
     <button type="button" id="certificate-download">Baixar dados (JSON)</button>
     <button type="button" id="certificate-back">Voltar</button>
-  </nav>`;
+    </div>
+    <details open><summary>Personalizar logos e assinaturas</summary>
+      <div class="certificate-layout-controls">
+        <label>Alinhamento dos logos
+          <select id="certificate-logo-align"><option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option></select>
+        </label>
+        <label>Tamanho dos logos
+          <select id="certificate-logo-size"><option value="">Padrão</option><option value="14">Pequeno</option><option value="22">Médio</option><option value="30">Grande</option></select>
+        </label>
+      </div>
+      <div id="certificate-signature-editor"></div>
+      <div class="certificate-preview-actions">
+        <button type="button" id="certificate-add-signature">Adicionar assinatura</button>
+        <button type="button" id="certificate-save-layout">Salvar como padrão neste navegador</button>
+        <button type="button" id="certificate-reset-layout">Restaurar padrão</button>
+      </div>
+      <span id="certificate-layout-status" role="status"></span>
+    </details>
+  </section>`;
   const html = certificateHTML(data, state.partners, true).replace("<body>", "<body>" + tools);
   win.document.open();
   win.document.write(html);
   win.document.close();
   const sheet = win.document.querySelector("main.sheet");
+  const readLayout = setupCertificateLayout(win.document, sheet);
   const fit = () => {
     const available = Math.max(1, win.document.documentElement.clientWidth - 16);
     sheet.style.setProperty("--certificate-preview-scale", String(Math.min(1, available / sheet.offsetWidth)));
@@ -2739,11 +2788,103 @@ function certificateDocument(data, exportData) {
   print.onclick = () => { if (!win.closed) win.print(); };
   win.document.getElementById("certificate-download").onclick = () => download(
     data.institutional ? "certificado-institucional-dados.json" : "certificado-dados.json",
-    JSON.stringify(exportData, null, 2),
+    JSON.stringify({...exportData, layout:readLayout()}, null, 2),
   );
   win.document.getElementById("certificate-back").onclick = () => win.close();
 }
 let generalAuditRows=[],generalAuditLoaded=false,generalAuditBusy=false,generalAuditSearch="";
+function setupCertificateLayout(doc, sheet) {
+  const find = id => doc.getElementById("certificate-" + id);
+  const alignment = find("logo-align");
+  const size = find("logo-size");
+  const editor = find("signature-editor");
+  const add = find("add-signature");
+  const status = find("layout-status");
+  const defaults = [...sheet.querySelectorAll(".signature")].map(line => ({
+    name:line.firstChild?.textContent || "", title:line.lastChild?.textContent || ""
+  }));
+  const bottom = sheet.querySelector(".bottom");
+  const signatures = doc.createElement("div");
+  signatures.className = "certificate-signatures";
+  bottom.querySelectorAll(".signature").forEach(line => line.remove());
+  bottom.append(signatures);
+  const key = "arena-certificate-layout-v1:" + JSON.stringify([user?.uid || "local", !!C.demo]);
+  let rows = [];
+  function readLayout() {
+    return {alignment:alignment.value,size:size.value,signatures:rows.map(row => ({...row}))};
+  }
+  function update() {
+    const value = alignment.value;
+    sheet.dataset.logoAlign = value;
+    sheet.toggleAttribute("data-logo-size", !!size.value);
+    sheet.style.setProperty("--certificate-logo-align", value === "left" ? "start" : value === "right" ? "end" : "center");
+    sheet.style.setProperty("--certificate-logo-left", value === "left" ? "12mm" : value === "center" ? "50%" : "auto");
+    sheet.style.setProperty("--certificate-logo-right", value === "right" ? "12mm" : "auto");
+    sheet.style.setProperty("--certificate-logo-shift", value === "center" ? "-50%" : "0%");
+    sheet.style.setProperty("--certificate-logo-size", size.value ? size.value + "mm" : "");
+    const filled = rows.filter(row => row.name.trim() || row.title.trim());
+    signatures.style.setProperty("--signature-count", String(Math.max(1, filled.length)));
+    signatures.replaceChildren(...filled.map(row => {
+      const line = doc.createElement("div");
+      line.className = "signature";
+      line.textContent = [row.name.trim(), row.title.trim()].filter(Boolean).join("\n");
+      return line;
+    }));
+  }
+  function drawEditor() {
+    editor.innerHTML = rows.map((row, index) => `<div class="certificate-signature-editor">
+      <label>Nome da assinatura ${index + 1}<input data-signature-field="name" maxlength="80" value="${esc(row.name)}"></label>
+      <label>Cargo ou função<input data-signature-field="title" maxlength="80" value="${esc(row.title)}"></label>
+      <button type="button" aria-label="Remover assinatura ${index + 1}">Remover</button>
+    </div>`).join("");
+    [...editor.children].forEach((line, index) => {
+      line.oninput = event => {
+        rows[index][event.target.dataset.signatureField] = event.target.value;
+        update();
+      };
+      line.querySelector("button").onclick = () => {
+        rows.splice(index, 1);
+        drawEditor();
+        add.focus();
+      };
+    });
+    add.disabled = rows.length >= 4;
+    update();
+  }
+  function load(layout = {}) {
+    alignment.value = ["left","center","right"].includes(layout.alignment) ? layout.alignment : "left";
+    size.value = ["14","22","30"].includes(layout.size) ? layout.size : "";
+    rows = (Array.isArray(layout.signatures) ? layout.signatures : defaults).slice(0,4).map(row => ({
+      name:String(row?.name ?? "").slice(0,80),title:String(row?.title ?? "").slice(0,80)
+    }));
+    drawEditor();
+  }
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(key)); } catch {}
+  load(saved || {});
+  alignment.onchange = size.onchange = update;
+  add.onclick = () => {
+    if (rows.length >= 4) return;
+    rows.push({name:"",title:""});
+    drawEditor();
+    editor.lastElementChild.querySelector("input").focus();
+  };
+  find("save-layout").onclick = () => {
+    try {
+      localStorage.setItem(key, JSON.stringify(readLayout()));
+      status.textContent = "Modelo salvo neste navegador.";
+    } catch { status.textContent = "O navegador não permitiu salvar o modelo."; }
+  };
+  find("reset-layout").onclick = () => {
+    load();
+    try {
+      localStorage.removeItem(key);
+      status.textContent = "Modelo original restaurado.";
+    } catch { status.textContent = "Modelo restaurado nesta prévia."; }
+  };
+  return readLayout;
+}
+
 function filteredAuditRows(rows=generalAuditRows) {
  const normalize=v=>String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
  const q=normalize(generalAuditSearch);
