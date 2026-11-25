@@ -35,7 +35,8 @@
   clearNotice: ['Retirar aviso', '[data-fast-notice="retirar"]'],
   ...Object.fromEntries(defaults.filter(id=>id!=='notices').map(id=>['panel-'+id,[labels[id],null,id]])),
  };
- const defaultMonitor = ['end','resume','pause','notices'];
+ const defaultMonitor = ['notices'];
+ const dedicatedCommands = ['end','resume','pause'];
  const sessionPreferences=new Map();
  const panelColors={azul:['Azul','#45a4ff'],verde:['Verde','#49c99a'],laranja:['Laranja','#f4a858'],roxo:['Roxo','#b58cff'],rosa:['Rosa','#ee80ac']};
  const panelTitle=(prefs,id)=>prefs.names?.[id]||labels[id];
@@ -119,7 +120,22 @@
   const choices=tools(root).querySelector('[data-op-monitor-choices]');
   const side=root.querySelector('[data-op-monitor-side]');
   menu.replaceChildren();side.replaceChildren();
+  const primary=root.querySelector('[data-op-primary]');
+  primary.replaceChildren();
+  if(!root.hasAttribute('data-op-standby')){
+   for(const id of ['resume','pause']){
+    const [label,selector]=monitorCommands[id];
+    const source=root.querySelector(selector);
+    if(!source||source.disabled)continue;
+    const button=document.createElement('button');
+    button.type='button';button.className='primary';
+    button.dataset.opMonitorRun=id;
+    button.textContent=id==='resume'?(source.textContent.trim().startsWith('Retomar')?'Continuar':source.textContent.trim()):label;
+    primary.append(button);
+   }
+  }
   for(const id of prefs.monitor){
+   if(dedicatedCommands.includes(id) || root.hasAttribute('data-op-standby'))continue;
    const [label,selector,panelId]=monitorCommands[id];
    const source=selector?root.querySelector(selector):root.querySelector('[data-op-panel="'+panelId+'"]');
    if(!source)continue;
@@ -133,13 +149,18 @@
    (prefs.side.includes(id)?side:menu).append(button);
   }
   for(const [id,[,selector,panelId]] of Object.entries(monitorCommands)){
+   if(dedicatedCommands.includes(id))continue;
    const source=selector?root.querySelector(selector):root.querySelector('[data-op-panel="'+panelId+'"] [data-op-drag]');
    if(!source)continue;
    source.dataset.opDockCommand=id;
    if(!panelId)source.draggable=!source.disabled;
   }
-  choices.innerHTML=Object.entries(monitorCommands).map(([id,[label]])=>
-   '<label><input type="checkbox" data-op-monitor-choice="'+id+'" '+(prefs.monitor.includes(id)?'checked':'')+'> '+escape(label)+'</label>').join('');
+  choices.innerHTML=Object.entries(monitorCommands).filter(([id])=>!dedicatedCommands.includes(id)).map(([id,[label]])=>{
+   const checked=prefs.monitor.includes(id);
+   const placement=checked?(prefs.side.includes(id)?'Ao lado':'Abaixo'):'Posicionar';
+   return '<div class="arena-op-choice"><label><input type="checkbox" data-op-monitor-choice="'+id+'" '+(checked?'checked':'')+'> '+escape(label)+'</label>'+
+    '<button type="button" draggable="true" data-op-dock-command="'+id+'" data-op-place aria-label="Posicionar '+escape(label)+'">'+grip+'<span>'+placement+'</span></button></div>';
+  }).join('');
  }
  function toolbar(root,prefs){monitorToolbar(root,prefs);const nav=tools(root).querySelector('[data-op-shortcuts]');nav.replaceChildren();const panels=[...root.querySelectorAll('[data-op-panel]')];for(const section of panels){const id=section.dataset.opPanel,fold=section.querySelector('[data-op-fold]'),closed=prefs.collapsed.includes(id);
    const title=panelTitle(prefs,id),color=panelColors[prefs.colors[id]];
@@ -228,7 +249,7 @@
   const monitor=document.createElement('nav');
   monitor.className='arena-op-monitor';monitor.dataset.opMonitor='';monitor.setAttribute('aria-label','Atalhos do placar');
   const editMonitor=document.createElement('button');
-  editMonitor.type='button';editMonitor.dataset.opMonitorEdit='';editMonitor.textContent='Editar atalhos';
+  editMonitor.type='button';editMonitor.dataset.opMonitorEdit='';editMonitor.textContent='Organizar atalhos';
   const monitorRow=document.createElement('div');monitorRow.className='arena-op-monitor-row';monitorRow.append(monitor);
   monitor.dataset.opDock='below';
   const side=document.createElement('nav');
@@ -237,26 +258,39 @@
   const controls=document.createElement('div');
   controls.className='arena-op-display-controls';
   controls.append(editMonitor,pin);
+  if(config.standby){
+   const choose=document.createElement('button');
+   choose.type='button';choose.className='primary';choose.dataset.opChoose='';
+   choose.textContent='Escolher jogo';controls.prepend(choose);
+  }
   const rail=document.createElement('div');
   rail.className='arena-op-display-rail';
   rail.append(controls,side);
   strip.append(rail);
   if(back&&!config.standby)monitorRow.prepend(back);
-  if(config.followClock){
+  if(config.followClock && !config.standby){
    const follow=document.createElement('button');
    follow.type='button';
    follow.dataset.clockFollow=match.id;
-   follow.textContent=config.clockFollowed?'Desafixar monitor':'Fixar monitor';
+   follow.className='arena-op-score-pin';
+   follow.title=config.clockFollowed?'Parar de acompanhar em outras telas':'Acompanhar em outras telas';
+   follow.setAttribute('aria-label',follow.title);
+   follow.innerHTML=icon('<path d="M9 3h6v6l4 4v2H5v-2l4-4V3Zm3 12v6"/>'+
+    (config.clockFollowed?'':'<path d="M3 3l18 18"/>'));
    follow.setAttribute('aria-pressed',String(config.clockFollowed));
    controls.append(follow);
   }
   const activity=document.createElement('p');
   activity.className='arena-op-monitor-event';
   activity.textContent=match.status+(config.monitorEvent?' · Último lance: '+config.monitorEvent:'');
+  const primary=document.createElement('div');
+  primary.className='arena-op-primary';primary.dataset.opPrimary='';
+  monitorRow.prepend(primary);
   strip.append(activity,monitorRow);
   root.append(strip);
+  if(config.chooser)root.insertAdjacentHTML("beforeend",config.chooser);
   const timeline=score.querySelector('.match-timeline');if(timeline)timeline.remove();const scoreWrap=document.createElement('section');scoreWrap.className='arena-op-score';const info=document.createElement('details');info.className='arena-op-match-details';info.innerHTML='<summary>Detalhes da partida</summary>';info.append(score);scoreWrap.append(info);const guide=old.querySelector('.match-guide');root.append(scoreWrap);
-  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.innerHTML='<summary>Personalizar a cabine</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Arraste um comando para perto do placar ou use clique direito ou toque prolongado. Marque abaixo os atalhos que quer manter.</p><div data-op-monitor-choices></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
+  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.innerHTML='<summary>Personalizar a cabine</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Marque a caixa para exibir o atalho. Arraste pela alça até um dos destinos abaixo, ou toque no botão Posicionar, Ao lado ou Abaixo.</p><div class="arena-op-dock-targets"><div data-op-dock="side">Ao lado do visor</div><div data-op-dock="below">Abaixo do visor</div><button type="button" data-op-view-monitor>Ver o visor</button></div><div data-op-monitor-choices></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
   const nav=document.createElement('nav');nav.className='toolbar arena-op-shortcuts';nav.dataset.opShortcuts='';nav.setAttribute('aria-label','Meus atalhos da operação');settings.append(nav);const grid=document.createElement('div');grid.className='arena-op-grid';grid.dataset.opGrid='';root.append(grid);
   for(const [group,label] of [['pinned','Caixas fixadas no topo'],['regular','Caixas desafixadas']]){
    const lane=document.createElement('div');lane.dataset.opGroup=group;
@@ -265,7 +299,15 @@
   const foldActions=document.createElement('div');foldActions.className='arena-op-fold-actions';
   foldActions.innerHTML='<h2>Ajustes das caixas</h2><p>Clique com o botão direito ou mantenha o dedo pressionado sobre a caixa para personalizar. Use a alça para arrastar.</p><div class="toolbar"><button type="button" data-op-fold-all="open">Expandir todas</button><button type="button" data-op-fold-all="close">Recolher todas</button></div>';
   strip.before(settings);settings.append(foldActions);
-  if(guide)scoreWrap.prepend(guide);strip.before(anchor);
+  if(guide && !config.standby)info.querySelector("summary").after(guide);
+  strip.before(anchor);
+  if(config.standby){
+   scoreWrap.hidden=true;
+   const preview=document.createElement('details');
+   preview.className='card arena-op-standby-preview';
+   preview.innerHTML='<summary>Ver controles em espera</summary>';
+   grid.before(preview);preview.append(grid);
+  }
   const quick=old.querySelector('.quick-panel'),noticeShortcuts=quick?[...quick.querySelectorAll('.quick-control-group')].find(node=>node.querySelector('h3')?.textContent==='Avisos rápidos'):null;if(noticeShortcuts)noticeShortcuts.remove();if(quick){quick.querySelectorAll('.quick-control-group').forEach(node=>node.remove());quick.querySelector(':scope>h2')?.remove();quick.querySelector(':scope>.tag')?.remove();}
   const time=old.querySelector('#mesa-tempo');if(time){time.removeAttribute('hidden');time.querySelector(':scope>h3')?.remove();}
   const notices=old.querySelector('#mesa-avisos');if(notices){notices.removeAttribute('hidden');notices.querySelector(':scope>h3')?.remove();if(noticeShortcuts)notices.append(noticeShortcuts);}
@@ -296,6 +338,18 @@
   const noteForm=old.querySelector('#notes'),notes=noteForm?.closest('.card')||[...old.querySelectorAll('.console-actions>.card')].find(card=>card.querySelector('h3')?.textContent==='Observações operacionais da súmula');
   const championship=old.querySelector('#championship-link, #arena-correct-match-sport')?.closest('.card');
   for(const [id,node]of Object.entries({points:quick,time,substitutions:substitution,coach,events:eventsWrap,pauses,roster,notices,history,notes,championship})){const section=panel(id,node);if(section)grid.append(section);}
+  if(match.status==='Ao vivo' && !config.standby){
+   for(const [side,id] of ['home','away'].entries()){
+    const source=root.querySelector(monitorCommands[id][1]);
+    if(!source || source.disabled)continue;
+    const button=document.createElement('button');
+    button.type='button';button.className='arena-op-team-point';
+    button.dataset.opMonitorRun=id;
+    button.textContent=['Futebol','Futsal','Handebol'].includes(match.sport)?'+1 gol':'+1 ponto';
+    button.setAttribute('aria-label',button.textContent+' para '+teams[side].querySelector('.name').textContent);
+    scoreboard.children[side*2].append(button);
+   }
+  }
   if(config.standby){
    for(const area of root.querySelectorAll('[data-op-content], .match-guide, .arena-op-score')){
     for(const control of area.querySelectorAll('button, input, select, textarea, fieldset')){
@@ -525,10 +579,31 @@
   apply(root,prefs);save(root,prefs);
  });
  document.addEventListener('click',event=>{
-  const button=event.target.closest('[data-op-monitor-edit],[data-op-monitor-run]');
+  const button=event.target.closest('[data-op-monitor-edit],[data-op-monitor-run],[data-op-place],[data-op-view-monitor],[data-op-choose]');
   if(!button||button.disabled)return;
   const root=workspaceFor(button);
   if(!root)return;
+  if(button.hasAttribute('data-op-choose')){
+   const picker=root.querySelector('.arena-cabin-picker');
+   if(picker){
+    picker.open=true;
+    picker.querySelector('summary').focus({preventScroll:true});
+    picker.scrollIntoView({block:'start'});
+   }
+   return;
+  }
+  if(button.hasAttribute('data-op-place')){
+   dockMenu(root,button);
+   return;
+  }
+  if(button.hasAttribute('data-op-view-monitor')){
+   tools(root).open=false;
+   const monitor=root.querySelector('.arena-op-strip');
+   monitor.tabIndex=-1;
+   monitor.focus({preventScroll:true});
+   root.querySelector('[data-op-score-anchor]').scrollIntoView({block:'start'});
+   return;
+  }
   if(button.hasAttribute('data-op-monitor-edit')){
    const settings=tools(root);
    settings.open=true;

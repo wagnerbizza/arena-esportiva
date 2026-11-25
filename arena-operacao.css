@@ -197,7 +197,7 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 .arena-op-display-controls,.arena-op-monitor-row,.arena-op-monitor,.arena-op-monitor-side {
   display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-width:0;
 }
-.arena-op-strip:not(.arena-docking) .arena-op-monitor-side:empty { display:none; }
+.arena-operation-workspace:not(.arena-docking) .arena-op-monitor-side:empty { display:none; }
 .arena-op-strip > .arena-op-monitor-event { grid-area:activity; }
 .arena-op-monitor-row { grid-area:shortcuts; }
 .arena-op-monitor { flex:0 1 auto; overflow:visible; }
@@ -220,3 +220,32 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 }
 .arena-op-score .match-guide { margin-block:0 8px; }
 [data-operation-customization] .arena-op-fold-actions { margin-block:8px 0; }
+
+[data-op-score-anchor] { scroll-margin-top:calc(var(--arena-op-stack-top,0px) + 12px); }
+.arena-op-monitor-options [data-op-monitor-choices] { grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr)); }
+.arena-op-choice { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:4px 8px; padding:6px; border-bottom:1px solid var(--line); }
+.arena-op-choice label { flex:1 1 130px; }
+.arena-op-choice [data-op-place] { display:inline-flex; align-items:center; gap:4px; min-height:44px; user-select:none; }
+.arena-op-choice [data-op-place] > * { pointer-events:none; }
+.arena-op-dock-targets { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+.arena-op-dock-targets [data-op-dock] { flex:1 1 130px; display:grid; place-items:center; padding:8px; border:1px dashed var(--accent); border-radius:8px; color:var(--text); }
+
+.arena-op-primary { display:flex; flex-wrap:wrap; gap:8px; }
+.arena-op-primary:empty,
+[data-op-standby] .arena-op-monitor-row:empty,
+[data-op-standby] .arena-op-monitor-row:not(:has(button)) { display:none; }
+.arena-cabin-picker { scroll-margin-top:calc(var(--arena-op-stack-top,0px) + 16px); }
+.arena-cabin-picker > summary,.arena-op-standby-preview > summary { cursor:pointer; }
+.arena-cabin-picker[open] > summary,.arena-op-standby-preview[open] > summary { margin-block-end:12px; }
+@media(max-width:767px) {
+  body.arena-central-ready.arena-operation-page main > .arena-weather-card.is-pinned { position:static; }
+  body.arena-operation-page main .arena-operation-workspace { --arena-op-stack-top:var(--arena-op-sticky-offset,80px); }
+  .arena-op-strip.is-pinned { max-block-size:38dvh; }
+  [data-op-standby] .arena-op-strip.is-pinned { position:relative; top:auto; max-block-size:none; overflow:visible; }
+}
+.arena-op-team-point { margin-top:4px; min-height:44px; padding:6px 10px; }
+@media(max-width:767px) {
+  body.arena-central-ready.arena-operation-page:has(#arenaMenuToggle:not([hidden])) main .arena-operation-workspace {
+    --arena-op-stack-top:var(--arena-op-sticky-offset,80px);
+  }
+}
