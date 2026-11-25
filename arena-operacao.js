@@ -122,7 +122,11 @@
   menu.replaceChildren();side.replaceChildren();
   const primary=root.querySelector('[data-op-primary]');
   primary.replaceChildren();
-  if(!root.hasAttribute('data-op-standby')){
+  if(root.hasAttribute('data-op-standby')){
+   const start=document.createElement('button');
+   start.type='button';start.className='primary';start.dataset.opNoMatch='';
+   start.textContent='Iniciar partida';primary.append(start);
+  }else{
    for(const id of ['resume','pause']){
     const [label,selector]=monitorCommands[id];
     const source=root.querySelector(selector);
@@ -151,7 +155,11 @@
    const preview=button.cloneNode(true);
    preview.dataset.opPlace='';
    (beside?sidePreview:belowPreview).append(preview);
-   if(root.hasAttribute('data-op-standby') || !source || source.disabled){
+   if(root.hasAttribute('data-op-standby')){
+    if(panelId)button.dataset.opQuickPanel=panelId;
+    else if(id==='clock')button.dataset.opQuickPanel='time';
+    else button.dataset.opNoMatch='';
+   }else if(!source || source.disabled){
     button.dataset.opUnavailable='';
     button.title=root.hasAttribute('data-op-standby')?'Escolha uma partida para usar este comando':'Comando indisponível na situação atual';
    }else if(['notices','events'].includes(panelId))button.dataset.opQuickPanel=panelId;
@@ -269,11 +277,16 @@
   const controls=document.createElement('div');
   controls.className='arena-op-display-controls';
   controls.append(editMonitor,pin);
-  if(match.status==='Ao vivo' && !config.standby){
+  if(match.status==='Ao vivo' || config.standby){
    const events=document.createElement('button');
    events.type='button';events.dataset.opQuickPanel='events';
    events.textContent='Cartões e faltas';
    controls.prepend(events);
+   if(config.standby && !prefs.monitor.includes('notices')){
+    const notices=document.createElement('button');
+    notices.type='button';notices.dataset.opQuickPanel='notices';notices.textContent='Avisos';
+    controls.prepend(notices);
+   }
   }
   if(config.standby){
    const choose=document.createElement('button');
@@ -368,11 +381,8 @@
    }
   }
   if(config.standby){
-   for(const area of root.querySelectorAll('[data-op-content], .match-guide, .arena-op-score')){
-    for(const control of area.querySelectorAll('button, input, select, textarea, fieldset')){
-     if(!control.hasAttribute('data-op-jump'))control.disabled=true;
-    }
-   }
+   for(const control of grid.querySelectorAll('[data-op-content] :is(button,input,select,textarea,fieldset)'))
+    control.disabled=false;
   }
   tools(root).querySelector('[data-op-compact]').checked=prefs.compact;tools(root).querySelector('[data-op-columns]').checked=prefs.columns;apply(root,prefs);return root.outerHTML;
  }
@@ -604,29 +614,67 @@
  }
  function openQuickPanel(root,id,opener){
   const panel=root.querySelector('[data-op-panel="'+id+'"]');
-  const content=id==='pauses'?panel?.querySelector('#interruption'):panel?.querySelector('[data-op-content] > div');
-  if(!content || root.querySelector('.arena-op-quick-dialog[open]'))return;
+  const content=id==='pauses'?panel?.querySelector('#interruption'):panel?.querySelector('[data-op-content]')?.firstElementChild;
+  if(!content){
+   showNoMatch(root,opener);
+   return;
+  }
+  if(root.querySelector('.arena-op-quick-dialog[open]'))return;
   const dialog=document.createElement('dialog');
   dialog.className='card arena-op-quick-dialog';
   dialog.setAttribute('aria-labelledby','arenaOpQuickTitle');
   dialog.innerHTML='<div class="arena-dialog-heading"><h2 id="arenaOpQuickTitle">'+escape(labels[id])+'</h2><button type="button" class="arena-close-x" aria-label="Fechar" title="Fechar">×</button></div><p data-op-quick-feedback role="status" hidden></p>';
   const marker=document.createComment('Destino do controle da cabine');
   content.before(marker);
+  if(root.hasAttribute('data-op-standby')){
+   const message=document.createElement('p');
+   message.className='muted';
+   message.textContent='Prévia dos controles. Os registros ficam disponíveis quando você abre uma partida.';
+   dialog.append(message);
+   content.dataset.opPreviewContent='';
+  }
   dialog.append(content);root.append(dialog);
   dialog.querySelector('.arena-close-x').onclick=()=>dialog.close();
   dialog.addEventListener('close',()=>{
+   delete content.dataset.opPreviewContent;
    marker.replaceWith(content);dialog.remove();
    if(opener.isConnected)opener.focus({preventScroll:true});
   },{once:true});
   dialog.showModal();
  }
+ function showNoMatch(root,opener){
+  if(root.querySelector('.arena-op-no-match[open]'))return;
+  const dialog=document.createElement('dialog');
+  dialog.className='card arena-op-quick-dialog arena-op-no-match';
+  dialog.setAttribute('aria-labelledby','arenaOpNoMatchTitle');
+  dialog.innerHTML='<div class="arena-dialog-heading"><h2 id="arenaOpNoMatchTitle">Nenhuma partida aberta</h2><button type="button" class="arena-close-x" aria-label="Fechar">×</button></div><p>Aguarde uma partida autorizada ou agende um jogo, se tiver permissão.</p>';
+  root.append(dialog);
+  dialog.querySelector('button').onclick=()=>dialog.close();
+  dialog.addEventListener('close',()=>{
+   dialog.remove();
+   if(opener.isConnected)opener.focus({preventScroll:true});
+  },{once:true});
+  dialog.showModal();
+ }
+ // A prévia permite preencher e conhecer os controles; nenhuma ação da partida passa por aqui.
+ for(const type of ['click','submit'])document.addEventListener(type,event=>{
+  const control=event.target.closest(type==='click'?'button':'form');
+  const root=control?.closest('[data-op-standby]');
+  if(!root)return;
+  if(type==='click'){
+   if(!control.hasAttribute('data-op-no-match') &&
+      (!control.closest('[data-op-content],[data-op-preview-content]') ||
+       control.matches('[data-op-jump],[data-op-event-kind],[data-added-minutes]')))return;
+  }else if(!control.closest('[data-op-content],[data-op-preview-content]'))return;
+  event.preventDefault();event.stopImmediatePropagation();
+  showNoMatch(root,control);
+ },true);
  document.addEventListener('click',event=>{
   const button=event.target.closest('[data-op-monitor-edit],[data-op-monitor-run],[data-op-place],[data-op-view-monitor],[data-op-choose],[data-op-quick-panel],[data-op-unavailable],[data-op-dock-command][data-op-jump="notices"],[data-op-dock-command][data-op-jump="events"]');
   if(!button||button.disabled)return;
   const root=workspaceFor(button);
   if(!root)return;
-  if(button.hasAttribute('data-op-choose') ||
-     (button.hasAttribute('data-op-unavailable') && root.hasAttribute('data-op-standby'))){
+  if(button.hasAttribute('data-op-choose')){
    chooseMatch(root);
    return;
   }
@@ -636,7 +684,7 @@
    return;
   }
   const quickPanel=button.dataset.opQuickPanel || button.dataset.opJump;
-  if(quickPanel==='notices' || quickPanel==='events'){
+  if(button.hasAttribute('data-op-quick-panel') || quickPanel==='notices' || quickPanel==='events'){
    openQuickPanel(root,quickPanel,button);
    return;
   }
