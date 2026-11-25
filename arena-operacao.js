@@ -41,7 +41,7 @@
  const panelColors={azul:['Azul','#45a4ff'],verde:['Verde','#49c99a'],laranja:['Laranja','#f4a858'],roxo:['Roxo','#b58cff'],rosa:['Rosa','#ee80ac']};
  const panelTitle=(prefs,id)=>prefs.names?.[id]||labels[id];
  const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>Object.hasOwn(panelColors,saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set(saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id)))]:[...defaultMonitor],displayWidth:[35,40,45,50,55,60,65].includes(saved?.displayWidth)?saved.displayWidth:45,stackMonitor:saved?.stackMonitor===true,cabinWidth:Number.isInteger(saved?.cabinWidth)?Math.max(40,Math.min(100,saved.cabinWidth)):null,side:Array.isArray(saved?.side)?saved.side.filter(id=>Object.hasOwn(monitorCommands,id)):[],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
+ function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>Object.hasOwn(panelColors,saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set(saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id)))]:[...defaultMonitor],displayWidth:[35,40,45,50,55,60,65].includes(saved?.displayWidth)?saved.displayWidth:45,stackMonitor:saved?.stackMonitor===true,cabinHeight:Number.isInteger(saved?.cabinHeight)?Math.max(0,Math.min(1600,saved.cabinHeight)):0,cabinWidth:Number.isInteger(saved?.cabinWidth)?Math.max(40,Math.min(100,saved.cabinWidth)):null,side:Array.isArray(saved?.side)?saved.side.filter(id=>Object.hasOwn(monitorCommands,id)):[],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
  let syncedLayout=null;
  const syncMessages=new Map();
  const pendingLayouts=new Map();
@@ -248,7 +248,16 @@
   settings.querySelector('[data-op-width-range]').value=String(value);
   settings.querySelector('[data-op-width-label]').textContent=width===null?'Automática':value+'%';
  }
+ function heightCabin(root,height){
+  const strip=root.querySelector('.arena-op-strip');
+  strip.classList.toggle('arena-op-manual-height',height>0);
+  strip.style.setProperty('--arena-cabin-height',height+'px');
+  const edge=strip.querySelector('[data-op-resize-height]');
+  edge.setAttribute('aria-valuenow',String(height));
+  edge.setAttribute('aria-valuetext',height?height+' pixels de altura mínima':'Altura automática');
+ }
  function apply(root,prefs){
+  heightCabin(root,prefs.cabinHeight);
   sizeCabin(root,prefs.cabinWidth);
   root.style.setProperty('--arena-display-width',prefs.displayWidth+'%');
   root.classList.toggle('arena-op-stack-monitor',prefs.stackMonitor);
@@ -378,6 +387,17 @@
   resize.setAttribute('aria-valuemin','40');resize.setAttribute('aria-valuemax','100');
   resize.title='Arraste esta borda para ajustar a largura';resize.innerHTML='<span aria-hidden="true">↔</span>';
   strip.append(resize);
+  const bottom=resize.cloneNode(false);
+  delete bottom.dataset.opResize;
+  bottom.dataset.opResizeHeight='';
+  bottom.className='arena-op-resize arena-op-resize-bottom';
+  bottom.setAttribute('aria-label','Altura mínima da cabine');
+  bottom.setAttribute('aria-orientation','vertical');
+  bottom.setAttribute('aria-valuemin','0');
+  bottom.setAttribute('aria-valuemax','1600');
+  bottom.title='Arraste esta borda para mudar a altura. Clique duas vezes para voltar ao automático.';
+  bottom.innerHTML='<span aria-hidden="true">↕</span>';
+  strip.append(bottom);
   root.append(strip);
   if(config.chooser)root.insertAdjacentHTML("beforeend",config.chooser);
   const timeline=score.querySelector('.match-timeline');if(timeline)timeline.remove();const scoreWrap=document.createElement('section');scoreWrap.className='arena-op-score';const info=document.createElement('details');info.className='arena-op-match-details';info.innerHTML='<summary>Detalhes da partida</summary>';info.append(score);scoreWrap.append(info);const guide=old.querySelector('.match-guide');root.append(scoreWrap);
@@ -663,7 +683,7 @@
    visible.splice(target,0,id);
    prefs.order=[...visible,...prefs.order.filter(key=>!visible.includes(key))];
   }
-  if(button.hasAttribute('data-op-reset')){prefs.order=[...defaults];prefs.monitor=[...defaultMonitor];prefs.side=[];prefs.displayWidth=45;prefs.stackMonitor=false;prefs.cabinWidth=null;prefs.names={};prefs.colors={};prefs.collapsed=[];prefs.locked=[];prefs.favorites=['points','time','events','history'];prefs.compact=false;prefs.columns=false;tools(root).querySelector('[data-op-compact]').checked=false;tools(root).querySelector('[data-op-columns]').checked=false;}
+  if(button.hasAttribute('data-op-reset')){prefs.order=[...defaults];prefs.monitor=[...defaultMonitor];prefs.side=[];prefs.displayWidth=45;prefs.stackMonitor=false;prefs.cabinWidth=null;prefs.cabinHeight=0;prefs.names={};prefs.colors={};prefs.collapsed=[];prefs.locked=[];prefs.favorites=['points','time','events','history'];prefs.compact=false;prefs.columns=false;tools(root).querySelector('[data-op-compact]').checked=false;tools(root).querySelector('[data-op-columns]').checked=false;}
   apply(root,prefs);save(root,prefs);
  });
  function chooseMatch(root){
@@ -872,6 +892,37 @@
   if(!button)return;
   const root=workspaceFor(button),prefs=read(root.dataset.opKey);
   prefs.cabinWidth=null;sizeCabin(root,null);save(root,prefs);
+ });
+ let heightDrag;
+ document.addEventListener('pointerdown',event=>{
+  const edge=event.target.closest('[data-op-resize-height]');
+  if(!edge||!event.isPrimary||event.button!==0)return;
+  const root=workspaceFor(edge), initial=read(root.dataset.opKey).cabinHeight;
+  const start=Math.round(edge.parentElement.getBoundingClientRect().height);
+  heightDrag={root,id:event.pointerId,y:event.clientY,initial,start,height:initial};
+  edge.setPointerCapture(event.pointerId);event.preventDefault();
+ });
+ document.addEventListener('pointermove',event=>{
+  if(heightDrag?.id!==event.pointerId)return;
+  const {root,start,y}=heightDrag;
+  heightDrag.height=Math.max(0,Math.min(1600,start+Math.round(event.clientY-y)));
+  heightCabin(root,heightDrag.height);
+ });
+ document.addEventListener('lostpointercapture',event=>{
+  if(heightDrag?.id!==event.pointerId)return;
+  const {root,height,initial}=heightDrag;heightDrag=null;
+  if(!root.isConnected||height===initial)return;
+  const prefs=read(root.dataset.opKey);prefs.cabinHeight=height;save(root,prefs);
+ });
+ for(const type of ['keydown','dblclick'])document.addEventListener(type,event=>{
+  const edge=event.target.closest('[data-op-resize-height]');
+  if(!edge||(type==='keydown'&&!['ArrowDown','ArrowUp','Home','End'].includes(event.key)))return;
+  event.preventDefault();
+  const root=workspaceFor(edge),prefs=read(root.dataset.opKey);
+  const current=prefs.cabinHeight||edge.parentElement.offsetHeight;
+  const height=type==='dblclick'?0:{Home:0,End:1600,ArrowDown:current+24,ArrowUp:current-24}[event.key];
+  prefs.cabinHeight=Math.max(0,Math.min(1600,height));
+  heightCabin(root,prefs.cabinHeight);save(root,prefs);
  });
  function dockMenu(root,source){
   const id=source.dataset.opDockCommand;

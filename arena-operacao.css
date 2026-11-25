@@ -311,3 +311,18 @@ body.arena-central-ready.arena-operation-page:has(#arenaMenuToggle:not([hidden])
   inline-size:min(100%,10rem); block-size:76px; overflow-wrap:anywhere;
   padding:8px; line-height:1.2;
 }
+
+.arena-op-strip.arena-op-manual-height {
+  min-block-size:var(--arena-cabin-height);
+  align-content:start;
+}
+.arena-op-strip.arena-op-manual-height.is-pinned { min-block-size:min(var(--arena-cabin-height),38dvh); }
+.arena-op-strip .arena-op-resize-bottom {
+  inset-inline:0 18px; inset-block:auto 0;
+  width:auto; min-width:0; height:18px; min-height:18px;
+  border-radius:0 0 0 12px; cursor:ns-resize;
+}
+@media (pointer:coarse) {
+  .arena-op-strip .arena-op-resize-bottom:not(:focus-visible) { pointer-events:auto; opacity:1; }
+  .arena-op-resize-bottom > span { opacity:1; }
+}
