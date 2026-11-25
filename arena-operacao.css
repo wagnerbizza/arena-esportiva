@@ -172,7 +172,7 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 .arena-operation-workspace { container:arena-cabin / inline-size; }
 .arena-op-strip {
   display:grid;
-  grid-template-columns:minmax(0,min(54%,26rem)) minmax(0,1fr);
+  grid-template-columns:minmax(0,var(--arena-display-width,45%)) minmax(0,1fr);
   grid-template-areas:"display rail" "activity activity" "shortcuts shortcuts";
   align-items:start;
   gap:10px 14px;
@@ -272,3 +272,14 @@ body.arena-central-ready.arena-operation-page:has(#arenaMenuToggle:not([hidden])
 .arena-operation-workspace > .arena-op-settings:not([open]) { display:none; }
 .arena-op-strip .arena-op-settings-trigger { display:grid; place-items:center; width:44px; min-height:44px; padding:0; }
 .arena-op-settings-trigger[aria-expanded=true] { border-color:var(--accent); }
+
+.arena-op-stack-monitor .arena-op-strip {
+  grid-template-columns:minmax(0,1fr);
+  grid-template-areas:"display" "rail" "activity" "shortcuts";
+}
+.arena-op-strip :is(.arena-op-monitor,.arena-op-monitor-side):not(:empty) {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,150px),1fr)); width:100%;
+}
+.arena-op-layout-options { min-width:0; display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.arena-op-layout-options label { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.arena-op-layout-options input[type=checkbox],.arena-op-layout-options select { width:auto; }
