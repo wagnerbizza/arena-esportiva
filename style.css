@@ -2736,3 +2736,10 @@ input[type="search"] {
 label[for="functionSearch"] > .arena-icon,
 label[for="sideFunctionSearch"] > .arena-icon { display:none; }
 #publicMatchSearch { margin-block:6px 14px; }
+
+/* Mantenha o título da turma afastado da barra da tabela anterior. */
+[data-participant-results] > section + section {
+  margin-block-start:clamp(20px,3vw,36px);
+  padding-block-start:12px;
+  border-block-start:1px solid var(--line);
+}
