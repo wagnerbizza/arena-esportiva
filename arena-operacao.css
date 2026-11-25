@@ -168,10 +168,11 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
   .arena-followed-clock:not(.arena-monitor-waiting) > .game-clock { grid-row:auto; }
 }
 
-/* O visor fica à esquerda, com controles à direita e comandos de jogo abaixo. */
+/* A largura útil da cabine pode ser menor que a janela por causa do menu lateral. */
+.arena-operation-workspace { container:arena-cabin / inline-size; }
 .arena-op-strip {
   display:grid;
-  grid-template-columns:minmax(0,26rem) minmax(0,1fr);
+  grid-template-columns:minmax(0,min(54%,26rem)) minmax(0,1fr);
   grid-template-areas:"display rail" "activity activity" "shortcuts shortcuts";
   align-items:start;
   gap:10px 14px;
@@ -202,7 +203,7 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 .arena-op-monitor-row { grid-area:shortcuts; }
 .arena-op-monitor { flex:0 1 auto; overflow:visible; }
 .arena-op-strip :is(.arena-op-display-rail,.arena-op-monitor-row) button {
-  flex:none; max-width:100%; min-height:44px; white-space:normal;
+  flex:0 1 auto; min-width:0; max-width:100%; min-height:44px; white-space:normal; overflow-wrap:anywhere;
 }
 .arena-op-display-controls .arena-op-score-pin { width:44px; }
 .arena-op-match-details > summary { cursor:pointer; padding:8px; }
@@ -211,11 +212,13 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 .arena-docking [data-op-dock]:empty::before { content:"Solte o atalho aqui"; align-self:center; padding:4px; color:var(--muted); }
 [data-op-dock-command][draggable=true] { cursor:grab; }
 .arena-dock-dialog { max-width:min(92vw,460px); }
-@media(max-width:767px) {
+@container arena-cabin (max-width:720px) {
   .arena-op-strip {
     grid-template-columns:minmax(0,1fr);
     grid-template-areas:"display" "rail" "activity" "shortcuts";
   }
+}
+@media(max-width:767px) {
   .arena-op-strip.is-pinned { max-block-size:48dvh; overflow:auto; }
 }
 .arena-op-score .match-guide { margin-block:0 8px; }
