@@ -49,22 +49,22 @@
   return [...document.querySelectorAll('.arena-operation-workspace')].find(root=>root.dataset.opKey===key);
  }
  function workspaceFor(element){
-  return element.closest('.arena-operation-workspace') ||
-   (element.closest('[data-operation-customization]') && document.querySelector('.arena-operation-workspace'));
+  return element.closest('.arena-operation-workspace');
  }
  function tools(root){
-  return root.querySelector('.arena-op-settings') ||
-   document.querySelector('[data-operation-customization] .arena-op-settings');
+  return root.querySelector('.arena-op-settings');
  }
- function mountCustomization(container){
+ function restoreSyncStatus(container){
   const root=container.querySelector('.arena-operation-workspace');
-  const settings=root?.querySelector('.arena-op-settings');
-  if(settings){
-   container.querySelector('[data-operation-customization]')?.append(settings);
-   const message=syncMessages.get(root.dataset.opKey);
-   if(message)syncStatus(root.dataset.opKey,message);
-  }
+  if(!root)return;
+  const key=root.dataset.opKey, message=syncMessages.get(key);
+  if(message)syncStatus(key,message);
  }
+ document.addEventListener('toggle',event=>{
+  if(!event.target.matches?.('.arena-op-settings'))return;
+  workspaceFor(event.target)?.querySelector('[data-op-monitor-edit]')
+   ?.setAttribute('aria-expanded',String(event.target.open));
+ },true);
  function syncStatus(key,text){
   syncMessages.set(key,text);
   const label=currentWorkspace(key) && tools(currentWorkspace(key))?.querySelector('[data-op-save-status]');
@@ -303,7 +303,12 @@
   const monitor=document.createElement('nav');
   monitor.className='arena-op-monitor';monitor.dataset.opMonitor='';monitor.setAttribute('aria-label','Atalhos do placar');
   const editMonitor=document.createElement('button');
-  editMonitor.type='button';editMonitor.dataset.opMonitorEdit='';editMonitor.textContent='Organizar atalhos';
+  editMonitor.type='button';editMonitor.dataset.opMonitorEdit='';editMonitor.className='arena-op-settings-trigger';
+  editMonitor.setAttribute('aria-label','Personalizar a cabine');
+  editMonitor.setAttribute('aria-controls','arenaOpSettings');
+  editMonitor.setAttribute('aria-expanded','false');
+  editMonitor.title='Personalizar a cabine';
+  editMonitor.innerHTML=icon('<circle cx="12" cy="12" r="3"/><path d="M10 3h4l.6 2.8 1.7 1 2.7-.9 2 3.5-2.1 1.9v1.9l2.1 1.9-2 3.5-2.7-.9-1.7 1L14 21h-4l-.6-2.8-1.7-1-2.7.9-2-3.5 2.1-1.9v-1.9L3 8.9l2-3.5 2.7.9 1.7-1Z"/>');
   const monitorRow=document.createElement('div');monitorRow.className='arena-op-monitor-row';monitorRow.append(monitor);
   monitor.dataset.opDock='below';
   const side=document.createElement('nav');
@@ -355,7 +360,7 @@
   root.append(strip);
   if(config.chooser)root.insertAdjacentHTML("beforeend",config.chooser);
   const timeline=score.querySelector('.match-timeline');if(timeline)timeline.remove();const scoreWrap=document.createElement('section');scoreWrap.className='arena-op-score';const info=document.createElement('details');info.className='arena-op-match-details';info.innerHTML='<summary>Detalhes da partida</summary>';info.append(score);scoreWrap.append(info);const guide=old.querySelector('.match-guide');root.append(scoreWrap);
-  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.innerHTML='<summary>Personalizar a cabine</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Marque a caixa para exibir o atalho. Arraste pela alça até um dos destinos abaixo, ou toque no botão Posicionar, Ao lado ou Abaixo.</p><div class="arena-op-dock-targets"><div data-op-dock="side"><strong>Ao lado do visor</strong><div data-op-dock-preview="side"></div></div><div data-op-dock="below"><strong>Abaixo do visor</strong><div data-op-dock-preview="below"></div></div><button type="button" data-op-view-monitor>Ver o visor</button></div><div data-op-monitor-choices></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><button type="button" data-op-sync>Sincronizar ajustes deste aparelho</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
+  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.id='arenaOpSettings';settings.innerHTML='<summary>Personalizar a cabine</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Marque a caixa para exibir o atalho. Arraste pela alça até um dos destinos abaixo, ou toque no botão Posicionar, Ao lado ou Abaixo.</p><div class="arena-op-dock-targets"><div data-op-dock="side"><strong>Ao lado do visor</strong><div data-op-dock-preview="side"></div></div><div data-op-dock="below"><strong>Abaixo do visor</strong><div data-op-dock-preview="below"></div></div><button type="button" data-op-view-monitor>Ver o visor</button></div><div data-op-monitor-choices></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><button type="button" data-op-sync>Sincronizar ajustes deste aparelho</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
   const nav=document.createElement('nav');nav.className='toolbar arena-op-shortcuts';nav.dataset.opShortcuts='';nav.setAttribute('aria-label','Meus atalhos da operação');settings.append(nav);const grid=document.createElement('div');grid.className='arena-op-grid';grid.dataset.opGrid='';root.append(grid);
   for(const [group,label] of [['pinned','Caixas fixadas no topo'],['regular','Caixas desafixadas']]){
    const lane=document.createElement('div');lane.dataset.opGroup=group;
@@ -363,7 +368,7 @@
   }
   const foldActions=document.createElement('div');foldActions.className='arena-op-fold-actions';
   foldActions.innerHTML='<h2>Ajustes das caixas</h2><p>Clique com o botão direito ou mantenha o dedo pressionado sobre a caixa para personalizar. Use a alça para arrastar.</p><div class="toolbar"><button type="button" data-op-fold-all="open">Expandir todas</button><button type="button" data-op-fold-all="close">Recolher todas</button></div>';
-  strip.before(settings);settings.append(foldActions);
+  strip.after(settings);settings.append(foldActions);
   if(guide && !config.standby)info.querySelector("summary").after(guide);
   strip.before(anchor);
   if(config.standby){
@@ -745,9 +750,16 @@
   }
   if(button.hasAttribute('data-op-monitor-edit')){
    const settings=tools(root);
-   settings.open=true;
-   settings.scrollIntoView({block:'center'});
-   settings.querySelector('[data-op-monitor-choice]')?.focus({preventScroll:true});
+   settings.open=!settings.open;
+   button.setAttribute('aria-expanded',String(settings.open));
+   if(settings.open){
+    const strip=root.querySelector('.arena-op-strip');
+    const style=getComputedStyle(strip);
+    const top=style.position==='sticky'?(parseFloat(style.top)||0)+strip.offsetHeight:0;
+    settings.style.scrollMarginTop=top+12+'px';
+    settings.scrollIntoView({block:'start'});
+    settings.querySelector('summary')?.focus({preventScroll:true});
+   }
    return;
   }
   if(['pause','suspend'].includes(button.dataset.opMonitorRun)){
@@ -860,5 +872,5 @@
    event.preventDefault();event.stopImmediatePropagation();
   }
  },true);
- window.ArenaOperation=Object.freeze({build,preview,mountCustomization});
+ window.ArenaOperation=Object.freeze({build,preview,restoreSyncStatus});
 })();
