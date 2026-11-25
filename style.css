@@ -2859,3 +2859,17 @@ button.arena-op-settings-trigger {
   pointer-events: none;
 }
 .arena-table-search-icon .arena-icon { width: 1.15rem; height: 1.15rem; }
+
+/* As duas equipes compartilham as linhas de identificação e pontuação. */
+.arena-team-scoreboard { align-items: stretch; row-gap: .45rem; }
+.arena-score-team, .arena-score-center {
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  align-self: stretch;
+  align-items: center;
+  row-gap: inherit;
+}
+.arena-score-identity { display: grid; justify-items: center; gap: 5px; min-width: 0; }
+.arena-score-center .arena-live-ball { grid-row: 1; }
+.arena-score-separator { grid-row: 2; }
+.arena-score-number { font-variant-numeric: tabular-nums; }
