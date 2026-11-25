@@ -1344,7 +1344,7 @@ function showGameBarSettings(key="games") {
   dialog.setAttribute("aria-labelledby","arenaGameBarSettingsTitle");
   const personal=readPersonalTools();
   const prefs=key==="games"?personal.gameBar:personal.customAreas[key]||{};
-  const names={games:"Barra de jogos",weather:"Previsão do tempo",navigation:"Atalhos e personalização",location:"Você está em",search:"Busca de funções"};
+  const names={games:"Barra de jogos",weather:"Previsão do tempo",navigation:"Atalhos e personalização",location:"Você está em",search:"Busca de funções","record-trash":"Lixeira de registros"};
   const title=names[key]||(key.startsWith("title:")?"Título da tela":"Seção de cadastros");
   const area=key==="games"?$("#arenaTopMatchMonitor"):
     [...document.querySelectorAll("[data-custom-area]")].find(el=>el.dataset.customArea===key);
@@ -6133,9 +6133,9 @@ function testDataPanel() {
     const details=r.entity==="teams" ? `<small>${esc([r.data.className,r.data.school].filter(Boolean).join(" · "))}</small>
       <details><summary>Elenco (${roster.length})</summary>${roster.length?`<ul>${roster.slice().sort(alphabetical).map(p=>`<li>${esc(p.name)}${p.testData?" (oculto)":""}</li>`).join("")}</ul>`:"<p>Equipe sem jogadores cadastrados.</p>"}</details>` : "";
     return `<tr><td><input type="checkbox" data-test-select="${esc(key)}" aria-label="Selecionar ${esc(testRecordName(r))}" ${testSelection.has(key)?"checked":""} ${testClassBusy?"disabled":""}></td>
-      <td>${r.label}</td><td>${esc(testRecordName(r))}<br>${details}<button type="button" data-test-detail="${esc(key)}">Ver detalhes</button>${testOnlyReserved ? recordTrashButton(r.entity, r.id, true) : ""}</td></tr>`;
+      <td>${r.label}</td><td>${esc(testRecordName(r))}<br>${details}<div class="toolbar"><button type="button" class="arena-icon-action" data-test-detail="${esc(key)}">${arenaIcon("search")} Ver detalhes</button>${testOnlyReserved ? recordTrashButton(r.entity, r.id, true) : ""}</div></td></tr>`;
   };
-  return `<section class="card"><h2>Lixeira de registros</h2>
+  return `<section class="card" data-custom-area="record-trash"><div class="arena-list-heading"><h2>Lixeira de registros</h2>${gameBarSettingsButton("record-trash")}</div>
     <p>Os registros na lixeira saem do painel público, das listas e das pesquisas normais. Você pode restaurá-los nesta área administrativa.</p>
     <p>Ao restaurar, as autorizações antigas voltam a valer. A operação pausa gravações esportivas temporariamente.</p>
     ${C.demo?"<p>O treinamento permite consultar a tela. Use a conta administrativa real para alterar a visibilidade.</p>":`<details><summary>Manutenção</summary><div class="toolbar"><button type="button" data-test-prepare ${testClassBusy||!legacy.length?"disabled":""}>Preparar registros antigos (${legacy.length})</button><button type="button" data-test-unlock ${testClassBusy?"disabled":""}>Liberar operação após interrupção</button></div></details>`}
@@ -6146,10 +6146,10 @@ function testDataPanel() {
     </div>
     <p>Ao ocultar uma equipe completa, a prévia inclui o elenco e as partidas vinculadas. Para marcar atletas individualmente, escolha Jogadores.</p>
     <div class="toolbar"><button type="button" data-test-select-all ${testClassBusy||!visible.length?"disabled":""}>Selecionar todos os resultados (${visible.length})</button><button type="button" data-test-select-clear ${testClassBusy?"disabled":""}>Limpar seleção</button>
-    <button type="button" data-test-preview ${testClassBusy||!testSelection.size||C.demo?"disabled":""}>${testOnlyReserved?"Revisar restauração":"Revisar envio à lixeira"}</button></div>
+    <button type="button" class="primary arena-icon-action" data-test-preview ${testClassBusy||!testSelection.size||C.demo?"disabled":""}>${arenaIcon("search")} ${testOnlyReserved?"Revisar restauração":"Revisar envio à lixeira"}</button></div>
     <p role="status">${testSelection.size} selecionado(s) · ${visible.length} resultado(s)${visible.length>500?" · Exibindo os primeiros 500.":""}</p>
     ${visible.length?`<div class="tablewrap"><table><thead><tr><th>Selecionar</th><th>Tipo</th><th>Registro</th></tr></thead><tbody>${visible.slice(0,500).map(displayRow).join("")}</tbody></table></div>`:empty("Nenhum registro com estes filtros.")}
-    ${testDetailPanel()}${testPlan?`<section class="public-notice" id="recordTrashPreview" tabindex="-1"><h3>Prévia • ${testPlan.items.length} registro(s)</h3><p>Nenhum dado será apagado. Confira todos os registros incluídos automaticamente pelos vínculos.</p>${blocked ? "<p>Encerre primeiro as partidas em andamento, pausadas ou suspensas.</p>" : ""}<ul>${testPlan.items.map(r=>`<li>${r.label}: ${esc(testRecordName(r))}</li>`).join("")}</ul><button type="button" data-test-backup>Baixar cópia privada desta seleção</button><form id="test-classify"><label>Motivo<textarea name="reason" required minlength="5" maxlength="300"></textarea></label><label>Digite ${testPlan.hidden?"OCULTAR":"RESTAURAR"}<input name="word" autocomplete="off" required></label><button class="primary" ${testClassBusy||blocked||!testBackup?"disabled":""}>Confirmar ${testPlan.hidden?"ocultação":"restauração"}</button></form><p>A cópia contém dados privados e não possui importação automática. Guarde-a em local restrito.</p></section>`:""}</section>`;
+    ${testDetailPanel()}${testPlan?`<section class="public-notice" id="recordTrashPreview" tabindex="-1" aria-labelledby="recordTrashPreviewTitle"><h3 id="recordTrashPreviewTitle">Prévia • ${testPlan.items.length} registro(s)</h3><p>Nenhum dado será apagado. Confira todos os registros incluídos automaticamente pelos vínculos.</p>${blocked ? "<p>Encerre primeiro as partidas em andamento, pausadas ou suspensas.</p>" : ""}<ul>${testPlan.items.map(r=>`<li>${r.label}: ${esc(testRecordName(r))}</li>`).join("")}</ul><div class="toolbar"><button type="button" data-test-backup>Baixar cópia privada desta seleção</button></div><form id="test-classify"><label>Motivo<textarea name="reason" required minlength="5" maxlength="300"></textarea></label><label>Digite ${testPlan.hidden?"OCULTAR":"RESTAURAR"}<input name="word" autocomplete="off" required></label><div class="toolbar"><button type="submit" class="primary" ${testClassBusy||blocked||!testBackup?"disabled":""}>Confirmar ${testPlan.hidden?"ocultação":"restauração"}</button></div></form><p>A cópia contém dados privados e não possui importação automática. Guarde-a em local restrito.</p></section>`:""}</section>`;
 }
 async function runTestClassification(items,hidden,reason) {
   if(role!=="admin"||C.demo)throw Error("Use a conta administrativa real.");
@@ -6209,7 +6209,11 @@ document.addEventListener("click",async e=>{
   }
   if(b.dataset.testHistory){await cloud.loadHistory([b.dataset.testHistory]);render();}
   if(b.dataset.testScope){testOnlyReserved=b.dataset.testScope==="reserved";testSelection.clear();testPlan=null;testBackup=false;render();}
-  if(b.hasAttribute("data-test-preview")){const items=planTestClassification(testRecords(),testSelection,!testOnlyReserved);if(!items.length)throw Error("Nenhum registro precisa mudar.");testPlan={items,hidden:!testOnlyReserved};testBackup=false;render();}
+  if(b.hasAttribute("data-test-preview")){const items=planTestClassification(testRecords(),testSelection,!testOnlyReserved);if(!items.length)throw Error("Nenhum registro precisa mudar.");testPlan={items,hidden:!testOnlyReserved};testBackup=false;render();
+   const preview = $("#recordTrashPreview");
+   preview?.focus({preventScroll:true});
+   scrollBelowPinnedCards(preview);
+  }
   if(b.hasAttribute("data-test-backup")&&testPlan){download("arena-selecao-testes-privada.json",JSON.stringify({format:"arena-testes-v1",at:new Date().toISOString(),records:testPlan.items},(_k,v)=>v?.toDate?v.toDate().toISOString():v,2));testBackup=true;render();}
   if(b.hasAttribute("data-test-prepare")){const legacy=testRecords().filter(r=>typeof r.data.testData!=="boolean").slice(0,500);await runTestClassification(legacy,false,"Preparação da proteção de dados de teste");}
   if(b.hasAttribute("data-test-unlock")){if(!confirm("Use somente se nenhuma classificação estiver em execução em outra aba. Liberar as gravações esportivas?"))return;await cloud.testMaintenance(false);toast("Operação liberada.");}
