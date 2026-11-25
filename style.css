@@ -2873,3 +2873,32 @@ button.arena-op-settings-trigger {
 .arena-score-center .arena-live-ball { grid-row: 1; }
 .arena-score-separator { grid-row: 2; }
 .arena-score-number { font-variant-numeric: tabular-nums; }
+
+.arena-score-team { align-items: stretch; }
+.arena-score-identity { width: 100%; align-content: end; }
+.arena-score-identity .arena-team-identity {
+  box-sizing: border-box;
+  min-height: 4.75rem;
+  justify-self: stretch;
+}
+.arena-match-outcome:empty, .arena-match-events:empty { display: none; }
+@supports (grid-template-rows: subgrid) {
+  .arena-score-identity {
+    grid-template-rows: subgrid;
+    grid-row: span 2;
+    align-content: stretch;
+  }
+  .arena-score-team, .arena-score-center { grid-row: span 3; }
+  .arena-score-identity > .crest { grid-row: 1; align-self: end; }
+  .arena-score-identity > .arena-team-identity { grid-row: 2; align-self: stretch; }
+  .arena-score-number, .arena-score-separator { grid-row: 3; }
+  .arena-score-center .arena-live-ball { grid-row: 2; }
+  #publicMatches > .match-card {
+    display: grid;
+    grid-row: span 8;
+    grid-template-rows: subgrid;
+    row-gap: 0;
+  }
+  #publicMatches .arena-match-outcome:empty,
+  #publicMatches .arena-match-events:empty { display: block; }
+}
