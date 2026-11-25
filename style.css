@@ -2772,3 +2772,27 @@ label[for="sideFunctionSearch"] > .arena-icon { display:none; }
 .arena-custom-large-buttons .toolbar > :is(button,.button) { min-block-size:52px; padding-inline:18px; }
 .arena-weather-card[data-custom-area] > #arenaWeather > summary { padding-inline-end:100px; }
 .arena-weather-card > .arena-game-bar-settings { position:absolute; inset-inline-end:50px; inset-block-start:4px; z-index:1; }
+
+/* Controles discretos, alinhados na mesma linha dos botões existentes. */
+.arena-game-bar-settings:is(button) {
+  display:inline-grid; place-items:center; inline-size:44px; min-block-size:44px; padding:0;
+  border-color:transparent; background:transparent; flex:none;
+}
+body.arena-layout-v2 .arena-ui-customization .arena-toolbar { margin:0; justify-content:space-between; }
+#arenaTopMatchMonitor { min-block-size:0; padding-inline-end:100px; }
+#arenaTopMatchMonitor :is(.arena-game-bar-settings,.arena-game-bar-pin) { inset-block-start:50%; transform:translateY(-50%); }
+#arenaTopMatchMonitor .arena-game-bar-settings { inset-inline-end:49px; }
+.arena-weather-card > .arena-game-bar-settings { inset-block-start:5px; }
+.arena-weather-card:has(> #arenaWeather:not([open])) > .arena-game-bar-settings { inset-block-start:50%; transform:translateY(-50%); }
+.arena-game-bar-settings .arena-icon,.arena-game-bar-pin .arena-icon { width:20px; height:20px; }
+:is([data-custom-area],#arenaTopMatchMonitor)[data-area-colored-background] {
+  background-color:var(--game-bar-background);
+}
+:is([data-custom-area],#arenaTopMatchMonitor)[data-area-colored-buttons] :is(.toolbar,.navigation-search-row,.arena-toolbar) > :is(button,.button):not(.arena-game-bar-settings,[data-personal-color]) {
+  background-color:var(--game-bar-buttons); color:var(--game-bar-button-text);
+}
+input[type="search"], #arenaSidebar #sideFunctionSearch, #functionSearch {
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238697a7' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M21 21l-6-6 M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0'/%3E%3C/svg%3E") !important;
+  background-repeat:no-repeat; background-position:left .7rem center; background-size:1.15rem;
+  padding-inline-start:2.45rem;
+}
