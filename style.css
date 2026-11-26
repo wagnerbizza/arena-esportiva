@@ -3017,3 +3017,51 @@ body.arena-central-ready main:has(.arena-audience-monitor.is-pinned) .arena-oper
     --arena-audience-base-top:var(--arena-op-sticky-offset,80px);
   }
 }
+
+/* Controles das barras: alvo de 44 px, ícone de 20 px e recuo comum. */
+:root {
+  --arena-bar-control-size: 44px;
+  --arena-bar-control-gap: 4px;
+  --arena-bar-control-inset: 8px;
+}
+button:is(.arena-game-bar-settings,.arena-game-bar-pin,.arena-weather-pin,.arena-op-settings-trigger,.arena-op-score-pin) {
+  box-sizing: border-box;
+  inline-size: var(--arena-bar-control-size);
+  min-block-size: var(--arena-bar-control-size);
+  padding: 0;
+  flex-shrink: 0;
+  place-items: center;
+}
+button:is(.arena-game-bar-settings,.arena-game-bar-pin,.arena-weather-pin,.arena-op-settings-trigger,.arena-op-score-pin) svg {
+  inline-size: 20px;
+  block-size: 20px;
+}
+#arenaTopMatchMonitor > .arena-game-bar-pin,
+.arena-weather-card > .arena-weather-pin {
+  inset-inline-end: var(--arena-bar-control-inset);
+}
+#arenaTopMatchMonitor > .arena-game-bar-settings,
+.arena-weather-card > .arena-game-bar-settings {
+  inset-inline-end: calc(var(--arena-bar-control-inset) + var(--arena-bar-control-size) + var(--arena-bar-control-gap));
+}
+.arena-weather-card[data-custom-area] > #arenaWeather > summary,
+#arenaTopMatchMonitor {
+  padding-inline-end: calc(2 * var(--arena-bar-control-size) + var(--arena-bar-control-gap) + 2 * var(--arena-bar-control-inset));
+}
+[data-custom-area="audience-monitor"],
+[data-custom-area="navigation"],
+[data-custom-area="search"],
+[data-custom-area="location"],
+[data-custom-area^="title:"],
+[data-custom-area^="list:"],
+[data-custom-area="record-trash"] {
+  padding-inline-end: var(--arena-bar-control-inset);
+}
+.arena-audience-monitor > .toolbar,
+.arena-list-heading {
+  align-items: center;
+  gap: var(--arena-bar-control-gap);
+}
+.navigation-search-row > .arena-game-bar-settings {
+  margin-inline-start: auto;
+}
