@@ -1374,6 +1374,15 @@ export async function connectSpark({
       const snap=await F.getDocs(F.query(F.collection(database,"arenaMatchPhases",matchId,"history"),F.where("championshipId","==",match.championshipId)));
       return snap.docs.map(doc=>doc.data()).sort((a,b)=>b.updatedAt.toMillis()-a.updatedAt.toMillis()).slice(0,20);
     },
+    watchPublicTeamProfile(id,onChange) {
+      return F.onSnapshot(F.doc(database,"publicTeamProfiles",id),snapshot=>onChange(snapshot.data() || null),()=>onChange(null));
+    },
+    async publishPublicTeamProfile(id,profile) {
+      if (!isOwner()) throw Error("Publicação exclusiva do administrador.");
+      const ref = F.doc(database,"publicTeamProfiles",id);
+      if (!profile) return F.deleteDoc(ref);
+      await F.setDoc(ref,profile);
+    },
     canOperate: canOperateMatch,
     canCorrect: canCorrectMatch,
     canCorrectSport: canCorrectMatchSport,

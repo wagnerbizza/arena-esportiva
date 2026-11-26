@@ -1832,7 +1832,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=controle-operadores-1");
+    const { connectSpark } = await import("./spark-store.js?v=ficha-publica-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -5492,13 +5492,38 @@ function publicHub(){
  return `${publicStatistics()}${publicSportSummary()}<nav class="public-navigation" aria-label="Conteúdo do painel público">${tabs.map(([id,label])=>`<button type="button" data-public-area="${id}" class="${id===publicArea?"active":""}" ${id===publicArea?'aria-current="page"':""}>${label}</button>`).join("")}</nav><div id="publicHubContent">${publicHubContent()}</div>`;
 }
 const openPublicTeams = new Set();
+const publicTeamProfiles = new Map();
+const publicTeamProfileWatches = new Map();
 document.addEventListener("toggle", event => {
  const card = event.target;
  if (!card.matches?.("details[data-public-team]") || !card.isConnected) return;
- if (card.open) openPublicTeams.add(card.dataset.publicTeam);
- else openPublicTeams.delete(card.dataset.publicTeam);
+ const id = card.dataset.publicTeam;
+ if (card.open) {
+  openPublicTeams.add(id);
+  if (!cloud || C.demo || publicTeamProfileWatches.has(id)) return;
+  publicTeamProfileWatches.set(id,cloud.watchPublicTeamProfile(id,profile=>{
+   publicTeamProfiles.set(id,profile);
+   if (!admin && publicArea === "teams" && openPublicTeams.has(id)) {
+    const panel = [...app.querySelectorAll("[data-public-team]")].find(item=>item.dataset.publicTeam===id);
+    const roster = panel?.querySelector("[data-public-team-roster]");
+    if(roster) roster.innerHTML = publicTeamRoster(id);
+   }
+  }));
+ } else {
+  openPublicTeams.delete(id);
+  publicTeamProfileWatches.get(id)?.();
+  publicTeamProfileWatches.delete(id);
+  publicTeamProfiles.delete(id);
+ }
 }, true);
 
+function publicTeamRoster(id) {
+ const profile = publicTeamProfiles.get(id);
+ if (!profile) return '<p class="muted">Elenco e técnico ainda não publicados.</p>';
+ const athletes = Array.isArray(profile.athletes) ? profile.athletes : [];
+ return `<h4>Técnico(a)</h4><p>${esc(profile.coach || "Não informado")}</p>
+ <h4>Elenco publicado</h4>${athletes.length ? `<ul>${athletes.map(athlete=>`<li>${esc(athlete)}</li>`).join("")}</ul>` : '<p>Nenhum atleta publicado.</p>'}`;
+}
 function publicTeamsPanel() {
  const byTeam = new Map();
  for (const game of state.matches) {
@@ -5516,18 +5541,15 @@ function publicTeamsPanel() {
   const team = teams.get(id);
   const games = (byTeam.get(id) || []).slice().sort((a,b)=>String(b.date || "").localeCompare(String(a.date || "")));
   const sports = [...new Set(games.map(game => game.sport).filter(Boolean))].sort();
-  const athletes = [...new Set(games.flatMap(game => (game.publicEvents || [])
-    .filter(event => event.playerName && (event.side === 0 ? game.home === id : event.side === 1 && game.away === id))
-    .map(event => event.playerName)))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
   const count = games.length ? `${games.length} ${games.length === 1 ? "partida" : "partidas"} nesta seleção` : "Aguardando primeira partida";
   return `<details class="card public-team-card" data-public-team="${esc(id)}" ${openPublicTeams.has(id)?"open":""}>
    <summary>${team?.badge ? badge(team) : ""}<span><strong>${esc(name(id))}</strong><small>${esc(count)}</small></span><span class="public-team-chevron" aria-hidden="true">⌄</span></summary>
    <div class="public-team-body"><dl><div><dt>Modalidades</dt><dd>${esc(sports.join(" · ") || "A definir")}</dd></div>
    <div><dt>Categoria</dt><dd>${esc(team?.category || "Não informada")}</dd></div></dl>
-   <h4>Atletas nos lances publicados</h4>${athletes.length ? `<ul>${athletes.map(athlete=>`<li>${esc(athlete)}</li>`).join("")}</ul>` : "<p>Nenhum atleta identificado nos lances disponíveis.</p>"}
-   ${games.length ? `<h4>Partidas</h4><ul class="public-team-games">${games.map(game => {
+   <div data-public-team-roster>${publicTeamRoster(id)}</div>
+   ${games.length ? `<h4>Histórico de partidas</h4><ul class="public-team-games">${games.map(game => {
     const opponent = game.home === id ? game.away : game.home;
-    return `<li><button type="button" data-public-dispute="${esc(game.id)}"><strong>× ${esc(name(opponent))}</strong><small>${esc([game.sport,game.status,game.date ? format(game.date) : ""].filter(Boolean).join(" · "))}</small></button></li>`;
+    return `<li><button type="button" data-public-dispute="${esc(game.id)}"><strong>Adversário: ${esc(name(opponent))}</strong><small>${esc([game.sport,game.status,game.date ? format(game.date) : "",["Encerrada","Homologada"].includes(game.status) ? gameResult(game).join(" × ") : ""].filter(Boolean).join(" · "))}</small></button></li>`;
    }).join("")}</ul>` : ""}
    </div></details>`;
  }).join("") || empty("Nenhuma equipe nesta seleção.")}</div></section>`;
@@ -5625,6 +5647,25 @@ function teamHistoryOutput(){
   return `<details class="event"><summary>${esc(r.entity==="teams"?"Equipe":"Jogador")} • ${esc(r.after?.name||r.before?.name||r.target)} • ${esc(r.detail?.type||"Alteração")} • ${esc(removedDate(r.at))}</summary><p>Responsável: ${esc(r.actor||"Não informado")}<br>Motivo/registro: ${esc(r.detail?.reason||r.detail?.text||"Não informado")}<br>ID: ${esc(r.ID||r.id||r.target)}</p>${table(["Campo","Antes","Depois"],changes)}</details>`;
  }).join("")||empty("Não há alterações registradas para esta equipe ou seu elenco nesta versão.");
 }
+document.addEventListener("click", async event => {
+ const button = event.target.closest("[data-publish-team-profile]");
+ if (!button || role !== "admin" || !cloud || C.demo) return;
+ const id = button.dataset.publishTeamProfile;
+ const team = state.teams.find(item=>item.id===id);
+ const remove = button.hasAttribute("data-unpublish-team-profile");
+ if (!team || (!remove && (team.archived || team.testData))) return;
+ if (!confirm(remove ? "Retirar elenco e técnico da ficha pública?" : "Publicar os nomes de exibição dos jogadores e do técnico desta equipe para qualquer visitante? Confirme que a divulgação está autorizada.")) return;
+ button.disabled = true;
+ try {
+  await cloud.publishPublicTeamProfile(id,remove ? null : {
+   coach:String(team.coach || "").slice(0,120),
+   athletes:[...new Set(state.players.filter(player=>player.team===id && !player.archived && !player.testData)
+    .map(player=>String(player.name || "").trim().slice(0,120)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"))
+  });
+  toast(remove ? "Elenco e técnico retirados da ficha pública." : "Ficha pública atualizada.");
+ } catch(error) { toast(error.message,true); }
+ finally { button.disabled = false; }
+});
 function teamProfileView(){
  const t=state.teams.find(t=>t.id===selectedTeamId);if(!t||!canManageRosters()){selectedTeamId="";return empty("Equipe indisponível para esta conta.");}
  const roster=state.players.filter(p=>p.team===t.id).slice().sort(alphabetical),games=teamMatches();
@@ -5641,7 +5682,7 @@ function teamProfileView(){
   content=`<section class="card"><h3>Resultados por modalidade</h3><p>Somente partidas encerradas ou homologadas. No vôlei, o resultado conta sets; nas demais modalidades, o placar. As modalidades não são somadas entre si.</p>${stats.length?table(["Modalidade","Jogos","Vitórias","Empates","Derrotas","A favor","Contra"],stats.map(r=>tr([r.sport,r.games,r.wins,r.draws,r.losses,r.for,r.against]))):empty("Ainda não há partidas concluídas nesta seleção.")}</section><section class="card"><h3>Jogadores, cartões e faltas</h3><p>Lances dos jogos selecionados, incluindo jogos em andamento e excluindo cancelados. Pontos/gols dos lances consideram os estornos registrados. Lances sem atleta ficam em uma linha própria.</p>${!C.demo?`<button type="button" data-profile-events ${teamProfileBusy?"disabled":""}>${teamProfileBusy?"Carregando…":"Carregar / atualizar lances"}</button>`:""}${ready?(events.length?table(["Modalidade","Jogador","Pontos/gols dos lances","Amarelos","Vermelhos","Faltas"],events.map(r=>tr([r.sport,r.player,r.points,r.yellow,r.red,r.fouls]))):empty("Nenhum lance correspondente carregado.")):empty("Carregue os lances para consultar cartões, faltas e pontuação individual.")}</section>`;
  }
  if(teamProfileTab==="history")content=`<section class="card"><h3>Alterações da equipe e elenco</h3><button type="button" data-profile-history ${teamProfileBusy?"disabled":""}>${teamProfileBusy?"Consultando…":"Carregar / atualizar histórico"}</button><p class="muted">Consulta sob demanda, exclusiva do administrador principal. Datas em horário de Brasília.</p>${teamHistoryOutput()}</section>`;
- return `<section class="card team-profile-heading"><button type="button" data-profile-back>← Voltar às equipes</button><div class="team-profile-title">${badge(t)}<div><span class="tag">FICHA DA EQUIPE • ${t.archived?"ARQUIVADA":"ATIVA"}</span><h2>${esc(t.name)}</h2><p><strong>Modalidades:</strong> ${esc(modalities.join(" · ") || "Não informadas")}</p><p><strong>Turma:</strong> ${esc(t.className?.trim() || "Não informada")}</p><p><strong>Técnico(a):</strong> ${esc(t.coach||"Não informado")}</p></div></div><nav aria-label="Ficha da equipe">${tabs.map(([id,label])=>`<button type="button" data-profile-tab="${id}" class="${id===teamProfileTab?"active":""}" aria-pressed="${id===teamProfileTab}">${label}</button>`).join("")}</nav>${["games","stats"].includes(teamProfileTab)?`<div class="formgrid"><label>Modalidade na ficha<select data-profile-sport><option value="">Todas as modalidades</option>${D.SPORTS.map(s=>`<option ${s===teamProfileSport?"selected":""}>${esc(s)}</option>`).join("")}</select></label><label>Campeonato / temporada<select data-profile-champ><option value="">Todos os campeonatos</option>${championships.map(([id,label])=>`<option value="${esc(id)}" ${id===teamProfileChamp?"selected":""}>${esc(label)}</option>`).join("")}</select></label></div>`:""}<div class="team-profile-content">${content}</div></section>`;
+ return `<section class="card team-profile-heading"><button type="button" data-profile-back>← Voltar às equipes</button><div class="team-profile-title">${badge(t)}<div><span class="tag">FICHA DA EQUIPE • ${t.archived?"ARQUIVADA":"ATIVA"}</span><h2>${esc(t.name)}</h2><p><strong>Modalidades:</strong> ${esc(modalities.join(" · ") || "Não informadas")}</p><p><strong>Turma:</strong> ${esc(t.className?.trim() || "Não informada")}</p><p><strong>Técnico(a):</strong> ${esc(t.coach||"Não informado")}</p></div></div><nav aria-label="Ficha da equipe">${tabs.map(([id,label])=>`<button type="button" data-profile-tab="${id}" class="${id===teamProfileTab?"active":""}" aria-pressed="${id===teamProfileTab}">${label}</button>`).join("")}</nav>${["games","stats"].includes(teamProfileTab)?`<div class="formgrid"><label>Modalidade na ficha<select data-profile-sport><option value="">Todas as modalidades</option>${D.SPORTS.map(s=>`<option ${s===teamProfileSport?"selected":""}>${esc(s)}</option>`).join("")}</select></label><label>Campeonato / temporada<select data-profile-champ><option value="">Todos os campeonatos</option>${championships.map(([id,label])=>`<option value="${esc(id)}" ${id===teamProfileChamp?"selected":""}>${esc(label)}</option>`).join("")}</select></label></div>`:""}<div class="team-profile-content">${content}</div>${role==="admin"&&!C.demo&&teamProfileTab==="roster"?`<section class="card"><h3>Ficha pública da equipe</h3><p>Publique os nomes de exibição autorizados. Atualize a ficha se o elenco ou o técnico mudar.</p><div class="toolbar"><button type="button" data-publish-team-profile="${esc(t.id)}" ${t.archived?"disabled":""}>Publicar ou atualizar elenco e técnico</button><button type="button" data-publish-team-profile="${esc(t.id)}" data-unpublish-team-profile>Retirar elenco e técnico</button></div></section>`:""}</section>`;
 }
 function openTeamEditor(id){
  if(!canManageRosters())return;const t=state.teams.find(t=>t.id===id);if(!t)return;
