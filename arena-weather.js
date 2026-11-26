@@ -86,6 +86,14 @@
   .arena-weather-card > #arenaWeather > summary {
     min-height:56px; padding-inline-end:60px; flex-wrap:wrap; overflow-wrap:anywhere;
   }
+  body:not([data-admin="true"]) .arena-weather-card > #arenaWeather > summary {
+    min-height:96px; padding-block:16px; gap:8px 16px; align-content:center;
+  }
+  body:not([data-admin="true"]) #arenaWeather [data-weather-summary]::before {
+    font-size:1.85rem; line-height:1; vertical-align:middle;
+  }
+  :root.reduce-motion #arenaWeather[data-weather-icon] [data-weather-summary]::before,
+  :root.reduce-motion #arenaWeather[open] .arena-weather-body { animation:none; }
   main:has(.arena-live-pinnable.is-pinned, .arena-op-strip.is-pinned) > .arena-weather-card.is-pinned {
     border-end-start-radius:0; border-end-end-radius:0;
   }

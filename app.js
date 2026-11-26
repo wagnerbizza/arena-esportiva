@@ -5491,23 +5491,45 @@ function publicHub(){
  const tabs=[["active","Jogos atuais"],["live","Ao vivo"],["schedule","Agenda"],["results","Resultados"],["teams","Equipes"],["standings","Classificação"],["fun","Diversão"],["news","Notícias"]];
  return `${publicStatistics()}${publicSportSummary()}<nav class="public-navigation" aria-label="Conteúdo do painel público">${tabs.map(([id,label])=>`<button type="button" data-public-area="${id}" class="${id===publicArea?"active":""}" ${id===publicArea?'aria-current="page"':""}>${label}</button>`).join("")}</nav><div id="publicHubContent">${publicHubContent()}</div>`;
 }
+const openPublicTeams = new Set();
+document.addEventListener("toggle", event => {
+ const card = event.target;
+ if (!card.matches?.("details[data-public-team]") || !card.isConnected) return;
+ if (card.open) openPublicTeams.add(card.dataset.publicTeam);
+ else openPublicTeams.delete(card.dataset.publicTeam);
+}, true);
+
 function publicTeamsPanel() {
- const games = state.matches.filter(m => !publicFilter || m.sport === publicFilter);
- const totals = new Map();
- for (const game of games) {
-  for (const id of new Set([game.home,game.away].filter(Boolean)))
-   totals.set(id,(totals.get(id) || 0) + 1);
+ const byTeam = new Map();
+ for (const game of state.matches) {
+  if (game.testData || game.publicHidden || (publicFilter && game.sport !== publicFilter)) continue;
+  for (const id of new Set([game.home,game.away].filter(Boolean))) {
+   if (!byTeam.has(id)) byTeam.set(id,[]);
+   byTeam.get(id).push(game);
+  }
  }
  const teams = new Map(state.teams.filter(team => team.archived !== true && team.testData !== true).map(team => [team.id,team]));
- const ids = new Set(totals.keys());
- // Sem partida, ainda não há vínculo público com modalidade ou campeonato.
+ const ids = new Set(byTeam.keys());
  if (!publicEdition && !publicFilter) for (const id of teams.keys()) ids.add(id);
  const entries = [...ids].sort((a,b) => name(a).localeCompare(name(b),"pt-BR",{numeric:true}));
- return `<section aria-label="Equipes"><h2>Equipes</h2><div class="grid">${entries.map(id => {
+ return `<section aria-label="Equipes"><h2>Equipes</h2><div class="grid public-team-grid">${entries.map(id => {
   const team = teams.get(id);
-  const total = totals.get(id) || 0;
-  const summary = total ? `${total} partida(s) nesta seleção` : "Aguardando primeira partida";
-  return `<article class="card">${team?.badge ? badge(team) : ""}<h3>${esc(name(id))}</h3><p>${summary}</p></article>`;
+  const games = (byTeam.get(id) || []).slice().sort((a,b)=>String(b.date || "").localeCompare(String(a.date || "")));
+  const sports = [...new Set(games.map(game => game.sport).filter(Boolean))].sort();
+  const athletes = [...new Set(games.flatMap(game => (game.publicEvents || [])
+    .filter(event => event.playerName && (event.side === 0 ? game.home === id : event.side === 1 && game.away === id))
+    .map(event => event.playerName)))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  const count = games.length ? `${games.length} ${games.length === 1 ? "partida" : "partidas"} nesta seleção` : "Aguardando primeira partida";
+  return `<details class="card public-team-card" data-public-team="${esc(id)}" ${openPublicTeams.has(id)?"open":""}>
+   <summary>${team?.badge ? badge(team) : ""}<span><strong>${esc(name(id))}</strong><small>${esc(count)}</small></span><span class="public-team-chevron" aria-hidden="true">⌄</span></summary>
+   <div class="public-team-body"><dl><div><dt>Modalidades</dt><dd>${esc(sports.join(" · ") || "A definir")}</dd></div>
+   <div><dt>Categoria</dt><dd>${esc(team?.category || "Não informada")}</dd></div></dl>
+   <h4>Atletas nos lances publicados</h4>${athletes.length ? `<ul>${athletes.map(athlete=>`<li>${esc(athlete)}</li>`).join("")}</ul>` : "<p>Nenhum atleta identificado nos lances disponíveis.</p>"}
+   ${games.length ? `<h4>Partidas</h4><ul class="public-team-games">${games.map(game => {
+    const opponent = game.home === id ? game.away : game.home;
+    return `<li><button type="button" data-public-dispute="${esc(game.id)}"><strong>× ${esc(name(opponent))}</strong><small>${esc([game.sport,game.status,game.date ? format(game.date) : ""].filter(Boolean).join(" · "))}</small></button></li>`;
+   }).join("")}</ul>` : ""}
+   </div></details>`;
  }).join("") || empty("Nenhuma equipe nesta seleção.")}</div></section>`;
 }
 function publicHubContent(){

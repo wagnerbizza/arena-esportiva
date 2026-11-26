@@ -2904,3 +2904,28 @@ button.arena-op-settings-trigger {
 }
 
 .list-filters .list-registration-actions + .list-groups { margin-block-start: 14px; }
+
+.public-team-grid { align-items:start; }
+.public-team-card > summary { display:flex; align-items:center; gap:12px; cursor:pointer; list-style:none; }
+.public-team-card > summary::-webkit-details-marker { display:none; }
+.public-team-card > summary strong { display:block; font-size:1.2rem; overflow-wrap:anywhere; }
+.public-team-card small { display:block; color:var(--muted); }
+.public-team-chevron { margin-inline-start:auto; font-size:1.5rem; color:var(--accent); }
+.public-team-card[open] .public-team-chevron { transform:rotate(180deg); }
+.public-team-card[open], .public-team-card:focus-within { border-color:var(--accent); }
+.public-team-body { border-top:1px solid var(--line); margin-top:14px; padding-top:10px; }
+.public-team-body dl { display:flex; flex-wrap:wrap; gap:12px 20px; }
+.public-team-body dd { margin:0; }
+.public-team-games { list-style:none; padding:0; display:grid; gap:8px; }
+.public-team-games button { width:100%; text-align:start; }
+@keyframes arena-public-team-enter {
+  from { opacity:.65; transform:translateY(4px); }
+  to { opacity:1; transform:translateY(0); }
+}
+@media (prefers-reduced-motion:no-preference) {
+  :root:not(.reduce-motion) .public-team-card { transition:border-color .2s, box-shadow .2s; }
+  :root:not(.reduce-motion) .public-team-card[open] .public-team-body { animation:arena-public-team-enter .2s ease-out; }
+}
+@media (hover:hover) {
+  .public-team-card:hover { border-color:var(--accent); }
+}
