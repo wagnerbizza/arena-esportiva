@@ -383,7 +383,7 @@
   }
   function publicTeam(t) {
     const { id, name, short, badge, category, _revision, _updatedAt } = t;
-    return { id, name, short, badge, category, _revision, _updatedAt };
+    return { id, name, short, badge, category, sports: t.sports || [], _revision, _updatedAt };
   }
   function publicSettings(t) {
     const { id, title, subtitle, color, banner, _revision, _updatedAt } = t;

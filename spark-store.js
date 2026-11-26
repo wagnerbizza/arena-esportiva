@@ -1446,6 +1446,22 @@ export async function connectSpark({
       }
       return rows.filter(row=>row.count>0).sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name,"pt-BR"));
     },
+    async syncPublishedTeamSports() {
+      if (!isOwner()) throw Error("Atualização exclusiva do administrador.");
+      const published = await F.getDocsFromServer(F.collection(database,"publicTeams"));
+      let updated = 0;
+      for (const item of published.docs) {
+        const changed = await F.runTransaction(database,async tx=>{
+          const team = (await tx.get(F.doc(database,"teams",item.id))).data();
+          const current = (await tx.get(item.ref)).data();
+          if (!team || !current || team.testData || team.archived || JSON.stringify(current.sports) === JSON.stringify(team.sports || [])) return false;
+          tx.set(item.ref,M.publicTeam(team));
+          return true;
+        });
+        if (changed) updated++;
+      }
+      return updated;
+    },
     watchPublicTeamProfile(id,onChange,onError) {
       return F.onSnapshot(F.doc(database,"publicTeamProfiles",id),snapshot=>onChange(snapshot.data() || null),onError);
     },

@@ -325,7 +325,7 @@ function listPanel(kind) {
   if (kind === "matches") controls += filterSelect(kind, "sport", "Modalidade", D.SPORTS, "Todas as modalidades") + filterSelect(kind, "status", "Situação específica", matchStatuses, "Todas as situações") + filterSelect(kind, "championshipId", "Campeonato / temporada", championshipFilterOptions(), "Todos os campeonatos");
   controls += filterSelect(kind, "order", "Ordenar", [["az","Nome A–Z"],["za","Nome Z–A"]], kind === "matches" ? "Ordem por horário" : "Nome A–Z (padrão)");
   const groups = kind === "matches" ? `<div class="list-groups" aria-label="Visualização das partidas">${[["active", "Em andamento e próximas"], ["finished", "Finalizadas"], ["all", "Todas"]].map(([v, title]) => `<button type="button" data-list-group="${v}" aria-pressed="${f.group === v}" class="${f.group === v ? "primary" : ""}">${title}</button>`).join("")}</div>` : "";
-  const actions=kind==="teams"?`<button type="button" class="primary arena-icon-action" data-new-team-form>${arenaIcon("add")} Nova equipe</button><button type="button" class="arena-icon-action" data-section="imports">${arenaIcon("upload")} Importar equipes</button><button type="button" data-team-card-width aria-controls="list-results-teams" aria-pressed="${teamCardsWide()}">Largura inteira dos cartões</button>`:kind==="players"?`<button type="button" class="primary arena-icon-action" data-player-form="open">${arenaIcon("add")} Cadastrar jogador</button><button type="button" data-section="imports" class="arena-icon-action">${arenaIcon("upload")} Importar jogadores</button>`:canCreateMatches()?'<button type="button" class="primary" data-section="createMatch">Cadastrar partida</button>':"";
+  const actions=kind==="teams"?`<button type="button" class="primary arena-icon-action" data-new-team-form>${arenaIcon("add")} Nova equipe</button><button type="button" class="arena-icon-action" data-section="imports">${arenaIcon("upload")} Importar equipes</button>${role==="admin"&&!C.demo?'<button type="button" data-sync-public-team-sports>Atualizar modalidades no painel público</button>':""}<button type="button" data-team-card-width aria-controls="list-results-teams" aria-pressed="${teamCardsWide()}">Largura inteira dos cartões</button>`:kind==="players"?`<button type="button" class="primary arena-icon-action" data-player-form="open">${arenaIcon("add")} Cadastrar jogador</button><button type="button" data-section="imports" class="arena-icon-action">${arenaIcon("upload")} Importar jogadores</button>`:canCreateMatches()?'<button type="button" class="primary" data-section="createMatch">Cadastrar partida</button>':"";
   return `<section class="card list-filters" data-custom-area="list:${kind}" aria-label="Filtros de ${titles[kind]}"><div class="arena-list-heading"><h2>${titles[kind]}</h2>${gameBarSettingsButton("list:"+kind)}</div>${actions?`<div class="toolbar list-registration-actions">${actions}</div>`:""}${groups}${kind === "teams" ? participantDirectory() : ""}<div class="list-controls">${controls}<button type="button" data-list-reset="${kind}">Limpar filtros</button></div><p class="muted list-count" id="list-count-${kind}" role="status">${listCount(kind)}</p>${kind === "matches" ? '<small>Finalizadas inclui encerradas, homologadas e canceladas. Adiadas e suspensas continuam em andamento e próximas.</small>' : ""}<div id="list-results-${kind}" class="arena-record-results ${kind === "players" ? "tablewrap-list" : "grid"}${kind === "teams" && teamCardsWide() ? " arena-team-results-wide" : ""}">${listResults(kind)}</div></section>`;
 }
 function listCount(kind) {
@@ -1959,7 +1959,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=contador-publico-1");
+    const { connectSpark } = await import("./spark-store.js?v=modalidades-equipes-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -5777,7 +5777,9 @@ function publicTeamsPanel() {
  }
  const teams = new Map(state.teams.filter(team => team.archived !== true && team.testData !== true).map(team => [team.id,team]));
  const ids = new Set(byTeam.keys());
- if (!publicEdition && !publicFilter) for (const id of teams.keys()) ids.add(id);
+ if (!publicEdition) for (const [id,team] of teams) {
+  if (!publicFilter || team.sports?.includes(publicFilter)) ids.add(id);
+ }
  const entries = [...ids].sort((a,b) => name(a).localeCompare(name(b),"pt-BR",{numeric:true}));
  for (const index of [0,1]) if (!ids.has(publicComparison[index])) publicComparison[index] = "";
  publicComparisonGames = byTeam;
@@ -5785,7 +5787,7 @@ function publicTeamsPanel() {
  return `<section aria-label="Equipes"><h2>Equipes</h2>${comparison}<div class="grid public-team-grid">${entries.map(id => {
   const team = teams.get(id);
   const games = (byTeam.get(id) || []).slice().sort((a,b)=>String(b.date || "").localeCompare(String(a.date || "")));
-  const sports = [...new Set(games.map(game => game.sport).filter(Boolean))].sort();
+  const sports = [...new Set([...(team?.sports || []),...games.map(game => game.sport).filter(Boolean)])].sort();
   const count = games.length ? `${games.length} ${games.length === 1 ? "partida" : "partidas"} nesta seleção` : "Aguardando primeira partida";
   const completed = games.filter(completedPublicTeamGame);
   const groups = [...new Set(games.map(game=>[game.competition,phaseLabel(game)].filter(Boolean).join(" · ")).filter(Boolean))];
@@ -6167,6 +6169,18 @@ function coachingStaffView() {
  const rows = teams.map(team=>`<tr><td>${esc(team.name)}</td><td>${esc(team.coach || "A definir")}</td><td>${esc(team.category || "—")}</td><td>${esc(teamSports(team).join(" · ") || "—")}</td><td><button type="button" data-edit-team="${esc(team.id)}" data-coaching-edit>${team.coach ? "Editar técnico(a)" : "Vincular técnico(a)"}</button></td></tr>`);
  return `<section class="card"><h2>Técnicos por equipe</h2><p>Selecione a equipe para cadastrar ou atualizar seu técnico.</p>${rows.length ? table(["Equipe","Técnico(a)","Categoria","Modalidades","Ação"],rows) : empty("Cadastre uma equipe para vincular o técnico.")}</section>`;
 }
+let syncingPublicTeamSports = false;
+document.addEventListener("click",async event=>{
+ const button = event.target.closest("[data-sync-public-team-sports]");
+ if (!button || role !== "admin" || !cloud || C.demo || syncingPublicTeamSports) return;
+ syncingPublicTeamSports = true;
+ button.disabled = true;
+ try {
+  const count = await cloud.syncPublishedTeamSports();
+  toast(count ? `${count} equipe(s) atualizada(s) no painel público.` : "As modalidades públicas já estão atualizadas.");
+ } catch (error) { toast(error.message,true); }
+ finally { syncingPublicTeamSports = false; button.disabled = false; }
+});
 function teamsDirectoryView(){
  if(teamFormVisible)return `<div class="sectionhead"><h2>${teamEditorId?"Editar equipe":"Nova equipe"}</h2><button type="button" data-team-form-back>← Voltar à lista de equipes</button></div>${teamRegistrationView()}`;
  return listPanel("teams");
