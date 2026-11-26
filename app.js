@@ -1831,7 +1831,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=preferencias-e-cabine-1");
+    const { connectSpark } = await import("./spark-store.js?v=controle-operadores-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -1969,15 +1969,25 @@ async function dispatch(a) {
   }
 }
 // 2 — Visualização e navegação.
+function canChangePublicVisibility(match) {
+  if (!admin || !cloud || C.demo || !match || match.testData || match.clock?.running) return false;
+  const eligible = finalStatuses.includes(match.status) || ["Agendada","Adiada"].includes(match.status);
+  return eligible && (role === "admin" || (!match.publicHidden && operatorPermissions.includes("hidePublicGames") && cloud.canOperate(match.id)));
+}
+function publicVisibilityButton(match) {
+  return canChangePublicVisibility(match)
+    ? `<button type="button" data-public-visibility="${esc(match.id)}">${match.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button>`
+    : "";
+}
 document.addEventListener("click", async (event) => {
   const control = event.target.closest("[data-public-visibility]");
-  if (!control || !admin || role !== "admin" || !cloud || C.demo) return;
+  if (!control) return;
   const match = state.matches.find((item) => item.id === control.dataset.publicVisibility);
-  if (!match || !finalStatuses.includes(match.status)) return;
+  if (!canChangePublicVisibility(match)) return;
   const hidden = !match.publicHidden;
   const description = name(match.home) + " × " + name(match.away);
   const question = hidden
-    ? "Ocultar " + description + " dos resultados e estatísticas públicas? A súmula e o histórico interno serão preservados."
+    ? "Ocultar " + description + " do painel público? A súmula e o histórico interno serão preservados."
     : "Publicar novamente o resultado de " + description + "?";
   if (!confirm(question)) return;
   control.disabled = true;
@@ -2033,7 +2043,7 @@ function matchCard(m, button = false, standby = false) {
   };
   const result = isFinished ? (sc[0] === sc[1] ? "Resultado final: empate" :
     "Vencedor: " + (sc[0] > sc[1] ? a.name : b.name)) : "";
-  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><strong class="arena-match-sport">Modalidade · ${esc(matchSportLabel(m))}</strong><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div>${standby ? '<p class="competition-name">Partida avulsa</p>' : matchCardDetails(m)}<div class="score arena-team-scoreboard">${teamScore(a, 0)}<div class="arena-score-center">${liveBall}<span class="arena-score-separator" aria-hidden="true">×</span></div>${teamScore(b, 1)}</div><div class="arena-match-outcome">${result ? `<p class="arena-match-result">${esc(result)}</p>` : ""}</div><div class="arena-match-clock">${clockMarkup(m)}</div><div class="stage-line">Etapa: ${esc(m.stage)} ${matchSportLabel(m).startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div><div class="arena-match-events">${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}</div><div class="arena-match-actions">${standby?"":timelineControl(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}${standby ? '<p class="match-meta">Data e local a definir</p>' : ""}<div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && admin && role === "admin" && cloud && !C.demo && finalStatuses.includes(m.status) ? `<details><summary>Mais ações</summary><button type="button" data-public-visibility="${esc(m.id)}">${m.publicHidden ? "Publicar novamente" : "Ocultar do painel público"}</button></details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></div></article>`;
+  return `<article id="match-card-${esc(m.id)}" class="card match-card ${isLive ? "is-live" : ""}"><div class="match-top"><strong class="arena-match-sport">Modalidade · ${esc(matchSportLabel(m))}</strong><span class="status ${isLive ? "live" : isFinished ? "is-finished" : ""}" ${isLive ? 'aria-label="Partida ao vivo"' : ""}>${isLive ? '<span class="live-status-dot" aria-hidden="true"></span>' : ""}${esc(m.status)}</span></div>${standby ? '<p class="competition-name">Partida avulsa</p>' : matchCardDetails(m)}<div class="score arena-team-scoreboard">${teamScore(a, 0)}<div class="arena-score-center">${liveBall}<span class="arena-score-separator" aria-hidden="true">×</span></div>${teamScore(b, 1)}</div><div class="arena-match-outcome">${result ? `<p class="arena-match-result">${esc(result)}</p>` : ""}</div><div class="arena-match-clock">${clockMarkup(m)}</div><div class="stage-line">Etapa: ${esc(m.stage)} ${matchSportLabel(m).startsWith("Vôlei") ? " • Pontos do set: " + points.join(" × ") : ""}</div><div class="arena-match-events">${m.sets.length ? '<p class="muted">Parciais: ' + m.sets.map((s) => s.score.join("–")).join(" / ") + "</p>" : ""}${matchEventSummary(m)}</div><div class="arena-match-actions">${standby?"":timelineControl(m)}${m.publicNotice ? `<div class="public-notice"><strong>${["Pausada", "Suspensa", "Adiada", "Cancelada"].includes(m.status) ? "Informação da partida" : "Aviso da organização"}</strong><p>${esc(m.publicNotice)}</p></div>` : ""}${standby ? '<p class="match-meta">Data e local a definir</p>' : ""}<div class="match-bottom">${button && (role === "admin" || (trainingMode && role === "operator" && !operatorPermissions.includes("gamesView")) || cloud?.canOperate(m.id)) ? `<button type="button" class="primary" data-open="${esc(m.id)}">${finalStatuses.includes(m.status) ? "Ver detalhes" : "Operar partida"} →</button>` : ""}${button && canChangePublicVisibility(m) ? `<details><summary>Mais ações</summary>${publicVisibilityButton(m)}</details>` : ""}<span class="brand-signature">WagnerBIZZA</span></div></div></article>`;
 }
 
 function liveStatusPanel(context) {
@@ -2310,6 +2320,19 @@ function cabinStandby(chooser) {
     stage:"—", score:[0,0], sets:[], roster:[], events:[], clock:M.emptyClock()};
   return `<section class="arena-cabin-standby" aria-label="Mesa de operação em espera">${operate(blankMatch, true, chooser)}</section>`;
 }
+function cabinHiddenGames() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(cabinHiddenKey()));
+    return new Set(Array.isArray(stored) ? stored : []);
+  } catch { return new Set(); }
+}
+function cabinHiddenKey() {
+  return "arena-cabin-hidden-v1:" + JSON.stringify([user?.uid || "local",role,!!C.demo]);
+}
+function cabinPickerGame(match, hidden = false) {
+  const canHide = ["Agendada","Adiada"].includes(match.status) && !match.clock?.running;
+  return `<article class="card"><button type="button" class="shortcut-primary" data-open="${esc(match.id)}" data-cabin-match><strong>${esc(name(match.home))} × ${esc(name(match.away))}</strong><small>${esc(match.sport)} · ${esc(match.competition || "Partida avulsa")} · ${esc(match.status)} · ${esc(format(match.date))}</small></button><div class="toolbar">${hidden || canHide ? `<button type="button" data-cabin-hide-game="${esc(match.id)}">${hidden ? "Mostrar na cabine" : "Ocultar só da minha cabine"}</button>` : ""}${publicVisibilityButton(match)}</div></article>`;
+}
 function cabinView() {
   const match = state.matches.find(item => item.id === selected);
   if (canUseCabin(match) && !finalStatuses.includes(match.status)) {
@@ -2318,9 +2341,28 @@ function cabinView() {
   }
   const games = state.matches.filter(item => canUseCabin(item) && !finalStatuses.includes(item.status))
     .sort((a,b) => Number(b.status === "Ao vivo") - Number(a.status === "Ao vivo") || String(a.date).localeCompare(String(b.date)));
-  return cabinStandby(`<details class="card arena-cabin-picker"><summary>Partidas disponíveis</summary><div class="toolbar"><button type="button" data-section="matches">Ver jogos</button>${canCreateMatches()?'<button type="button" data-section="createMatch">Agendar partida</button>':""}</div><div class="grid cabin-games">${games.map(item => `<button type="button" class="shortcut-primary" data-open="${esc(item.id)}" data-cabin-match><strong>${esc(name(item.home))} × ${esc(name(item.away))}</strong><small>${esc(item.sport)} · ${esc(item.status)} · ${esc(format(item.date))}</small></button>`).join("") || empty("Não há partidas disponíveis no momento. Aguarde uma partida autorizada.")}</div></details>`);
+  const hidden = cabinHiddenGames();
+  const isHidden = game => hidden.has(game.id) && ["Agendada","Adiada"].includes(game.status) && !game.clock?.running;
+  const visible = games.filter(game=>!isHidden(game));
+  const excluded = games.filter(isHidden);
+  return cabinStandby(`<details class="card arena-cabin-picker"><summary>Partidas disponíveis</summary><div class="toolbar"><button type="button" data-section="matches">Ver jogos</button>${canCreateMatches()?'<button type="button" data-section="createMatch">Agendar partida</button>':""}</div><div class="grid cabin-games">${visible.map(game=>cabinPickerGame(game)).join("") || empty("Nenhuma partida disponível nesta lista.")}</div>${excluded.length ? `<details class="card"><summary>Ocultas nesta cabine (${excluded.length})</summary><div class="grid cabin-games">${excluded.map(game=>cabinPickerGame(game,true)).join("")}</div></details>` : ""}</details>`);
+
 }
 document.addEventListener("click", event => {
+  const hide = event.target.closest("[data-cabin-hide-game]");
+  if(hide && section === "operation") {
+    const match = state.matches.find(item=>item.id===hide.dataset.cabinHideGame);
+    if(!canUseCabin(match) || !["Agendada","Adiada"].includes(match.status) || match.clock?.running) return;
+    const hidden = cabinHiddenGames();
+    if(hidden.has(match.id)) hidden.delete(match.id); else hidden.add(match.id);
+    try { localStorage.setItem(cabinHiddenKey(),JSON.stringify([...hidden])); }
+    catch { toast("Não foi possível salvar a preferência desta cabine.",true); return; }
+    render();
+    const picker = app.querySelector(".arena-cabin-picker");
+    if(picker) picker.open = true;
+    picker?.querySelector("summary")?.focus({preventScroll:true});
+    return;
+  }
   const button = event.target.closest("[data-cabin-keyboard]");
   if (!button || section !== "operation" || !selected || busy) return;
   cabinKeyboardMatch = cabinKeyboardMatch === selected ? "" : selected;
@@ -3497,8 +3539,10 @@ function updateOperationSummary(form) {
   if (!output) return;
   const matches = [...form.querySelectorAll('input[name="assignedMatches"]:checked')].map(input => input.value);
   const championships = [...form.querySelectorAll('input[name="operatedChampionships"]:checked')].map(input => input.value);
-  const count = state.matches.filter(m => matches.includes(m.id) || (m.championshipId && championships.includes(m.championshipId))).length;
+  const count = state.matches.filter(m => !m.testData && (form.elements.operateAllPermission?.checked || matches.includes(m.id) || (m.championshipId && championships.includes(m.championshipId)))).length;
   const options = [
+    ["operateAllPermission", "Operar tudo"],
+    ["hidePublicPermission", "Ocultar jogos do público"],
     ["rosterPermission", "Editar e importar equipes e jogadores"],
     ["championshipPermission", "Criar e editar campeonatos"],
     ["matchCreatePermission", "Criar jogos"],
@@ -3605,7 +3649,8 @@ function authorizationSection(id,title,description,content,count,open=false) {
 }
 function operatorAuthorizationGroups(operator,editionOptions) {
  const permissions=operator.permissions||[],checked=id=>permissions.includes(id)?"checked":"";
- const operations=authorizationSection("championships","Operar campeonatos","Marque as categorias em que o operador pode mudar placar, controlar o tempo e registrar lances. Inclui novos jogos dessas categorias.",championshipOperationPicker(operator),(operator.operatedChampionships||[]).length,true);
+ const operations=authorizationSection("championships","Operar campeonatos","Marque as categorias em que o operador pode mudar placar, controlar o tempo e registrar lances. Inclui novos jogos dessas categorias.",`<label class="confirmation-check"><input type="checkbox" name="operateAllPermission" ${checked("operateAllGames")}><span><strong>Operar tudo</strong> · Todos os jogos, modalidades e campeonatos ativos no sistema, inclusive partidas avulsas e futuras.</span></label>${championshipOperationPicker(operator)}`,(operator.operatedChampionships||[]).length + Number(permissions.includes("operateAllGames")),true);
+ const publication=authorizationSection("publication","Ocultar jogos do público","Vale apenas para jogos que o operador já pode operar, antes do início ou após o encerramento. A republicação é do administrador.",`<label class="confirmation-check"><input type="checkbox" name="hidePublicPermission" ${checked("hidePublicGames")}><span>Permitir ocultar jogos do painel público</span></label>`,Number(permissions.includes("hidePublicGames")));
  const matches=authorizationSection("matches","Operar jogos avulsos","Marque aqui os jogos que quer liberar um a um. Um jogo já liberado pelo campeonato dispensa outra marcação.",operatorMatchPicker(operator),(operator.matches||[]).length);
  const history=authorizationSection("history","Anular lances","Libera anulações com motivo em jogos abertos que o operador já pode operar. O lance original continua no histórico.",`<label class="confirmation-check"><input type="checkbox" name="historyCorrectPermission" ${checked("historyCorrections")}><span>Anular gols, pontos, cartões, faltas, substituições e pedidos de tempo.</span></label>`,permissions.includes("historyCorrections")?1:0);
  const sportCorrection=authorizationSection("matchSportCorrection","Corrigir modalidade","Libera corrigir de Futebol para Futsal em partidas encerradas que o operador já pode operar. Exige informar o motivo.",`<label class="confirmation-check"><input type="checkbox" name="matchSportCorrectionPermission" ${checked("correctMatchSport")}><span>Corrigir modalidade dos jogos liberados.</span></label>`,permissions.includes("correctMatchSport")?1:0);
@@ -3613,7 +3658,7 @@ function operatorAuthorizationGroups(operator,editionOptions) {
   `<label class="confirmation-check"><input type="checkbox" name="phaseEditPermission" ${checked("editMatchPhases")}><span>Mudar fase, grupo, chave ou rodada.</span></label>`,permissions.includes("editMatchPhases")?1:0);
  const registrations=authorizationSection("records","Fazer cadastros","Cada caixa libera um cadastro. Para operar um jogo criado, marque o jogo ou seu campeonato nas opções acima.",`<label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${checked("rosters")}><span>Criar, editar e importar equipes e jogadores.</span></label><label class="confirmation-check"><input type="checkbox" name="championshipPermission" ${checked("championships")}><span>Criar e editar campeonatos e temporadas.</span></label><label class="confirmation-check"><input type="checkbox" name="matchCreatePermission" ${checked("matchesCreate")}><span>Criar novos jogos.</span></label>`,permissions.filter(id=>["rosters","championships","matchesCreate"].includes(id)).length);
  const viewing=authorizationSection("view","Só consultar jogos","As opções abaixo liberam consulta. Para registrar lances, use Operar campeonatos ou Operar jogos avulsos.",`<fieldset><legend>Campeonatos para consultar</legend>${editionOptions}<label class="confirmation-check"><input type="checkbox" name="gamesViewPermission" ${checked("gamesView")}><span>Consultar todos os jogos publicados.</span></label></fieldset>`,(operator.followedEditions||[]).length+(permissions.includes("gamesView")?1:0));
- return `<div class="toolbar"><button type="button" data-permissions-expand="true">Expandir autorizações</button><button type="button" data-permissions-expand="false">Recolher autorizações</button></div>${operations}${matches}${history}${sportCorrection}${phases}${registrations}${viewing}`;
+ return `<div class="toolbar"><button type="button" data-permissions-expand="true">Expandir autorizações</button><button type="button" data-permissions-expand="false">Recolher autorizações</button></div>${operations}${matches}${publication}${history}${sportCorrection}${phases}${registrations}${viewing}`;
 }
 document.addEventListener("click",event=>{
  const button=event.target.closest("[data-permissions-expand]");if(!button||role!=="admin")return;
@@ -3649,7 +3694,7 @@ function usersView() {
     permissions.includes("championships") && "Campeonatos",
     permissions.includes("matchesCreate") && "Novas partidas",
   ].filter(Boolean).join(", ") || "Nenhum";
-  const permissionNames={rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos",historyCorrections:"Anular lances com justificativa",editMatchPhases:"Editar grupos e chaves",correctMatchSport:"Corrigir modalidade dos jogos liberados"};
+  const permissionNames={hidePublicGames:"Ocultar jogos do público",operateAllGames:"Operar tudo",rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos",historyCorrections:"Anular lances com justificativa",editMatchPhases:"Editar grupos e chaves",correctMatchSport:"Corrigir modalidade dos jogos liberados"};
   const accessAuditRows=(state.accessAudit||[]).slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
   const accessAuditDate=value=>value?.toDate?.().toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})||"Aguardando confirmação do servidor";
   const accessAuditValue=(key,value)=>{
@@ -3735,7 +3780,7 @@ document.addEventListener("submit", async (e) => {
           toast(user?.emailVerified ? "Solicitação registrada. Aguarde a aprovação do administrador principal." : "Solicitação registrada. Confira a confirmação enviada ao seu e-mail.");
         } else {
           await cloud.manageUser({userId:d.userId, access:d.access,
-            matches: new FormData(f).getAll("assignedMatches"), followedEditions: new FormData(f).getAll("followedEditions"), operatedChampionships: new FormData(f).getAll("operatedChampionships"), permissions:[...(f.elements.rosterPermission.checked?["rosters"]:[]),...(f.elements.matchCreatePermission.checked?["matchesCreate"]:[]),...(f.elements.championshipPermission.checked?["championships"]:[]),...(f.elements.gamesViewPermission.checked?["gamesView"]:[]),...(f.elements.historyCorrectPermission.checked?["historyCorrections"]:[]),...(f.elements.phaseEditPermission.checked?["editMatchPhases"]:[]),...(f.elements.matchSportCorrectionPermission.checked?["correctMatchSport"]:[])], reason:d.reason});
+            matches: new FormData(f).getAll("assignedMatches"), followedEditions: new FormData(f).getAll("followedEditions"), operatedChampionships: new FormData(f).getAll("operatedChampionships"), permissions:[...(f.elements.hidePublicPermission.checked?["hidePublicGames"]:[]),...(f.elements.operateAllPermission.checked?["operateAllGames"]:[]),...(f.elements.rosterPermission.checked?["rosters"]:[]),...(f.elements.matchCreatePermission.checked?["matchesCreate"]:[]),...(f.elements.championshipPermission.checked?["championships"]:[]),...(f.elements.gamesViewPermission.checked?["gamesView"]:[]),...(f.elements.historyCorrectPermission.checked?["historyCorrections"]:[]),...(f.elements.phaseEditPermission.checked?["editMatchPhases"]:[]),...(f.elements.matchSportCorrectionPermission.checked?["correctMatchSport"]:[])], reason:d.reason});
           managedUserId = "";
           toast("Permissões salvas e registradas no histórico.");
         }
@@ -5348,7 +5393,7 @@ function operatorMonitor(){
  if(role!=="admin")return "";
  const people=(state.users||[]).filter(u=>!u.deleted && u.id!==(cloud?.mainUID||user?.uid) && !cloud?.isAdministratorUID?.(u.id));
  const operators=people.filter(u=>u.role==="operator"&&u.enabled!==false),pending=people.filter(u=>u.role==="pending");
- const assigned=new Set(state.matches.filter(m=>operators.some(u=>(u.matches||[]).includes(m.id)||(m.championshipId&&(u.operatedChampionships||[]).includes(m.championshipId)))).map(m=>m.id));
+ const assigned=new Set(state.matches.filter(m=>operators.some(u=>((u.permissions||[]).includes("operateAllGames")&&!m.testData)||(u.matches||[]).includes(m.id)||(m.championshipId&&(u.operatedChampionships||[]).includes(m.championshipId)))).map(m=>m.id));
  const operational=state.matches.filter(m=>!["Encerrada","Homologada","Cancelada"].includes(m.status));
  const unassigned=operational.filter(m=>!assigned.has(m.id));
  return `<section class="card"><span class="tag">ADMINISTRAÇÃO</span><h2>Operadores e distribuição de partidas</h2><p>Acompanhe as aprovações e quem tem autorização em cada jogo. “Aprovado” indica permissão de acesso; não indica que a pessoa esteja conectada neste momento.</p><div class="admin-metrics"><button type="button" class="card overview-shortcut" data-section="users"><strong>${operators.length}</strong><span>Operadores aprovados</span></button><button type="button" class="card overview-shortcut" data-review-account-requests><strong>${pending.length}</strong><span>Solicitações pendentes</span></button><button type="button" class="card overview-shortcut" data-unassigned-games><strong>${unassigned.length}</strong><span>Partidas em aberto sem operador</span></button></div><button type="button" data-section="users">Gerenciar acessos e atribuições</button>${table(["Pessoa","E-mail","Situação do acesso","Partidas existentes atribuídas"],people.map(u=>tr([u.name||"Operador",u.email||"Não informado",u.role==="pending"?"Aguardando aprovação":u.role==="operator"?(u.enabled===false?"Bloqueado":"Aprovado"):"Revisar perfil",state.matches.filter(m=>(u.matches||[]).includes(m.id)||(m.championshipId&&(u.operatedChampionships||[]).includes(m.championshipId))).map(m=>`${name(m.home)} × ${name(m.away)} (${m.status})`).join("; ")||"Nenhuma"]))) }${people.length?"":empty(C.demo?"A demonstração não contém contas reais de operadores.":"Nenhum operador cadastrado.")}<h3>Relatórios e documentos</h3><p class="muted">A visualização de operadores continua atualizando em tempo real. Para gerar documentos administrativos, escolha o relatório desejado:</p><div class="toolbar"><button type="button" data-section="matchSheets">Súmulas</button><button type="button" data-section="reports">Relatórios esportivos</button><button type="button" data-section="auditReports">Relatório geral de alterações</button><button type="button" data-section="certificates">Certificados</button></div></section><section class="card" id="arenaUnassignedGames" tabindex="-1"><h3>Partidas em aberto sem operador atribuído</h3>${unassigned.length?table(["Partida","Modalidade","Situação","Local"],unassigned.map(m=>tr([name(m.home)+" × "+name(m.away),m.sport,m.status,m.place||"A definir"]))):empty("Todas as partidas em aberto possuem operador aprovado atribuído, ou não há partidas em aberto.")}<p class="muted">O administrador principal continua autorizado a operar todas as partidas.</p></section>`;

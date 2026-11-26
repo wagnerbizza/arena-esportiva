@@ -20,7 +20,7 @@ export async function connectSpark({
     if (!authorized()) return false;
     const match = state.matches.find(item => item.id === id);
     if (!match || match.testData) return false;
-    if ((profile?.matches || []).includes(id)) return true;
+    if (canOperateAllGames() || (profile?.matches || []).includes(id)) return true;
     return Boolean(match?.championshipId &&
       (profile?.operatedChampionships || []).includes(match.championshipId));
   }
@@ -32,6 +32,7 @@ export async function connectSpark({
   const canManageRosters = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("rosters"));
   const canCreateMatches = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("matchesCreate"));
   const canManageChampionships = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("championships"));
+  const canOperateAllGames = () => authorized() && (profile?.permissions || []).includes("operateAllGames");
   const canViewAllGames = () => isOwner() || (authorized() && Array.isArray(profile?.permissions) && profile.permissions.includes("gamesView"));
   const version = "11.0.2";
   const [fb, auth, F] = await Promise.all([
@@ -172,7 +173,7 @@ export async function connectSpark({
       };
       const watchAssignedChampionship = id => {
         if(typeof id!=="string" || !id || id.includes("/") || championshipWatches.has(id))return;
-        if(!canManageChampionships() && !(profile?.operatedChampionships || []).includes(id))return;
+        if(!canOperateAllGames() && !canManageChampionships() && !(profile?.operatedChampionships || []).includes(id))return;
         championshipWatches.add(id);
         // Leitura pontual também contempla cadastros antigos sem o campo testData.
         watchDoc("championships/"+id,row=>{
@@ -213,6 +214,12 @@ export async function connectSpark({
           }, [F.where("competition", "==", edition)]);
         }
       }
+      if(canOperateAllGames()) {
+        watchCollection("matches", games => {
+          championshipGames.set("",games);
+          publishOperatorGames();
+        }, [F.where("testData","==",false)]);
+      }
       for (const championshipId of [...new Set(profile?.operatedChampionships || [])]) {
         if(canEditMatchPhases(championshipId)){
           const phaseEpoch=dataEpoch;
@@ -224,6 +231,7 @@ export async function connectSpark({
             publish();
           },()=>{}));
         }
+        if(canOperateAllGames()) continue;
         watchCollection("matches", games => {
           championshipGames.set(championshipId,games);
           publishOperatorGames();
@@ -772,9 +780,10 @@ export async function connectSpark({
           if((before.archived||false)===action.archived)throw Error("A equipe já está nesta situação.");
           next={...before,archived:action.archived};detail=M.detail(action.archived?"arquivamento":"reativação");detail.reason=String(action.reason).trim();detail.text=action.archived?"Equipe retirada de novos cadastros e jogos":"Equipe disponível novamente";
         } else if (action.type === "matchVisibility") {
-          if (!isOwner()) throw Error("Somente o administrador principal controla a publicação.");
-          if (!before || !["Encerrada", "Homologada", "Cancelada"].includes(before.status))
-            throw Error("Selecione uma partida finalizada.");
+          if (!isOwner() && (!canOperateMatch(target) || !(profile?.permissions || []).includes("hidePublicGames") || action.hidden !== true))
+            throw Error("Sua conta não tem autorização para alterar esta publicação.");
+          if (!before || before.testData || before.clock?.running || !["Agendada","Adiada","Encerrada","Homologada","Cancelada"].includes(before.status))
+            throw Error("A visibilidade só pode mudar antes do jogo começar ou após o encerramento.");
           const current = before.publicHidden === true;
           if (typeof action.hidden !== "boolean" || current === action.hidden)
             throw Error("A visibilidade já mudou. Atualize a lista.");
@@ -1087,7 +1096,7 @@ export async function connectSpark({
       const before = snap.data();
       if (before.deleted === true) throw Error("Este operador foi removido e está disponível apenas para consulta.");
       const granted=access==="active"?[...new Set(permissions===undefined?(before.permissions||[]):permissions)]:[];
-      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView","historyCorrections","editMatchPhases","correctMatchSport"].includes(p)))throw Error("Permissão específica inválida.");
+      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView","historyCorrections","editMatchPhases","correctMatchSport","operateAllGames","hidePublicGames"].includes(p)))throw Error("Permissão específica inválida.");
       const editions = access === "active"
         ? [...new Set(followedEditions ?? before.followedEditions ?? [])] : [];
       const known = new Set(state.championships.map((c) => c.name + " • " + c.season));
