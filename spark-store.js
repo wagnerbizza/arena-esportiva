@@ -47,6 +47,26 @@ export async function connectSpark({
     authentication = auth.getAuth(app),
     M = window.SparkModel,
     D = window.Domain;
+  let fanConnection, fanLogin;
+  async function fanSession() {
+    if (!fanConnection) {
+      const fanApp = fb.initializeApp(config.firebase,"arena-torcida");
+      const db = F.getFirestore(fanApp);
+      const account = auth.getAuth(fanApp);
+      if (config.emulators?.enabled) {
+        const host = config.emulators.host || "127.0.0.1";
+        F.connectFirestoreEmulator(db,host,config.emulators.firestorePort || 8080);
+        auth.connectAuthEmulator(account,`http://${host}:${config.emulators.authPort || 9099}`,{disableWarnings:true});
+      }
+      fanConnection = {db,account};
+    }
+    const {db,account} = fanConnection;
+    if (!fanLogin) fanLogin = (async () => {
+      await account.authStateReady();
+      return (account.currentUser || (await auth.signInAnonymously(account)).user).uid;
+    })().catch(error=>{fanLogin = null;throw error;});
+    return {db,uid:await fanLogin};
+  }
   authentication.languageCode = "pt-BR";
   const emulator = config.emulators;
   if (emulator?.enabled) {
@@ -1373,6 +1393,40 @@ export async function connectSpark({
       if(!privateView||!match||!canEditMatchPhases(match.championshipId))throw Error("Sem autorização para consultar esta partida.");
       const snap=await F.getDocs(F.query(F.collection(database,"arenaMatchPhases",matchId,"history"),F.where("championshipId","==",match.championshipId)));
       return snap.docs.map(doc=>doc.data()).sort((a,b)=>b.updatedAt.toMillis()-a.updatedAt.toMillis()).slice(0,20);
+    },
+    async recordAudiencePresence() {
+      if (privateView) return;
+      const { db, uid } = await fanSession();
+      await F.setDoc(F.doc(db,"publicAudience",uid),{lastSeen:F.serverTimestamp()});
+    },
+    async audienceCounts() {
+      if (!authorized()) throw Error("Consulta reservada à organização.");
+      const audience = F.collection(database,"publicAudience");
+      const since = minutes => F.query(audience,F.where("lastSeen",">=",F.Timestamp.fromMillis(Date.now()-minutes*60000)));
+      const [total,day,now] = await Promise.all([audience,since(1440),since(5)].map(async query =>
+        (await F.getCountFromServer(query)).data().count));
+      return {total,day,now};
+    },
+    async saveFanFavorite(teamId) {
+      if (privateView) throw Error("Use o painel público para favoritar.");
+      const { db, uid } = await fanSession();
+      const ref = F.doc(db,"fanFavorites",uid);
+      if (teamId) await F.setDoc(ref,{teamId});
+      else await F.deleteDoc(ref);
+    },
+    async fanFavoriteCounts() {
+      if (!authorized()) throw Error("Consulta reservada à equipe de organização.");
+      const teams = await F.getDocs(F.collection(database,"publicTeams"));
+      const rows = [];
+      for (let offset = 0; offset < teams.docs.length; offset += 10) {
+        const batch = await Promise.all(teams.docs.slice(offset,offset+10).map(async team => {
+          const query = F.query(F.collection(database,"fanFavorites"),F.where("teamId","==",team.id));
+          const count = (await F.getCountFromServer(query)).data().count;
+          return {name:team.data().name,count};
+        }));
+        rows.push(...batch);
+      }
+      return rows.filter(row=>row.count>0).sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name,"pt-BR"));
     },
     watchPublicTeamProfile(id,onChange) {
       return F.onSnapshot(F.doc(database,"publicTeamProfiles",id),snapshot=>onChange(snapshot.data() || null),()=>onChange(null));

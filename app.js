@@ -7,6 +7,34 @@ const D = window.Domain,
   C = trainingMode ? { ...window.CONFIG, demo: true } : window.CONFIG,
   M = window.SparkModel,
   admin = document.body.dataset.admin === "true";
+let lastAudiencePing = 0;
+let audienceRequest = null;
+async function pingAudience() {
+ if (admin || C.demo || !cloud || document.hidden || Date.now() - lastAudiencePing < 120000) return;
+ lastAudiencePing = Date.now();
+ try { await cloud.recordAudiencePresence(); } catch {}
+}
+function audienceView() {
+ return '<section class="card"><h2>Audiência do painel público</h2><p>Contagem por perfil de navegador. Assistindo agora considera atividade nos últimos 5 minutos. As medições começam quando este recurso é publicado.</p><div class="toolbar"><button type="button" data-refresh-audience>Atualizar audiência</button></div><div data-audience-results aria-live="polite"><p>Carregando audiência…</p></div></section>';
+}
+async function refreshAudience() {
+ if (!admin || C.demo || !["admin","operator"].includes(role) || section !== "audience" || !cloud || document.hidden) return;
+ const session = user?.uid;
+ if (!audienceRequest) audienceRequest = cloud.audienceCounts().finally(()=>{audienceRequest=null;});
+ try {
+  const {total,day,now} = await audienceRequest;
+  const output = $("[data-audience-results]");
+  if (!output || user?.uid !== session || !["admin","operator"].includes(role)) return;
+  const fmt = new Intl.NumberFormat("pt-BR");
+  output.innerHTML = `<div class="grid">${[[now,"Assistindo agora"],[day,"Visitantes nas últimas 24 horas"],[total,"Visitantes desde a ativação"]].map(([count,label])=>`<div class="card"><strong>${fmt.format(count)}</strong><div>${label}</div></div>`).join("")}</div><p class="muted">Atualizado às ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}.</p>`;
+ } catch {
+  const output = $("[data-audience-results]");
+  if(output && user?.uid === session) output.textContent = "Não foi possível consultar a audiência agora.";
+ }
+}
+document.addEventListener("click",event=>{if(event.target.closest("[data-refresh-audience]"))void refreshAudience();});
+document.addEventListener("visibilitychange",()=>{void pingAudience();void refreshAudience();});
+setInterval(()=>{void pingAudience();void refreshAudience();},60000);
 const $ = (s) => document.querySelector(s),
   esc = (v) =>
     String(v ?? "").replace(
@@ -1832,7 +1860,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=ficha-publica-1");
+    const { connectSpark } = await import("./spark-store.js?v=audiencia-publica-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -1846,6 +1874,7 @@ async function boot() {
         if(user?.uid!==u?.uid || r!=="admin"){systemCheckAbort?.abort();systemCheckReport=null;}
         accessStatus = access.status || "loading";
         if(user?.uid!==u?.uid || r!=="admin"){credentialRows=[];credentialLoaded=false;testSelection.clear();testPlan=null;testBackup=false;}
+        if (user?.uid !== u?.uid || role !== r) favoriteCounts = null;
         user = u;
         role = r;
         operatorPermissions = Array.isArray(access.permissions)?access.permissions:[];
@@ -1858,6 +1887,7 @@ async function boot() {
       onError: (e) => toast(admin?e.message:"Não foi possível atualizar os resultados. Confira a conexão.", true),
       onConnection: setConnectionStatus,
     });
+    void pingAudience();
     render();
   } catch (e) {
     setConnectionStatus("conexão indisponível");
@@ -2110,13 +2140,14 @@ function render() {
     return;
   }
   // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
-  if (role !== "admin" && !["overview", "matches", "operation", "reportCenter", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canPrepareRegistrationSheets()?["registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[])].includes(section)) {
+  if (role !== "admin" && !["overview", "matches", "operation", "reportCenter", "audience", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canPrepareRegistrationSheets()?["registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[])].includes(section)) {
     section = "overview";
     selected = "";
   }
   if (selected && !state.matches.some((m) => m.id === selected)) selected = "";
   const sections = [
     ["overview", "Início"],
+    ["audience", "Audiência"],
     ["championships", "Campeonatos"],
     ["standings", "Classificação"],
     ["teams", "Equipes"],
@@ -2147,6 +2178,7 @@ function render() {
   ];
   const pageControls = arenaPageControls();
   app.innerHTML = `${pageControls}${locationTrail()}${workspaceNavigation(sections)}${floatingGameClock()}<div class="sectionhead admin-heading noprint" data-custom-area="title:${esc(section)}"><div><span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span>${gameBarSettingsButton("title:"+section)}</div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel():""}${view()}</div>${relatedArenaScreens()}`;
+  if (section === "audience") void refreshAudience();
   const overviewTools = app.querySelector(".arena-overview-preferences");
   if (openOverviewTools && overviewTools) overviewTools.open = true;
   if (openOverviewShortcutEditor && overviewTools) showShortcutEditor();
@@ -2218,7 +2250,8 @@ function view() {
   if (section === "account") return accountView();
   if (section === "championships" && canManageChampionships()) return championshipsView();
   if (section === "users" && role === "admin") return usersView();
-  if (section === "overview")return overviewMatchView();
+  if (section === "audience")return C.demo ? empty("A audiência está disponível no painel conectado.") : audienceView();
+  if (section === "overview")return overviewMatchView() + fanFavoritePanel();
   if (section === "teams") return teamsDirectoryView();
   if (section === "players" && !playerFormOpen)
     return listPanel("players");
@@ -5217,7 +5250,7 @@ document.addEventListener("click",async event=>{
 
 // 21 — Organização da central. Permissões continuam validadas pelo Firebase.
 const workspaceDefinitions=[
- {id:"games",title:"Jogos",intro:"Operação, agenda e resultados",sections:["overview","operation","matches","createMatch","standings"]},
+ {id:"games",title:"Jogos",intro:"Operação, agenda e resultados",sections:["overview","operation","matches","createMatch","standings","audience"]},
  {id:"records",title:"Cadastros",intro:"Equipes, jogadores e importação",sections:["teams","players","imports"]},
  {id:"championships",title:"Campeonatos",intro:"Temporadas e inscrições",sections:["championships","registrationSheets"]},
  {id:"reports",title:"Relatórios",intro:"Súmulas, resultados e auditoria",sections:["reportCenter","matchSheets","reports","auditReports","accessHistory"]},
@@ -5227,7 +5260,7 @@ const workspaceDefinitions=[
  {id:"administration",title:"Acessos",intro:"Permissões e operadores",sections:["users","monitor"]},
  {id:"maintenance",title:"Backups e suporte",intro:"Guias, testes e recuperação",sections:["systemCheck","documentation","testData","cleanup"]}
 ];
-function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","operation","matches","reportCenter","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
+function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","operation","matches","reportCenter","audience","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
 function publicPanelURL(edition="") {
  const url=new URL("./index.html",location.href);
  if(trainingMode)url.searchParams.set("demonstracao","1");
@@ -5491,6 +5524,60 @@ function publicHub(){
  const tabs=[["active","Jogos atuais"],["live","Ao vivo"],["schedule","Agenda"],["results","Resultados"],["teams","Equipes"],["standings","Classificação"],["fun","Diversão"],["news","Notícias"]];
  return `${publicStatistics()}${publicSportSummary()}<nav class="public-navigation" aria-label="Conteúdo do painel público">${tabs.map(([id,label])=>`<button type="button" data-public-area="${id}" class="${id===publicArea?"active":""}" ${id===publicArea?'aria-current="page"':""}>${label}</button>`).join("")}</nav><div id="publicHubContent">${publicHubContent()}</div>`;
 }
+const fanFavoriteKey = "arena-torcida-favorita-v1";
+let favoriteTeam = "", favoriteBusy = false, favoriteCounts = null, favoriteCountsBusy = false;
+try { favoriteTeam = localStorage.getItem(fanFavoriteKey) || ""; } catch {}
+function fanFavoriteButton(id) {
+ const chosen = favoriteTeam === id;
+ return `<button type="button" data-fan-favorite="${esc(id)}" aria-pressed="${chosen}" ${favoriteBusy?"disabled":""}>${chosen?"★ Equipe favorita":"☆ Favoritar equipe"}</button>`;
+}
+function fanFavoriteResults() {
+ if (favoriteCountsBusy) return "<p>Consultando favoritos…</p>";
+ if (favoriteCounts === null) return "";
+ return favoriteCounts.length ? table(["Equipe","Favoritos"],favoriteCounts.map(row=>tr([row.name,row.count])),false)
+   : "<p>Nenhuma equipe recebeu favoritos ainda.</p>";
+}
+function fanFavoritePanel() {
+ return C.demo ? "" : `<section class="card"><h2>Favoritas da torcida</h2><p>Consulte quantos visitantes escolheram cada equipe.</p><button type="button" data-fan-counts ${favoriteCountsBusy?"disabled":""}>${favoriteCounts===null?"Consultar favoritos":"Atualizar consulta"}</button><div id="fanFavoriteResults" aria-live="polite">${fanFavoriteResults()}</div></section>`;
+}
+document.addEventListener("click",async event=>{
+ const button = event.target.closest("[data-fan-favorite],[data-fan-counts]");
+ if(!button || !cloud || C.demo) return;
+ if (button.hasAttribute("data-fan-favorite")) {
+  if (admin || favoriteBusy) return;
+  const id = button.dataset.fanFavorite;
+  const next = favoriteTeam === id ? "" : id;
+  favoriteBusy = true;
+  button.disabled = true;
+  try {
+   await cloud.saveFanFavorite(next);
+   favoriteTeam = next;
+   try { localStorage.setItem(fanFavoriteKey,next); } catch {}
+   toast(next ? "Equipe marcada como favorita." : "Favorito retirado.");
+  } catch(error) { toast("Não foi possível salvar o favorito. Tente novamente.",true); }
+  finally {
+   favoriteBusy = false;
+   for (const control of app.querySelectorAll("[data-fan-favorite]")) {
+    const chosen = favoriteTeam === control.dataset.fanFavorite;
+    control.setAttribute("aria-pressed",String(chosen));
+    control.textContent = chosen ? "★ Equipe favorita" : "☆ Favoritar equipe";
+    control.disabled = false;
+   }
+  }
+ } else if (admin && ["admin","operator"].includes(role) && !favoriteCountsBusy) {
+  const refresh = () => {
+   const output = $("#fanFavoriteResults");
+   if (output) output.innerHTML = fanFavoriteResults();
+   const control = $("[data-fan-counts]");
+   if (control) control.disabled = favoriteCountsBusy;
+  };
+  favoriteCountsBusy = true;
+  refresh();
+  try { favoriteCounts = await cloud.fanFavoriteCounts(); }
+  catch(error) { toast("Não foi possível consultar os favoritos.",true); }
+  finally { favoriteCountsBusy = false; refresh(); }
+ }
+});
 const openPublicTeams = new Set();
 const publicTeamProfiles = new Map();
 const publicTeamProfileWatches = new Map();
@@ -5594,6 +5681,7 @@ function publicTeamsPanel() {
   return `<details class="card public-team-card" data-public-team="${esc(id)}" ${openPublicTeams.has(id)?"open":""}>
    <summary>${team?.badge ? badge(team) : ""}<span><strong>${esc(name(id))}</strong><small>${esc(count)}</small></span><span class="public-team-chevron" aria-hidden="true">⌄</span></summary>
    <div class="public-team-body">
+   ${team && !C.demo ? `<div class="toolbar">${fanFavoriteButton(id)}</div>` : ""}
    <div class="toolbar" role="group" aria-label="Detalhes da equipe">${[["club","Clube"],["roster","Elenco"],["groups","Competições e grupos"],["history","Jogos disputados"],["venues","Locais"]].map(([key,label])=>`<button type="button" data-public-team-tab="${key}" aria-pressed="${key===activeTab}">${label}</button>`).join("")}</div>
    ${panel("club",`<dl><div><dt>Sigla</dt><dd>${esc(team?.short || "Não informada")}</dd></div><div><dt>Modalidades</dt><dd>${esc(sports.join(" · ") || "A definir")}</dd></div><div><dt>Categoria</dt><dd>${esc(team?.category || "Não informada")}</dd></div></dl>`)}
    ${panel("roster",`<div data-public-team-roster>${publicTeamRoster(id)}</div>`)}
@@ -6314,6 +6402,7 @@ const navigationDescriptions={
  preferences:{label:"Configurações pessoais",description:"Aparência, leitura e atalhos deste navegador.",keywords:"preferencias configuracoes tema leitura atalhos favoritos"},
  registrationSheets:{label:"Fichas de inscrição",description:"Baixar ou imprimir fichas dos campeonatos autorizados.",keywords:"ficha inscricao campeonato participantes documentos imprimir"},
  accessHistory:{label:"Histórico de permissões",description:"Consultar registros de autorização e alterações de acesso dos operadores.",keywords:"relatorio auditoria permissoes acesso registro operadores historico"},
+ audience:{label:"Audiência",description:"Acompanhar visitas ao painel público.",keywords:"visitantes público estatísticas assistindo agora"},
  overview:{label:"Início",description:"Veja os jogos de hoje e os resultados.",keywords:"inicio home encerradas finalizadas atuais próximas"},
  matches:{label:"Acompanhar jogos",description:"Consultar jogos próximos, ao vivo e encerrados; operar somente os atribuídos.",keywords:"gol gols ponto pontos iniciar tempo relogio pausa intervalo etapa cartao cartões faltas substituicoes var estorno anular arbitragem juiz local futebol basquete volei"},
  createMatch:{label:"Cadastrar partida",description:"Programar uma nova partida (se autorizado).",keywords:"criar cadastrar programar nova jogo partida"},
