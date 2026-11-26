@@ -198,7 +198,7 @@ function listPanel(kind) {
   controls += filterSelect(kind, "order", "Ordenar", [["az","Nome A–Z"],["za","Nome Z–A"]], kind === "matches" ? "Ordem por horário" : "Nome A–Z (padrão)");
   const groups = kind === "matches" ? `<div class="list-groups" aria-label="Visualização das partidas">${[["active", "Em andamento e próximas"], ["finished", "Finalizadas"], ["all", "Todas"]].map(([v, title]) => `<button type="button" data-list-group="${v}" aria-pressed="${f.group === v}" class="${f.group === v ? "primary" : ""}">${title}</button>`).join("")}</div>` : "";
   const actions=kind==="teams"?`<button type="button" class="primary arena-icon-action" data-new-team-form>${arenaIcon("add")} Nova equipe</button><button type="button" class="arena-icon-action" data-section="imports">${arenaIcon("upload")} Importar equipes</button>`:kind==="players"?`<button type="button" class="primary arena-icon-action" data-player-form="open">${arenaIcon("add")} Cadastrar jogador</button><button type="button" data-section="imports" class="arena-icon-action">${arenaIcon("upload")} Importar jogadores</button>`:canCreateMatches()?'<button type="button" class="primary" data-section="createMatch">Cadastrar partida</button>':"";
-  return `<section class="card list-filters" data-custom-area="list:${kind}" aria-label="Filtros de ${titles[kind]}"><div class="arena-list-heading"><h2>${titles[kind]}</h2>${gameBarSettingsButton("list:"+kind)}</div>${actions?`<div class="toolbar">${actions}</div>`:""}${groups}${kind === "teams" ? participantDirectory() : ""}<div class="list-controls">${controls}<button type="button" data-list-reset="${kind}">Limpar filtros</button></div><p class="muted list-count" id="list-count-${kind}" role="status">${listCount(kind)}</p>${kind === "matches" ? '<small>Finalizadas inclui encerradas, homologadas e canceladas. Adiadas e suspensas continuam em andamento e próximas.</small>' : ""}<div id="list-results-${kind}" class="arena-record-results ${kind === "players" ? "tablewrap-list" : "grid"}">${listResults(kind)}</div></section>`;
+  return `<section class="card list-filters" data-custom-area="list:${kind}" aria-label="Filtros de ${titles[kind]}"><div class="arena-list-heading"><h2>${titles[kind]}</h2>${gameBarSettingsButton("list:"+kind)}</div>${actions?`<div class="toolbar list-registration-actions">${actions}</div>`:""}${groups}${kind === "teams" ? participantDirectory() : ""}<div class="list-controls">${controls}<button type="button" data-list-reset="${kind}">Limpar filtros</button></div><p class="muted list-count" id="list-count-${kind}" role="status">${listCount(kind)}</p>${kind === "matches" ? '<small>Finalizadas inclui encerradas, homologadas e canceladas. Adiadas e suspensas continuam em andamento e próximas.</small>' : ""}<div id="list-results-${kind}" class="arena-record-results ${kind === "players" ? "tablewrap-list" : "grid"}">${listResults(kind)}</div></section>`;
 }
 function listCount(kind) {
   return `${filteredRecords(kind).length} de ${listSource(kind).length} ${ { teams: "equipes", players: "jogadores", matches: "partidas" }[kind]} nesta visualização`;
@@ -2373,11 +2373,15 @@ document.addEventListener("click", event => {
 document.addEventListener("click", event => {
   if (!event.target.closest("[data-complete-match-notes]") || role !== "admin") return;
   const notes = app.querySelector("#match-sheet-notes");
+  const fold = notes?.closest('[data-op-panel="notes"]')?.querySelector('[data-op-fold][aria-expanded="false"]');
+  fold?.click();
   for (let node = notes?.parentElement; node && node !== app; node = node.parentElement) {
     if (node.tagName === "DETAILS") node.open = true;
   }
-  notes?.focus({preventScroll:true});
-  scrollBelowPinnedCards(notes);
+  requestAnimationFrame(() => {
+    notes?.focus({preventScroll:true});
+    scrollBelowPinnedCards(notes, "instant");
+  });
 });
 document.addEventListener("keydown", event => {
   if (section !== "operation" || !selected || cabinKeyboardMatch !== selected || busy ||
@@ -4183,6 +4187,14 @@ document.addEventListener("click", async (e) => {
       selected = "";
       pendingImport = null;
       render();
+      if (section === "createMatch") {
+        requestAnimationFrame(() => {
+          const form = app.querySelector("#match");
+          if (!form) return;
+          form.querySelector("select, input:not([type=hidden])")?.focus({preventScroll:true});
+          scrollBelowPinnedCards(form, "instant");
+        });
+      }
       if (section === "overview" && !b.closest("#arenaSidebar")) {
         window.scrollTo({top:0, behavior:"instant"});
         app.querySelector(".admin-heading h1")?.focus({preventScroll:true});
@@ -6272,6 +6284,7 @@ boot();
 // 30 — Navegação intencional: posiciona somente após abrir uma função.
 // Não acompanha snapshots, cronômetro, placar, filtros nem gravações de lances.
 function navigationDestination(control){
+ if(control.dataset.section === "createMatch")return null;
  if (control.dataset.section === "operation" || control.hasAttribute("data-cabin-match"))
    return "[data-op-score-anchor]";
  if (control.dataset.section === "overview" && !control.closest("#arenaSidebar")) return null;

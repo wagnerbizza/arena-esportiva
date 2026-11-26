@@ -2902,3 +2902,5 @@ button.arena-op-settings-trigger {
   #publicMatches .arena-match-outcome:empty,
   #publicMatches .arena-match-events:empty { display: block; }
 }
+
+.list-filters .list-registration-actions + .list-groups { margin-block-start: 14px; }
