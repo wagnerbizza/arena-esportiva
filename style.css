@@ -2929,3 +2929,30 @@ button.arena-op-settings-trigger {
 @media (hover:hover) {
   .public-team-card:hover { border-color:var(--accent); }
 }
+
+/* Painel público: dimensões consistentes mesmo quando os rótulos quebram. */
+.public-metrics,
+.public-navigation {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  align-items: stretch;
+  gap: 12px;
+}
+.public-metrics .metric-shortcut {
+  align-self: stretch;
+  align-content: start;
+  min-width: 0;
+}
+.public-navigation > button {
+  align-self: stretch;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .public-metrics,
+  .public-navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
