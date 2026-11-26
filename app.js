@@ -66,7 +66,8 @@ function updateMatchNotices() {
 }
 
 let state = D.fresh(),
-  section = admin && trainingMode && new URLSearchParams(location.search).get("inicio") === "operacao" ? "operation" : "overview",
+  section = admin && !C.demo && new URLSearchParams(location.search).get("inicio") === "sumulas" ? "matchSheets"
+    : admin && trainingMode && new URLSearchParams(location.search).get("inicio") === "operacao" ? "operation" : "overview",
   selected = "",
   user = null,
   role = "",
@@ -1399,12 +1400,12 @@ function floatingGameClock() {
   const matches = state.matches.filter(item => canUseCabin(item));
   const match = followed || matches.find(item => item.status === "Ao vivo") ||
     matches.find(item => ["Pausada","Suspensa"].includes(item.status));
-  if (!match && ["matchSheets","reports","auditReports","reportCenter","certificates"].includes(section)) return "";
+  if (["matchSheets","reports","auditReports","reportCenter","certificates"].includes(section)) return "";
   if (!match) return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock arena-monitor-waiting noprint ${pinned ? "is-pinned" : ""}" aria-label="Barra de jogos">
     <div><strong class="arena-icon-action">${arenaIcon("games")} Barra de jogos</strong><p>Aguardando partida</p></div>
     <div class="toolbar">${section !== "operation" ? `<button type="button" class="arena-icon-action" data-section="operation">${arenaIcon("live")}<span>Abrir operação</span></button>` : ""}
     ${canCreateMatches() ? `<button type="button" class="arena-icon-action" data-section="createMatch">${arenaIcon("calendar")}<span>Agendar partida</span></button>` : ""}
-    ${trainingMode ? "" : `<a class="button arena-icon-action" href="./painel.html?demonstracao=1&amp;inicio=operacao">${arenaIcon("training")}<span>Simular partida</span></a>`}</div>${gameBarSettingsButton()}${gameBarPinButton(pinned)}
+    </div>${gameBarSettingsButton()}${gameBarPinButton(pinned)}
   </aside>`;
   const lastEvent = monitorLastEvent(match);
   return `<aside id="arenaTopMatchMonitor" class="arena-followed-clock noprint ${pinned ? "is-pinned" : ""}" aria-label="Barra de jogos">
@@ -6284,6 +6285,7 @@ boot();
 // 30 — Navegação intencional: posiciona somente após abrir uma função.
 // Não acompanha snapshots, cronômetro, placar, filtros nem gravações de lances.
 function navigationDestination(control){
+ if(control.dataset.section === "matchSheets")return "#view";
  if(control.dataset.section === "createMatch")return null;
  if (control.dataset.section === "operation" || control.hasAttribute("data-cabin-match"))
    return "[data-op-score-anchor]";
