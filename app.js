@@ -8,11 +8,29 @@ const D = window.Domain,
   M = window.SparkModel,
   admin = document.body.dataset.admin === "true";
 let lastAudiencePing = 0;
+let publicAudienceStats = null, publicAudienceBusy = false;
+async function refreshPublicAudience() {
+ if (admin || C.demo || !cloud || document.hidden || publicAudienceBusy) return;
+ publicAudienceBusy = true;
+ try { publicAudienceStats = await cloud.publicAudienceCounts(); }
+ catch { publicAudienceStats = null; }
+ finally {
+  publicAudienceBusy = false;
+  const output = $("[data-public-audience]");
+  if (output) output.innerHTML = publicAudienceText();
+ }
+}
+function publicAudienceText() {
+ if (!publicAudienceStats) return "Audiência indisponível no momento.";
+ const fmt = new Intl.NumberFormat("pt-BR");
+ return `<strong>${fmt.format(publicAudienceStats.now)}</strong> acompanhando nesta janela de 5 min · <strong>${fmt.format(publicAudienceStats.total)}</strong> visitantes desde a ativação do contador público`;
+}
 let audienceRequest = null;
 async function pingAudience() {
  if (admin || C.demo || !cloud || document.hidden || Date.now() - lastAudiencePing < 120000) return;
  lastAudiencePing = Date.now();
  try { await cloud.recordAudiencePresence(); } catch {}
+ void refreshPublicAudience();
 }
 function audienceView() {
  return '<section class="card"><h2>Audiência do painel público</h2><p>Contagem por perfil de navegador. Assistindo agora considera atividade nos últimos 5 minutos. As medições começam quando este recurso é publicado.</p><div class="toolbar"><button type="button" data-refresh-audience>Atualizar audiência</button></div><div data-audience-results aria-live="polite"><p>Carregando audiência…</p></div></section>';
@@ -33,8 +51,8 @@ async function refreshAudience() {
  }
 }
 document.addEventListener("click",event=>{if(event.target.closest("[data-refresh-audience]"))void refreshAudience();});
-document.addEventListener("visibilitychange",()=>{void pingAudience();void refreshAudience();});
-setInterval(()=>{void pingAudience();void refreshAudience();},60000);
+document.addEventListener("visibilitychange",()=>{void pingAudience();void refreshAudience();void refreshPublicAudience();});
+setInterval(()=>{void pingAudience();void refreshAudience();void refreshPublicAudience();},60000);
 const $ = (s) => document.querySelector(s),
   esc = (v) =>
     String(v ?? "").replace(
@@ -1860,7 +1878,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=audiencia-publica-1");
+    const { connectSpark } = await import("./spark-store.js?v=contador-publico-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -2205,7 +2223,7 @@ function render() {
   }
 }
 function publicPageHTML() {
-  return `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(publicEdition || systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section>${C.demo ? "" : shareEditionControls(publicEdition)}${liveStatusPanel("public")}<div class="sectionhead"><h2>Acompanhe os jogos</h2><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
+  return `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(publicEdition || systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section>${C.demo ? "" : shareEditionControls(publicEdition)}${liveStatusPanel("public")}<div class="sectionhead"><div><h2>Acompanhe os jogos</h2>${C.demo?"":`<p class="muted"><span aria-hidden="true">◉</span> <span data-public-audience>${publicAudienceText()}</span></p>`}</div><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
       D.SPORTS,
       (x) => x,
       (x) => x,
@@ -5581,6 +5599,7 @@ document.addEventListener("click",async event=>{
 const openPublicTeams = new Set();
 const publicTeamProfiles = new Map();
 const publicTeamProfileWatches = new Map();
+const unavailablePublicRosters = new Set();
 document.addEventListener("toggle", event => {
  const card = event.target;
  if (card.matches?.("details[data-compare-teams]") && card.isConnected) publicComparisonOpen = card.open;
@@ -5589,13 +5608,18 @@ document.addEventListener("toggle", event => {
  if (card.open) {
   openPublicTeams.add(id);
   if (!cloud || C.demo || publicTeamProfileWatches.has(id)) return;
-  publicTeamProfileWatches.set(id,cloud.watchPublicTeamProfile(id,profile=>{
+  const update = profile => {
    publicTeamProfiles.set(id,profile);
    if (!admin && publicArea === "teams" && openPublicTeams.has(id)) {
     const panel = [...app.querySelectorAll("[data-public-team]")].find(item=>item.dataset.publicTeam===id);
     const roster = panel?.querySelector("[data-public-team-roster]");
     if(roster) roster.innerHTML = publicTeamRoster(id);
    }
+  };
+  unavailablePublicRosters.delete(id);
+  publicTeamProfileWatches.set(id,cloud.watchPublicTeamProfile(id,update,()=>{
+   unavailablePublicRosters.add(id);
+   update(null);
   }));
  } else {
   openPublicTeams.delete(id);
@@ -5607,7 +5631,9 @@ document.addEventListener("toggle", event => {
 
 function publicTeamRoster(id) {
  const profile = publicTeamProfiles.get(id);
- if (!profile) return '<p class="muted">Elenco e técnico ainda não publicados.</p>';
+ if (unavailablePublicRosters.has(id)) return '<p class="muted">Elenco indisponível no momento.</p>';
+ if (!publicTeamProfiles.has(id) && !C.demo) return '<p class="muted">Consultando elenco publicado…</p>';
+ if (!profile) return '<p class="muted">Elenco e técnico ainda não publicados pela organização.</p>';
  const athletes = Array.isArray(profile.athletes) ? profile.athletes : [];
  return `<h4>Técnico(a)</h4><p>${esc(profile.coach || "Não informado")}</p>
  <h4>Elenco publicado</h4>${athletes.length ? `<ul>${athletes.map(athlete=>`<li>${esc(athlete)}</li>`).join("")}</ul>` : '<p>Nenhum atleta publicado.</p>'}`;

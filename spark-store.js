@@ -1397,7 +1397,25 @@ export async function connectSpark({
     async recordAudiencePresence() {
       if (privateView) return;
       const { db, uid } = await fanSession();
-      await F.setDoc(F.doc(db,"publicAudience",uid),{lastSeen:F.serverTimestamp()});
+      const visitor = F.doc(db,"publicAudience",uid);
+      const summary = F.doc(db,"audiencePublicSummary","main");
+      await F.runTransaction(db,async tx=>{
+        const presence = (await tx.get(visitor)).data();
+        const counts = (await tx.get(summary)).data();
+        const now = Date.now();
+        if (presence?.lastSeen && now - presence.lastSeen.toMillis() < 60000) return;
+        const reset = !counts || now - counts.windowStart.toMillis() >= 300000;
+        const windowStart = reset ? F.serverTimestamp() : counts.windowStart;
+        if (reset || !presence?.windowStart?.isEqual(counts.windowStart)) {
+          tx.set(summary,{windowStart,active:reset?1:counts.active+1,total:(counts?.total||0)+(presence?.windowStart?0:1)});
+        }
+        tx.set(visitor,{lastSeen:F.serverTimestamp(),windowStart});
+      });
+    },
+    async publicAudienceCounts() {
+      const data = (await F.getDocFromServer(F.doc(database,"audiencePublicSummary","main"))).data();
+      if (!data) return null;
+      return {total:data.total,now:Date.now()-data.windowStart.toMillis()<300000?data.active:0};
     },
     async audienceCounts() {
       if (!authorized()) throw Error("Consulta reservada à organização.");
@@ -1428,8 +1446,8 @@ export async function connectSpark({
       }
       return rows.filter(row=>row.count>0).sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name,"pt-BR"));
     },
-    watchPublicTeamProfile(id,onChange) {
-      return F.onSnapshot(F.doc(database,"publicTeamProfiles",id),snapshot=>onChange(snapshot.data() || null),()=>onChange(null));
+    watchPublicTeamProfile(id,onChange,onError) {
+      return F.onSnapshot(F.doc(database,"publicTeamProfiles",id),snapshot=>onChange(snapshot.data() || null),onError);
     },
     async publishPublicTeamProfile(id,profile) {
       if (!isOwner()) throw Error("Publicação exclusiva do administrador.");
