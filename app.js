@@ -9,15 +9,28 @@ const D = window.Domain,
   admin = document.body.dataset.admin === "true";
 let lastAudiencePing = 0;
 let publicAudienceStats = null, publicAudienceBusy = false;
+let publicAudienceReadError = "", publicAudienceWriteError = "";
+function audienceErrorCode(error) {
+ const code = typeof error?.code === "string" ? error.code : "erro-desconhecido";
+ return /^[a-z0-9/-]{1,80}$/.test(code) ? code : "erro-desconhecido";
+}
+function updatePublicAudienceLabels() {
+ for (const output of app.querySelectorAll("[data-public-audience]"))
+  output.innerHTML = publicAudienceText();
+}
 async function refreshPublicAudience() {
  if (C.demo || !cloud || document.hidden || publicAudienceBusy || (admin && !["admin","operator"].includes(role))) return;
  publicAudienceBusy = true;
- try { publicAudienceStats = await cloud.publicAudienceCounts(); }
- catch { publicAudienceStats = null; }
+ try {
+  publicAudienceStats = await cloud.publicAudienceCounts();
+  publicAudienceReadError = "";
+ } catch (error) {
+  publicAudienceStats = null;
+  publicAudienceReadError = audienceErrorCode(error);
+ }
  finally {
   publicAudienceBusy = false;
-  for (const output of app.querySelectorAll("[data-public-audience]"))
-   output.innerHTML = publicAudienceText();
+  updatePublicAudienceLabels();
  }
 }
 function audienceMonitorBar() {
@@ -30,7 +43,14 @@ function audienceMonitorBar() {
  </section>`;
 }
 function publicAudienceText() {
- if (!publicAudienceStats) return "Audiência indisponível no momento.";
+ if (!publicAudienceStats) {
+  const error = publicAudienceReadError || publicAudienceWriteError;
+  if (error === "auth/operation-not-allowed") return "Audiência indisponível · acesso anônimo desabilitado (auth/operation-not-allowed).";
+  if (error === "permission-denied" || error === "firestore/permission-denied")
+   return `Audiência indisponível · acesso ao contador recusado (${publicAudienceReadError ? "leitura" : "registro"}, ${esc(error)}).`;
+  if (error) return `Audiência indisponível · ${esc(error)}.`;
+  return publicAudienceBusy ? "Consultando audiência…" : "Aguardando o primeiro registro de audiência.";
+ }
  const fmt = new Intl.NumberFormat("pt-BR");
  return `<strong>${fmt.format(publicAudienceStats.now)}</strong> acompanhando nesta janela de 5 min · <strong>${fmt.format(publicAudienceStats.total)}</strong> visitantes desde a ativação do contador público`;
 }
@@ -38,7 +58,13 @@ let audienceRequest = null;
 async function pingAudience() {
  if (admin || C.demo || !cloud || document.hidden || Date.now() - lastAudiencePing < 120000) return;
  lastAudiencePing = Date.now();
- try { await cloud.recordAudiencePresence(); } catch {}
+ try {
+  await cloud.recordAudiencePresence();
+  publicAudienceWriteError = "";
+ } catch (error) {
+  publicAudienceWriteError = audienceErrorCode(error);
+ }
+ updatePublicAudienceLabels();
  void refreshPublicAudience();
 }
 function audienceView() {
