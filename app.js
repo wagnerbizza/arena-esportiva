@@ -4777,7 +4777,7 @@ setupTraining();
 // 16 — CLASSIFICAÇÃO DE FUTEBOL E FUTSAL. Calculada sem novas gravações no Firebase.
 // Critérios desta versão: pontos, vitórias, saldo de gols e gols pró.
 let standingChampionship = "";
-const standingSports = ["Futebol","Futsal"];
+const rankedSports = ["Futebol","Futsal"];
 function footballTable(matches, sport = "Futebol") {
   const teams = new Map();
   const ensure=id=>{if(!teams.has(id))teams.set(id,{id,points:0,played:0,wins:0,draws:0,losses:0,gf:0,ga:0,gd:0});return teams.get(id);};
@@ -4802,7 +4802,7 @@ function footballTable(matches, sport = "Futebol") {
 function standingChampionships(){
   const choices = new Map();
   const add = (id, sport, title) => {
-    if (!id || !standingSports.includes(sport)) return;
+    if (!D.SPORTS.includes(sport)) return;
     const key = JSON.stringify([id,sport]);
     if (!choices.has(key)) choices.set(key,{key,id,sport,title:(title || "Campeonato") + " · " + sport});
   };
@@ -4812,7 +4812,7 @@ function standingChampionships(){
     }
   }
   for (const match of state.matches) {
-    if (!match.testData && (admin || !match.publicHidden)) add(match.championshipId,match.sport,match.competition);
+    if (!match.testData && (admin || !match.publicHidden)) add(match.championshipId || "",match.sport,match.championshipId ? match.competition : "Partidas avulsas");
   }
   return [...choices.values()].sort((a,b)=>a.title.localeCompare(b.title,"pt-BR"));
 }
@@ -4820,19 +4820,35 @@ function selectedStanding(choices = standingChampionships()){
   const choice = choices.find(row=>row.key===standingChampionship) || choices[0];
   standingChampionship = choice?.key || "";
   const matches = choice ? state.matches.filter(match=>
-    match.championshipId === choice.id && !match.testData && (admin || !match.publicHidden)
+    (match.championshipId || "") === choice.id && match.sport === choice.sport && !match.testData && (admin || !match.publicHidden)
   ) : [];
-  return {...footballTable(matches,choice?.sport),choice};
+  return {...footballTable(rankedSports.includes(choice?.sport) ? matches : [],choice?.sport),choice,matches};
+}
+function disputeTable(matches){
+  const ordered = matches.slice().sort((a,b)=>String(a.date || "").localeCompare(String(b.date || "")));
+  const headers = ["Equipe 1","Equipe 2","Data e horário","Local","Situação","Placar","Parciais","Ação"];
+  return ordered.length ? table(headers,ordered.map(match => {
+    const score = match.status === "Cancelada" || ["Agendada","Adiada"].includes(match.status)
+      ? "—" : gameResult(match).join(" × ");
+    const action = admin
+      ? (canUseCabin(match) ? `<button type="button" data-open="${esc(match.id)}">Abrir partida</button>` : "")
+      : `<button type="button" data-public-dispute="${esc(match.id)}">Ver partida</button>`;
+    const fields = [name(match.home),name(match.away),match.date ? format(match.date) : "A definir",
+      match.place || "A definir",match.status,score,(match.sets || []).map(set=>set.score.join(" × ")).join(" / ") || "—"];
+    return `<tr>${fields.map(value=>`<td>${esc(value)}</td>`).join("")}<td>${action}</td></tr>`;
+  })) : empty("Ainda não há disputas nesta edição e modalidade.");
 }
 function standingOutput(choices){
-  const {rows,counted,invalid}=selectedStanding(choices);
-  return `<p class="muted" role="status">${counted} partida(s) computada(s). ${rows.length} equipe(s) identificada(s) nas partidas não canceladas desta edição e modalidade.</p>${invalid?'<p class="public-notice">Há resultado inválido fora do cálculo. O administrador deve conferir os registros.</p>':""}${rows.length?table(["Posição","Equipe","Sigla","Categoria da equipe","Pontos","Jogos","Vitórias","Empates","Derrotas","Gols pró","Gols contra","Saldo"],rows.map(r=>tr([r.position+"º"+(r.tied?" (empate)":""),name(r.id),team(r.id).short || "—",team(r.id).category || "—",r.points,r.played,r.wins,r.draws,r.losses,r.gf,r.ga,r.gd]))):empty("Ainda não há equipes em partidas desta edição e modalidade.")}`;
+  const {rows,counted,invalid,choice,matches}=selectedStanding(choices);
+  const disputes = `<h3>Disputas da edição e modalidade</h3>${disputeTable(matches)}`;
+  if (!rankedSports.includes(choice?.sport) || !choice.id) return disputes;
+  return `<p class="muted" role="status">${counted} partida(s) computada(s). ${rows.length} equipe(s) identificada(s) nas partidas não canceladas desta edição e modalidade.</p>${invalid?'<p class="public-notice">Há resultado inválido fora do cálculo. O administrador deve conferir os registros.</p>':""}${rows.length?table(["Posição","Equipe","Sigla","Categoria da equipe","Pontos","Jogos","Vitórias","Empates","Derrotas","Gols pró","Gols contra","Saldo"],rows.map(r=>tr([r.position+"º"+(r.tied?" (empate)":""),name(r.id),team(r.id).short || "—",team(r.id).category || "—",r.points,r.played,r.wins,r.draws,r.losses,r.gf,r.ga,r.gd]))):empty("Ainda não há equipes em partidas desta edição e modalidade.")}<p class="muted">Desempate: pontos, vitórias, saldo e gols pró. Equipes com os mesmos critérios compartilham a posição.</p>${admin&&role==="admin"&&rows.length?'<button type="button" data-standing-excel>Exportar classificação em Excel</button>':""}${disputes}`;
 }
 function standingsPanel(){
   const choices=standingChampionships();
   if(!admin&&!choices.length)return "";
   const output=standingOutput(choices);
-  return `<section class="card"><h2>Classificação — Futebol e Futsal</h2><p>Vitória: 3 pontos • Empate: 1 ponto • Derrota: 0 ponto.</p><label>Edição e modalidade<select id="standingChampionship" ${!choices.length?"disabled":""}>${choices.map(({key,title})=>`<option value="${esc(key)}" ${key===standingChampionship?"selected":""}>${esc(title)}</option>`).join("")||'<option>Nenhum campeonato de futebol ou futsal disponível</option>'}</select></label><p class="muted">Equipes com partidas vinculadas à edição e à modalidade aparecem na tabela. Somente partidas encerradas ou homologadas somam resultados.</p><div id="standingOutput">${output}</div><p class="muted">Desempate: pontos, vitórias, saldo de gols e gols pró. Se todos forem iguais, a posição é compartilhada; a ordem alfabética serve apenas para exibir as equipes.</p>${admin&&role==="admin"&&choices.length?'<button type="button" data-standing-excel>Exportar classificação em Excel</button>':""}</section>`;
+  return `<section class="card"><h2>Disputas e classificação</h2><p>Consulte jogos e resultados por edição e modalidade. Em campeonatos de futebol e futsal, a tabela usa 3 pontos por vitória e 1 por empate.</p><label>Edição e modalidade<select id="standingChampionship" ${!choices.length?"disabled":""}>${choices.map(({key,title})=>`<option value="${esc(key)}" ${key===standingChampionship?"selected":""}>${esc(title)}</option>`).join("")||'<option>Nenhuma disputa disponível</option>'}</select></label><p class="muted">Equipes com partidas vinculadas à edição e à modalidade aparecem na tabela. Somente partidas encerradas ou homologadas somam resultados.</p><div id="standingOutput">${output}</div></section>`;
 }
 document.addEventListener("change",e=>{if(e.target.id!=="standingChampionship")return;standingChampionship=e.target.value;$("#standingOutput").innerHTML=standingOutput();});
 document.addEventListener("click",e=>{
@@ -4840,6 +4856,7 @@ document.addEventListener("click",e=>{
   try{
     if(role!=="admin")throw Error("Exportação exclusiva do administrador.");sheetReady();
     const {rows,counted,choice}=selectedStanding();const title=choice?.title||"Classificação";
+    if (!choice?.id || !rankedSports.includes(choice.sport)) throw Error("Selecione um campeonato de futebol ou futsal para exportar a classificação.");
     const data=rows.map(r=>({Posição:r.position,Equipe:name(r.id),Sigla:team(r.id).short||"",Categoria:team(r.id).category||"",Pontos:r.points,Jogos:r.played,Vitórias:r.wins,Empates:r.draws,Derrotas:r.losses,"Gols pró":r.gf,"Gols contra":r.ga,Saldo:r.gd,"Empate técnico":r.tied?"Sim":"Não"}));
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),"Classificação");
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([["Campeonato",title],["Partidas computadas",counted],["Pontuação","Vitória 3; empate 1; derrota 0"],["Situações","Encerrada e Homologada"],["Desempate","Pontos, vitórias, saldo e gols pró. Igualdade mantém empate técnico."],["Gerado em",new Date().toLocaleString("pt-BR")]]),"Critérios");
@@ -5420,7 +5437,7 @@ function publicHubContent(){
  if(publicArea==="news")return publicNews();
  if(publicArea==="teams")return publicTeamsPanel();
  if(publicArea==="fun")return fanZone();
- if(publicArea==="standings")return standingsPanel()||empty("A classificação estará disponível quando houver partidas vinculadas a um campeonato de futebol ou futsal.");
+ if(publicArea==="standings")return standingsPanel()||empty("As disputas estarão disponíveis quando houver partidas publicadas.");
  return `${publicArea==="active"?'<p class="muted">Partidas encerradas, homologadas e canceladas ficam em <strong>Resultados</strong>.</p>':""}<label class="list-search">Buscar partida<input id="publicMatchSearch" type="search" value="${esc(publicMatchQuery)}" placeholder="Equipe, sigla, modalidade ou local"></label><div id="publicMatches" class="grid">${publicMatches(publicFilter)}</div>${publicArea==="active"?'<section class="card public-locations"><h2>Esporte em diferentes locais</h2><p>Veja o local informado em cada partida. Use a modalidade, a agenda e os jogos ao vivo para acompanhar os eventos publicados pela organização.</p></section>':""}`;
 }
 function publicNews(){
@@ -5429,6 +5446,17 @@ function publicNews(){
 function googleSymbol(){return '<svg class="google-symbol" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.32 2.98-7.36Z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.41l-3.24-2.51c-.9.6-2.05.97-3.38.97-2.6 0-4.8-1.76-5.59-4.12H3.07v2.59A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.41 13.93a6 6 0 0 1 0-3.86V7.48H3.07a10 10 0 0 0 0 9.04l3.34-2.59Z"/><path fill="#EA4335" d="M12 5.95c1.47 0 2.78.5 3.82 1.5l2.86-2.87A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.93 5.48l3.34 2.59C7.2 7.7 9.4 5.95 12 5.95Z"/></svg>';}
 document.addEventListener("click",e=>{
  if(admin)return;
+ const dispute=e.target.closest("[data-public-dispute]");
+ if(dispute){
+  const match=state.matches.find(item=>item.id===dispute.dataset.publicDispute && !item.testData && !item.publicHidden);
+  if(!match)return;
+  publicArea=finalStatuses.includes(match.status)?"results":"active";
+  publicFilter="";
+  publicMatchQuery="";
+  render();
+  requestAnimationFrame(()=>scrollBelowPinnedCards(document.getElementById(`match-card-${match.id}`)));
+  return;
+ }
  const liveJump=e.target.closest("[data-public-live-jump]");
  if(liveJump){
   const match=state.matches.find(item=>item.id===liveJump.dataset.publicLiveJump);
