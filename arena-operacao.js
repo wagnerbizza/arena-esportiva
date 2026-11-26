@@ -400,6 +400,14 @@
   bottom.innerHTML='<span aria-hidden="true">↕</span>';
   strip.append(bottom);
   root.append(strip);
+  const completeNotes=old.querySelector('[data-complete-match-notes]');
+  if(completeNotes && !config.standby){
+   const actions=document.createElement('div');
+   actions.className='toolbar noprint';
+   completeNotes.classList.add('primary');
+   actions.append(completeNotes);
+   root.append(actions);
+  }
   if(config.chooser)root.insertAdjacentHTML("beforeend",config.chooser);
   const timeline=score.querySelector('.match-timeline');if(timeline)timeline.remove();const scoreWrap=document.createElement('section');scoreWrap.className='arena-op-score';const info=document.createElement('details');info.className='arena-op-match-details';info.innerHTML='<summary>Detalhes da partida</summary>';info.append(score);scoreWrap.append(info);const guide=old.querySelector('.match-guide');root.append(scoreWrap);
   const settings=document.createElement('details');settings.className='card arena-op-settings';settings.id='arenaOpSettings';settings.innerHTML='<summary>Personalizar a cabine</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-layout-options"><legend>Espaço do visor</legend><div class="arena-op-width-options"><label>Largura da cabine <output data-op-width-label></output><input type="range" data-op-width-range min="40" max="100" step="1" value="100"></label><button type="button" data-op-width-auto>Largura automática</button></div><label>Largura do placar em telas largas<select data-op-display-width><option value="35">35%</option><option value="40">40%</option><option value="45">45%</option><option value="50">50%</option><option value="55">55%</option><option value="60">60%</option><option value="65">65%</option></select></label><label><input type="checkbox" data-op-stack-monitor> Dar a largura inteira aos comandos abaixo do placar</label></fieldset><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Marque a caixa para exibir o atalho. Arraste pela alça até um dos destinos abaixo, ou toque no botão Posicionar, Ao lado ou Abaixo.</p><div class="arena-op-dock-targets"><div data-op-dock="side"><strong>Ao lado do visor</strong><div data-op-dock-preview="side"></div></div><div data-op-dock="below"><strong>Abaixo do visor</strong><div data-op-dock-preview="below"></div></div><button type="button" data-op-view-monitor>Ver o visor</button></div><div data-op-monitor-choices></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><button type="button" data-op-sync>Sincronizar ajustes deste aparelho</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
