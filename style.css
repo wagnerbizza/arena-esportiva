@@ -3077,3 +3077,9 @@ button:is(.arena-game-bar-settings,.arena-game-bar-pin,.arena-weather-pin,.arena
     animation: arena-audience-blink 5s ease-in-out infinite;
   }
 }
+
+#list-results-teams {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
+}
+#list-results-teams.arena-team-results-wide { grid-template-columns: minmax(0, 1fr); }
+#list-results-teams > .empty { grid-column: 1 / -1; }

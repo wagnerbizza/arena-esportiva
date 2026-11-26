@@ -288,6 +288,23 @@ function filterSelect(kind, key, label, values, allLabel) {
   if (f[key] && !entries.some(([v]) => v === f[key])) entries.push([f[key], f[key]]);
   return `<label>${label}<select data-list-filter="${kind}" data-filter-key="${key}">${[["", allLabel], ...entries].map(([v, title]) => `<option value="${esc(v)}" ${f[key] === v ? "selected" : ""}>${esc(title)}</option>`).join("")}</select></label>`;
 }
+const teamWidthKey = () => "arena-team-cards-wide-v1:" + JSON.stringify([user?.uid || "local",role,!!C.demo]);
+let teamWidthLayout;
+function teamCardsWide() {
+ const key = teamWidthKey();
+ if (teamWidthLayout?.key === key) return teamWidthLayout.wide;
+ try { return localStorage.getItem(key) === "1"; } catch { return false; }
+}
+document.addEventListener("click",event=>{
+ const button = event.target.closest("[data-team-card-width]");
+ const results = button?.closest(".list-filters")?.querySelector("#list-results-teams");
+ if (!results || !canManageRosters()) return;
+ const wide = results.classList.toggle("arena-team-results-wide");
+ button.setAttribute("aria-pressed",String(wide));
+ const key = teamWidthKey();
+ teamWidthLayout = {key,wide};
+ try { localStorage.setItem(key,wide ? "1" : "0"); } catch {}
+});
 function listPanel(kind) {
   const unique = (rows, key) => [...new Set(rows.map((r) => r[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
   const f = listFilters[kind];
@@ -308,8 +325,8 @@ function listPanel(kind) {
   if (kind === "matches") controls += filterSelect(kind, "sport", "Modalidade", D.SPORTS, "Todas as modalidades") + filterSelect(kind, "status", "Situação específica", matchStatuses, "Todas as situações") + filterSelect(kind, "championshipId", "Campeonato / temporada", championshipFilterOptions(), "Todos os campeonatos");
   controls += filterSelect(kind, "order", "Ordenar", [["az","Nome A–Z"],["za","Nome Z–A"]], kind === "matches" ? "Ordem por horário" : "Nome A–Z (padrão)");
   const groups = kind === "matches" ? `<div class="list-groups" aria-label="Visualização das partidas">${[["active", "Em andamento e próximas"], ["finished", "Finalizadas"], ["all", "Todas"]].map(([v, title]) => `<button type="button" data-list-group="${v}" aria-pressed="${f.group === v}" class="${f.group === v ? "primary" : ""}">${title}</button>`).join("")}</div>` : "";
-  const actions=kind==="teams"?`<button type="button" class="primary arena-icon-action" data-new-team-form>${arenaIcon("add")} Nova equipe</button><button type="button" class="arena-icon-action" data-section="imports">${arenaIcon("upload")} Importar equipes</button>`:kind==="players"?`<button type="button" class="primary arena-icon-action" data-player-form="open">${arenaIcon("add")} Cadastrar jogador</button><button type="button" data-section="imports" class="arena-icon-action">${arenaIcon("upload")} Importar jogadores</button>`:canCreateMatches()?'<button type="button" class="primary" data-section="createMatch">Cadastrar partida</button>':"";
-  return `<section class="card list-filters" data-custom-area="list:${kind}" aria-label="Filtros de ${titles[kind]}"><div class="arena-list-heading"><h2>${titles[kind]}</h2>${gameBarSettingsButton("list:"+kind)}</div>${actions?`<div class="toolbar list-registration-actions">${actions}</div>`:""}${groups}${kind === "teams" ? participantDirectory() : ""}<div class="list-controls">${controls}<button type="button" data-list-reset="${kind}">Limpar filtros</button></div><p class="muted list-count" id="list-count-${kind}" role="status">${listCount(kind)}</p>${kind === "matches" ? '<small>Finalizadas inclui encerradas, homologadas e canceladas. Adiadas e suspensas continuam em andamento e próximas.</small>' : ""}<div id="list-results-${kind}" class="arena-record-results ${kind === "players" ? "tablewrap-list" : "grid"}">${listResults(kind)}</div></section>`;
+  const actions=kind==="teams"?`<button type="button" class="primary arena-icon-action" data-new-team-form>${arenaIcon("add")} Nova equipe</button><button type="button" class="arena-icon-action" data-section="imports">${arenaIcon("upload")} Importar equipes</button><button type="button" data-team-card-width aria-controls="list-results-teams" aria-pressed="${teamCardsWide()}">Largura inteira dos cartões</button>`:kind==="players"?`<button type="button" class="primary arena-icon-action" data-player-form="open">${arenaIcon("add")} Cadastrar jogador</button><button type="button" data-section="imports" class="arena-icon-action">${arenaIcon("upload")} Importar jogadores</button>`:canCreateMatches()?'<button type="button" class="primary" data-section="createMatch">Cadastrar partida</button>':"";
+  return `<section class="card list-filters" data-custom-area="list:${kind}" aria-label="Filtros de ${titles[kind]}"><div class="arena-list-heading"><h2>${titles[kind]}</h2>${gameBarSettingsButton("list:"+kind)}</div>${actions?`<div class="toolbar list-registration-actions">${actions}</div>`:""}${groups}${kind === "teams" ? participantDirectory() : ""}<div class="list-controls">${controls}<button type="button" data-list-reset="${kind}">Limpar filtros</button></div><p class="muted list-count" id="list-count-${kind}" role="status">${listCount(kind)}</p>${kind === "matches" ? '<small>Finalizadas inclui encerradas, homologadas e canceladas. Adiadas e suspensas continuam em andamento e próximas.</small>' : ""}<div id="list-results-${kind}" class="arena-record-results ${kind === "players" ? "tablewrap-list" : "grid"}${kind === "teams" && teamCardsWide() ? " arena-team-results-wide" : ""}">${listResults(kind)}</div></section>`;
 }
 function listCount(kind) {
   return `${filteredRecords(kind).length} de ${listSource(kind).length} ${ { teams: "equipes", players: "jogadores", matches: "partidas" }[kind]} nesta visualização`;
