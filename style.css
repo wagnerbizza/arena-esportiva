@@ -2956,3 +2956,22 @@ button.arena-op-settings-trigger {
   .public-metrics,
   .public-navigation { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.arena-audience-monitor > .toolbar {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:nowrap;
+  gap:12px;
+  margin:0;
+}
+.arena-audience-link {
+  flex:1;
+  min-width:0;
+  display:grid;
+  gap:4px;
+  color:var(--accent);
+  text-decoration:none;
+}
+.arena-audience-link:hover > strong,
+.arena-audience-link:focus-visible > strong { text-decoration:underline; }

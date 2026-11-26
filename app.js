@@ -10,15 +10,24 @@ const D = window.Domain,
 let lastAudiencePing = 0;
 let publicAudienceStats = null, publicAudienceBusy = false;
 async function refreshPublicAudience() {
- if (admin || C.demo || !cloud || document.hidden || publicAudienceBusy) return;
+ if (C.demo || !cloud || document.hidden || publicAudienceBusy || (admin && !["admin","operator"].includes(role))) return;
  publicAudienceBusy = true;
  try { publicAudienceStats = await cloud.publicAudienceCounts(); }
  catch { publicAudienceStats = null; }
  finally {
   publicAudienceBusy = false;
-  const output = $("[data-public-audience]");
-  if (output) output.innerHTML = publicAudienceText();
+  for (const output of app.querySelectorAll("[data-public-audience]"))
+   output.innerHTML = publicAudienceText();
  }
+}
+function audienceMonitorBar() {
+ if (C.demo || !["admin","operator"].includes(role)) return "";
+ return `<section class="card noprint arena-audience-monitor" data-custom-area="audience-monitor" aria-label="Acompanhamento do painel público">
+  <div class="toolbar"><a class="arena-audience-link" href="./index.html" target="_blank" rel="noopener">
+   <strong>Audiência do painel público ↗</strong>
+   <span class="muted" data-public-audience>${publicAudienceText()}</span>
+  </a>${gameBarSettingsButton("audience-monitor")}</div>
+ </section>`;
 }
 function publicAudienceText() {
  if (!publicAudienceStats) return "Audiência indisponível no momento.";
@@ -1391,7 +1400,7 @@ function showGameBarSettings(key="games") {
   dialog.setAttribute("aria-labelledby","arenaGameBarSettingsTitle");
   const personal=readPersonalTools();
   const prefs=key==="games"?personal.gameBar:personal.customAreas[key]||{};
-  const names={games:"Barra de jogos",weather:"Previsão do tempo",navigation:"Atalhos e personalização",location:"Você está em",search:"Busca de funções","record-trash":"Lixeira de registros"};
+  const names={games:"Barra de jogos",weather:"Previsão do tempo","audience-monitor":"Audiência do painel público",navigation:"Atalhos e personalização",location:"Você está em",search:"Busca de funções","record-trash":"Lixeira de registros"};
   const title=names[key]||(key.startsWith("title:")?"Título da tela":"Seção de cadastros");
   const area=key==="games"?$("#arenaTopMatchMonitor"):
     [...document.querySelectorAll("[data-custom-area]")].find(el=>el.dataset.customArea===key);
@@ -1895,6 +1904,7 @@ async function boot() {
         if (user?.uid !== u?.uid || role !== r) favoriteCounts = null;
         user = u;
         role = r;
+        if (admin && ["admin","operator"].includes(role)) void refreshPublicAudience();
         operatorPermissions = Array.isArray(access.permissions)?access.permissions:[];
         operatorEditions = Array.isArray(access.followedEditions) ? access.followedEditions : [];
         operatorChampionships = Array.isArray(access.operatedChampionships) ? access.operatedChampionships : [];
@@ -1906,6 +1916,7 @@ async function boot() {
       onConnection: setConnectionStatus,
     });
     void pingAudience();
+    void refreshPublicAudience();
     render();
   } catch (e) {
     setConnectionStatus("conexão indisponível");
@@ -2196,7 +2207,7 @@ function render() {
     ["imports", "Importar"],
   ];
   const pageControls = arenaPageControls();
-  app.innerHTML = `${pageControls}${locationTrail()}${workspaceNavigation(sections)}${floatingGameClock()}<div class="sectionhead admin-heading noprint" data-custom-area="title:${esc(section)}"><div><span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span>${gameBarSettingsButton("title:"+section)}</div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel():""}${view()}</div>${relatedArenaScreens()}`;
+  app.innerHTML = `${audienceMonitorBar()}${pageControls}${locationTrail()}${workspaceNavigation(sections)}${floatingGameClock()}<div class="sectionhead admin-heading noprint" data-custom-area="title:${esc(section)}"><div><span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span>${gameBarSettingsButton("title:"+section)}</div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel():""}${view()}</div>${relatedArenaScreens()}`;
   if (section === "audience") void refreshAudience();
   const overviewTools = app.querySelector(".arena-overview-preferences");
   if (openOverviewTools && overviewTools) overviewTools.open = true;
