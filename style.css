@@ -2975,3 +2975,11 @@ button.arena-op-settings-trigger {
 }
 .arena-audience-link:hover > strong,
 .arena-audience-link:focus-visible > strong { text-decoration:underline; }
+
+/* Diferencia as consultas expansíveis dos cartões de equipes e jogos. */
+details[data-compare-teams],
+details.public-sport-summary {
+  margin-block-end: 28px;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--bg) 32%, transparent),
+              0 2px 6px color-mix(in srgb, var(--text) 12%, transparent);
+}
