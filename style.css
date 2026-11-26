@@ -3065,3 +3065,15 @@ button:is(.arena-game-bar-settings,.arena-game-bar-pin,.arena-weather-pin,.arena
 .navigation-search-row > .arena-game-bar-settings {
   margin-inline-start: auto;
 }
+
+.public-audience-badge { margin: 6px 0 0; color: var(--accent); }
+.public-audience-badge > span { display: inline-flex; align-items: center; gap: 8px; }
+@keyframes arena-audience-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(.18); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root:not(.reduce-motion) .public-audience-badge svg {
+    animation: arena-audience-blink 5s ease-in-out infinite;
+  }
+}

@@ -16,7 +16,7 @@ function audienceErrorCode(error) {
 }
 function updatePublicAudienceLabels() {
  for (const output of app.querySelectorAll("[data-public-audience]"))
-  output.innerHTML = publicAudienceText();
+  output.innerHTML = admin ? publicAudienceText() : publicAudienceBadge();
 }
 async function refreshPublicAudience() {
  if (C.demo || !cloud || document.hidden || publicAudienceBusy || (admin && !["admin","operator"].includes(role))) return;
@@ -64,6 +64,12 @@ function audienceMonitorBar() {
    <span class="muted" data-public-audience>${publicAudienceText()}</span>
   </a>${gameBarSettingsButton("audience-monitor")}<button type="button" class="arena-game-bar-pin" data-audience-pin aria-pressed="${pinned}" aria-label="${label}" title="${label}">${arenaIcon(pinned ? "pin" : "unpin")}</button></div>
  </section>`;
+}
+function publicAudienceBadge() {
+ const count = publicAudienceStats?.now;
+ const number = count == null ? "—" : new Intl.NumberFormat("pt-BR").format(count);
+ const label = count == null ? "Audiência ao vivo indisponível" : `${number} acompanhando nesta janela de 5 minutos`;
+ return `<span role="img" aria-label="${esc(label)}" title="${esc(label)}">${passwordEye(false)}<strong aria-hidden="true">${number}</strong></span>`;
 }
 function publicAudienceText() {
  if (!publicAudienceStats) {
@@ -2288,7 +2294,7 @@ function render() {
   }
 }
 function publicPageHTML() {
-  return `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(publicEdition || systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section>${C.demo ? "" : shareEditionControls(publicEdition)}${liveStatusPanel("public")}<div class="sectionhead"><div><h2>Acompanhe os jogos</h2>${C.demo?"":`<p class="muted"><span aria-hidden="true">◉</span> <span data-public-audience>${publicAudienceText()}</span></p>`}</div><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
+  return `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(publicEdition || systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section>${C.demo ? "" : shareEditionControls(publicEdition)}${liveStatusPanel("public")}<div class="sectionhead"><div><h2>Acompanhe os jogos</h2>${C.demo?"":`<p class="public-audience-badge" data-public-audience>${publicAudienceBadge()}</p>`}</div><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
       D.SPORTS,
       (x) => x,
       (x) => x,
