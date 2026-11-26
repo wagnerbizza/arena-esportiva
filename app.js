@@ -4861,9 +4861,7 @@ function standingChampionships(){
   }
   return [...choices.values()].sort((a,b)=>a.title.localeCompare(b.title,"pt-BR"));
 }
-function selectedStanding(choices = standingChampionships()){
-  const choice = choices.find(row=>row.key===standingChampionship) || choices[0];
-  standingChampionship = choice?.key || "";
+function standingFor(choice){
   const matches = choice ? state.matches.filter(match=>
     (match.championshipId || "") === choice.id && match.sport === choice.sport && !match.testData && (admin || !match.publicHidden)
   ) : [];
@@ -4883,24 +4881,31 @@ function disputeTable(matches){
     return `<tr>${fields.map(value=>`<td>${esc(value)}</td>`).join("")}<td>${action}</td></tr>`;
   })) : empty("Ainda não há disputas nesta edição e modalidade.");
 }
-function standingOutput(choices){
-  const {rows,counted,invalid,choice,matches}=selectedStanding(choices);
+function standingGroup(choice){
+  const {rows,counted,invalid,matches}=standingFor(choice);
   const disputes = `<h3>Disputas da edição e modalidade</h3>${disputeTable(matches)}`;
   if (!rankedSports.includes(choice?.sport) || !choice.id) return disputes;
-  return `<p class="muted" role="status">${counted} partida(s) computada(s). ${rows.length} equipe(s) identificada(s) nas partidas não canceladas desta edição e modalidade.</p>${invalid?'<p class="public-notice">Há resultado inválido fora do cálculo. O administrador deve conferir os registros.</p>':""}${rows.length?table(["Posição","Equipe","Sigla","Categoria da equipe","Pontos","Jogos","Vitórias","Empates","Derrotas","Gols pró","Gols contra","Saldo"],rows.map(r=>tr([r.position+"º"+(r.tied?" (empate)":""),name(r.id),team(r.id).short || "—",team(r.id).category || "—",r.points,r.played,r.wins,r.draws,r.losses,r.gf,r.ga,r.gd]))):empty("Ainda não há equipes em partidas desta edição e modalidade.")}<p class="muted">Desempate: pontos, vitórias, saldo e gols pró. Equipes com os mesmos critérios compartilham a posição.</p>${admin&&role==="admin"&&rows.length?'<button type="button" data-standing-excel>Exportar classificação em Excel</button>':""}${disputes}`;
+  return `<p class="muted" role="status">${counted} partida(s) computada(s). ${rows.length} equipe(s) identificada(s) nas partidas não canceladas desta edição e modalidade.</p>${invalid?'<p class="public-notice">Há resultado inválido fora do cálculo. O administrador deve conferir os registros.</p>':""}${rows.length?table(["Posição","Equipe","Sigla","Categoria da equipe","Pontos","Jogos","Vitórias","Empates","Derrotas","Gols pró","Gols contra","Saldo"],rows.map(r=>tr([r.position+"º"+(r.tied?" (empate)":""),name(r.id),team(r.id).short || "—",team(r.id).category || "—",r.points,r.played,r.wins,r.draws,r.losses,r.gf,r.ga,r.gd]))):empty("Ainda não há equipes em partidas desta edição e modalidade.")}<p class="muted">Desempate: pontos, vitórias, saldo e gols pró. Equipes com os mesmos critérios compartilham a posição.</p>${admin&&role==="admin"&&rows.length?`<button type="button" data-standing-excel="${esc(choice.key)}">Exportar classificação em Excel</button>`:""}${disputes}`;
+}
+function standingOutput(choices = standingChampionships()){
+  if (!choices.some(choice => choice.key === standingChampionship)) standingChampionship = "";
+  const visible = standingChampionship ? choices.filter(choice => choice.key === standingChampionship) : choices;
+  return visible.map(choice => `<section class="card"><h3>${esc(choice.title)}</h3>${standingGroup(choice)}</section>`).join("")
+    || empty("Nenhuma disputa disponível.");
 }
 function standingsPanel(){
   const choices=standingChampionships();
   if(!admin&&!choices.length)return "";
   const output=standingOutput(choices);
-  return `<section class="card"><h2>Disputas e classificação</h2><p>Consulte jogos e resultados por edição e modalidade. Em campeonatos de futebol e futsal, a tabela usa 3 pontos por vitória e 1 por empate.</p><label>Edição e modalidade<select id="standingChampionship" ${!choices.length?"disabled":""}>${choices.map(({key,title})=>`<option value="${esc(key)}" ${key===standingChampionship?"selected":""}>${esc(title)}</option>`).join("")||'<option>Nenhuma disputa disponível</option>'}</select></label><p class="muted">Equipes com partidas vinculadas à edição e à modalidade aparecem na tabela. Somente partidas encerradas ou homologadas somam resultados.</p><div id="standingOutput">${output}</div></section>`;
+  return `<section class="card"><h2>Disputas e classificação</h2><p>Consulte jogos e resultados por edição e modalidade. Em campeonatos de futebol e futsal, a tabela usa 3 pontos por vitória e 1 por empate.</p><label>Edição e modalidade<select id="standingChampionship" ${!choices.length?"disabled":""}><option value="" ${standingChampionship?"":"selected"}>Todas as modalidades e edições</option>${choices.map(({key,title})=>`<option value="${esc(key)}" ${key===standingChampionship?"selected":""}>${esc(title)}</option>`).join("")||'<option>Nenhuma disputa disponível</option>'}</select></label><p class="muted">Equipes com partidas vinculadas à edição e à modalidade aparecem na tabela. Somente partidas encerradas ou homologadas somam resultados.</p><div id="standingOutput">${output}</div></section>`;
 }
 document.addEventListener("change",e=>{if(e.target.id!=="standingChampionship")return;standingChampionship=e.target.value;$("#standingOutput").innerHTML=standingOutput();});
 document.addEventListener("click",e=>{
-  if(!e.target.closest("[data-standing-excel]"))return;
+  const button = e.target.closest("[data-standing-excel]");
+  if(!button)return;
   try{
     if(role!=="admin")throw Error("Exportação exclusiva do administrador.");sheetReady();
-    const {rows,counted,choice}=selectedStanding();const title=choice?.title||"Classificação";
+    const {rows,counted,choice}=standingFor(standingChampionships().find(row=>row.key===button.dataset.standingExcel));const title=choice?.title||"Classificação";
     if (!choice?.id || !rankedSports.includes(choice.sport)) throw Error("Selecione um campeonato de futebol ou futsal para exportar a classificação.");
     const data=rows.map(r=>({Posição:r.position,Equipe:name(r.id),Sigla:team(r.id).short||"",Categoria:team(r.id).category||"",Pontos:r.points,Jogos:r.played,Vitórias:r.wins,Empates:r.draws,Derrotas:r.losses,"Gols pró":r.gf,"Gols contra":r.ga,Saldo:r.gd,"Empate técnico":r.tied?"Sim":"Não"}));
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),"Classificação");
