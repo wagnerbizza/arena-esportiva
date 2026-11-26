@@ -33,13 +33,36 @@ async function refreshPublicAudience() {
   updatePublicAudienceLabels();
  }
 }
+const audiencePinKey = () => "arena-audience-pin-v1:" + (user?.uid || "");
+function audienceMonitorPinned() {
+ try { return localStorage.getItem(audiencePinKey()) === "1"; } catch { return false; }
+}
+const audienceMonitorObserver = typeof ResizeObserver === "function" ? new ResizeObserver(syncAudienceMonitorOffset) : null;
+function syncAudienceMonitorOffset() {
+ const monitor = app.querySelector(".arena-audience-monitor.is-pinned");
+ document.documentElement.style.setProperty("--arena-audience-sticky-height", `${monitor?.offsetHeight || 0}px`);
+}
+document.addEventListener("click",event=>{
+ const button = event.target.closest("[data-audience-pin]");
+ if (!button) return;
+ const monitor = button.closest(".arena-audience-monitor");
+ const pinned = monitor.classList.toggle("is-pinned");
+ try { localStorage.setItem(audiencePinKey(),pinned ? "1" : "0"); } catch {}
+ button.setAttribute("aria-pressed",String(pinned));
+ button.setAttribute("aria-label",gameBarPinLabel(pinned));
+ button.title = gameBarPinLabel(pinned);
+ button.innerHTML = arenaIcon(pinned ? "pin" : "unpin");
+ syncAudienceMonitorOffset();
+});
 function audienceMonitorBar() {
  if (C.demo || !["admin","operator"].includes(role)) return "";
- return `<section class="card noprint arena-audience-monitor" data-custom-area="audience-monitor" aria-label="Acompanhamento do painel público">
+ const pinned = audienceMonitorPinned();
+ const label = gameBarPinLabel(pinned);
+ return `<section class="card noprint arena-audience-monitor ${pinned?"is-pinned":""}" data-custom-area="audience-monitor" aria-label="Acompanhamento do painel público">
   <div class="toolbar"><a class="arena-audience-link" href="./index.html" target="_blank" rel="noopener">
    <strong>Audiência do painel público ↗</strong>
    <span class="muted" data-public-audience>${publicAudienceText()}</span>
-  </a>${gameBarSettingsButton("audience-monitor")}</div>
+  </a>${gameBarSettingsButton("audience-monitor")}<button type="button" class="arena-game-bar-pin" data-audience-pin aria-pressed="${pinned}" aria-label="${label}" title="${label}">${arenaIcon(pinned ? "pin" : "unpin")}</button></div>
  </section>`;
 }
 function publicAudienceText() {
@@ -2234,6 +2257,10 @@ function render() {
   ];
   const pageControls = arenaPageControls();
   app.innerHTML = `${audienceMonitorBar()}${pageControls}${locationTrail()}${workspaceNavigation(sections)}${floatingGameClock()}<div class="sectionhead admin-heading noprint" data-custom-area="title:${esc(section)}"><div><span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span>${gameBarSettingsButton("title:"+section)}</div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel():""}${view()}</div>${relatedArenaScreens()}`;
+  audienceMonitorObserver?.disconnect();
+  const audienceMonitor = app.querySelector(".arena-audience-monitor");
+  if (audienceMonitor) audienceMonitorObserver?.observe(audienceMonitor);
+  syncAudienceMonitorOffset();
   if (section === "audience") void refreshAudience();
   const overviewTools = app.querySelector(".arena-overview-preferences");
   if (openOverviewTools && overviewTools) overviewTools.open = true;
@@ -6588,7 +6615,7 @@ function scrollBelowPinnedCards(target, behavior=preferences.motion ||
   matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"){
  if(!target)return;
  let offset=0;
- for(const selector of [".arena-weather-card.is-pinned",".arena-live-pinnable.is-pinned","#arenaTopMatchMonitor.is-pinned",".arena-op-strip.is-pinned"]){
+ for(const selector of [".arena-weather-card.is-pinned",".arena-audience-monitor.is-pinned",".arena-live-pinnable.is-pinned","#arenaTopMatchMonitor.is-pinned",".arena-op-strip.is-pinned"]){
   const card=document.querySelector(selector);
   if(!card || !(card.compareDocumentPosition(target)&Node.DOCUMENT_POSITION_FOLLOWING))continue;
   const style=getComputedStyle(card);

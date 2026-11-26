@@ -2983,3 +2983,37 @@ details.public-sport-summary {
   box-shadow: 0 8px 20px color-mix(in srgb, var(--bg) 32%, transparent),
               0 2px 6px color-mix(in srgb, var(--text) 12%, transparent);
 }
+
+.arena-audience-monitor .arena-game-bar-pin {
+  display:inline-grid; place-items:center; flex:none;
+  inline-size:44px; min-block-size:44px; padding:0;
+  border-color:transparent; background:transparent;
+}
+.arena-audience-monitor .arena-game-bar-pin:hover,
+.arena-audience-monitor .arena-game-bar-pin[aria-pressed="true"] {
+  color:var(--accent);
+}
+.arena-audience-monitor.is-pinned {
+  position:sticky;
+  top:var(--arena-audience-stack-top);
+  z-index:11;
+}
+main:has(.arena-audience-monitor.is-pinned) {
+  --arena-audience-base-top:0px;
+  --arena-audience-stack-top:calc(var(--arena-audience-base-top) + var(--arena-weather-sticky-height,0px));
+}
+body.arena-operation-page main:has(.arena-audience-monitor.is-pinned) {
+  --arena-audience-stack-top:var(--arena-audience-base-top);
+}
+body main:has(.arena-audience-monitor.is-pinned) #arenaTopMatchMonitor.is-pinned,
+body main:has(.arena-audience-monitor.is-pinned) .arena-live-pinnable.is-pinned {
+  top:calc(var(--arena-audience-stack-top) + var(--arena-audience-sticky-height,0px));
+}
+body.arena-central-ready main:has(.arena-audience-monitor.is-pinned) .arena-operation-workspace {
+  --arena-op-stack-top:calc(var(--arena-audience-stack-top) + var(--arena-audience-sticky-height,0px));
+}
+@media(max-width:767px) {
+  body.arena-central-ready:has(#arenaMenuToggle:not([hidden])) main:has(.arena-audience-monitor.is-pinned) {
+    --arena-audience-base-top:var(--arena-op-sticky-offset,80px);
+  }
+}
