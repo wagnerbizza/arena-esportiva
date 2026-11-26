@@ -1412,10 +1412,11 @@ export async function connectSpark({
         tx.set(visitor,{lastSeen:F.serverTimestamp(),windowStart});
       });
     },
-    async publicAudienceCounts() {
-      const data = (await F.getDocFromServer(F.doc(database,"audiencePublicSummary","main"))).data();
-      if (!data) return null;
-      return {total:data.total,now:Date.now()-data.windowStart.toMillis()<300000?data.active:0};
+    watchPublicAudience(onData,onError) {
+      return F.onSnapshot(F.doc(database,"audiencePublicSummary","main"),snapshot=>{
+        const data = snapshot.data();
+        onData(data ? {total:data.total,active:data.active,expiresAt:data.windowStart.toMillis()+300000} : null);
+      },onError);
     },
     async audienceCounts() {
       if (!authorized()) throw Error("Consulta reservada à organização.");

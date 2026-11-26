@@ -18,20 +18,28 @@ function updatePublicAudienceLabels() {
  for (const output of app.querySelectorAll("[data-public-audience]"))
   output.innerHTML = admin ? publicAudienceText() : publicAudienceBadge();
 }
-async function refreshPublicAudience() {
- if (C.demo || !cloud || document.hidden || publicAudienceBusy || (admin && !["admin","operator"].includes(role))) return;
+let stopPublicAudience = null, audienceWindowTimer;
+function refreshPublicAudience() {
+ if (C.demo || !cloud || document.hidden || stopPublicAudience || (admin && !["admin","operator"].includes(role))) return;
  publicAudienceBusy = true;
- try {
-  publicAudienceStats = await cloud.publicAudienceCounts();
+ stopPublicAudience = cloud.watchPublicAudience(data=>{
+  clearTimeout(audienceWindowTimer);
+  publicAudienceBusy = false;
   publicAudienceReadError = "";
- } catch (error) {
+  publicAudienceStats = data ? {total:data.total,now:data.expiresAt > Date.now() ? data.active : 0} : null;
+  updatePublicAudienceLabels();
+  if (publicAudienceStats?.now > 0) audienceWindowTimer = setTimeout(()=>{
+   publicAudienceStats = {...publicAudienceStats,now:0};
+   updatePublicAudienceLabels();
+  },Math.max(0,data.expiresAt-Date.now()));
+ },error=>{
+  stopPublicAudience = null;
+  clearTimeout(audienceWindowTimer);
+  publicAudienceBusy = false;
   publicAudienceStats = null;
   publicAudienceReadError = audienceErrorCode(error);
- }
- finally {
-  publicAudienceBusy = false;
   updatePublicAudienceLabels();
- }
+ });
 }
 const audiencePinKey = () => "arena-audience-pin-v1:" + (user?.uid || "");
 function audienceMonitorPinned() {
@@ -85,7 +93,7 @@ function publicAudienceText() {
 }
 let audienceRequest = null;
 async function pingAudience() {
- if (admin || C.demo || !cloud || document.hidden || Date.now() - lastAudiencePing < 120000) return;
+ if (admin || C.demo || !cloud || document.hidden || Date.now() - lastAudiencePing < 60000) return;
  lastAudiencePing = Date.now();
  try {
   await cloud.recordAudiencePresence();
@@ -1959,7 +1967,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=modalidades-equipes-1");
+    const { connectSpark } = await import("./spark-store.js?v=audiencia-tempo-real-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -1975,6 +1983,11 @@ async function boot() {
         if(user?.uid!==u?.uid || r!=="admin"){credentialRows=[];credentialLoaded=false;testSelection.clear();testPlan=null;testBackup=false;}
         if (user?.uid !== u?.uid || role !== r) favoriteCounts = null;
         user = u;
+        if (admin && !["admin","operator"].includes(r)) {
+          stopPublicAudience?.();
+          stopPublicAudience = null;
+          clearTimeout(audienceWindowTimer);
+        }
         role = r;
         if (admin && ["admin","operator"].includes(role)) void refreshPublicAudience();
         operatorPermissions = Array.isArray(access.permissions)?access.permissions:[];
