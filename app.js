@@ -2158,7 +2158,7 @@ function render() {
     return;
   }
   // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
-  if (role !== "admin" && !["overview", "matches", "operation", "reportCenter", "audience", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canPrepareRegistrationSheets()?["registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[])].includes(section)) {
+  if (role !== "admin" && !["overview", "matches", "operation", "reportCenter", "audience", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","coachingStaff","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canPrepareRegistrationSheets()?["registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[])].includes(section)) {
     section = "overview";
     selected = "";
   }
@@ -2169,6 +2169,7 @@ function render() {
     ["championships", "Campeonatos"],
     ["standings", "Classificação"],
     ["teams", "Equipes"],
+    ["coachingStaff", "Comissões técnicas"],
     ["players", "Jogadores"],
     ["createMatch", "Cadastrar partida"],
     ["matches", "Jogos"],
@@ -2270,6 +2271,7 @@ function view() {
   if (section === "users" && role === "admin") return usersView();
   if (section === "audience")return C.demo ? empty("A audiência está disponível no painel conectado.") : audienceView();
   if (section === "overview")return overviewMatchView() + fanFavoritePanel();
+  if (section === "coachingStaff" && canManageRosters()) return coachingStaffView();
   if (section === "teams") return teamsDirectoryView();
   if (section === "players" && !playerFormOpen)
     return listPanel("players");
@@ -4222,7 +4224,7 @@ document.addEventListener("click", async (e) => {
       });
     } else if (b.hasAttribute("data-remove-badge")) {
       setBadgeDraft("");
-    } else if(b.dataset.editTeam){openTeamEditor(b.dataset.editTeam);return;
+    } else if(b.dataset.editTeam){openTeamEditor(b.dataset.editTeam);if(b.hasAttribute("data-coaching-edit")) $("#team")?.elements.coach.focus();return;
     } else if (b.dataset.editPlayer || b.dataset.playerForm) {
       if (section!=="players" || !canManageRosters()) return;
       editedPlayerId=b.dataset.editPlayer||"";
@@ -5269,7 +5271,7 @@ document.addEventListener("click",async event=>{
 // 21 — Organização da central. Permissões continuam validadas pelo Firebase.
 const workspaceDefinitions=[
  {id:"games",title:"Jogos",intro:"Operação, agenda e resultados",sections:["overview","operation","matches","createMatch","standings","audience"]},
- {id:"records",title:"Cadastros",intro:"Equipes, jogadores e importação",sections:["teams","players","imports"]},
+ {id:"records",title:"Cadastros",intro:"Equipes, jogadores, comissões técnicas e importação",sections:["teams","players","coachingStaff","imports"]},
  {id:"championships",title:"Campeonatos",intro:"Temporadas e inscrições",sections:["championships","registrationSheets"]},
  {id:"reports",title:"Relatórios",intro:"Súmulas, resultados e auditoria",sections:["reportCenter","matchSheets","reports","auditReports","accessHistory"]},
  {id:"documents",title:"Certificados",intro:"Certificados",sections:["certificates"]},
@@ -5278,7 +5280,7 @@ const workspaceDefinitions=[
  {id:"administration",title:"Acessos",intro:"Permissões e operadores",sections:["users","monitor"]},
  {id:"maintenance",title:"Backups e suporte",intro:"Guias, testes e recuperação",sections:["systemCheck","documentation","testData","cleanup"]}
 ];
-function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","operation","matches","reportCenter","audience","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
+function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","operation","matches","reportCenter","audience","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","coachingStaff","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
 function publicPanelURL(edition="") {
  const url=new URL("./index.html",location.href);
  if(trainingMode)url.searchParams.set("demonstracao","1");
@@ -6073,6 +6075,11 @@ document.addEventListener("click", event => {
   sheet.document.getElementById("print").onclick = () => sheet.print();
 });
 
+function coachingStaffView() {
+ const teams = [...state.teams].filter(team=>!team.archived && !team.testData).sort(alphabetical);
+ const rows = teams.map(team=>`<tr><td>${esc(team.name)}</td><td>${esc(team.coach || "A definir")}</td><td>${esc(team.category || "—")}</td><td>${esc(teamSports(team).join(" · ") || "—")}</td><td><button type="button" data-edit-team="${esc(team.id)}" data-coaching-edit>${team.coach ? "Editar técnico(a)" : "Vincular técnico(a)"}</button></td></tr>`);
+ return `<section class="card"><h2>Técnicos por equipe</h2><p>Selecione a equipe para cadastrar ou atualizar seu técnico.</p>${rows.length ? table(["Equipe","Técnico(a)","Categoria","Modalidades","Ação"],rows) : empty("Cadastre uma equipe para vincular o técnico.")}</section>`;
+}
 function teamsDirectoryView(){
  if(teamFormVisible)return `<div class="sectionhead"><h2>${teamEditorId?"Editar equipe":"Nova equipe"}</h2><button type="button" data-team-form-back>← Voltar à lista de equipes</button></div>${teamRegistrationView()}`;
  return listPanel("teams");
@@ -6434,6 +6441,7 @@ const navigationDescriptions={
  createMatch:{label:"Cadastrar partida",description:"Programar uma nova partida (se autorizado).",keywords:"criar cadastrar programar nova jogo partida"},
  championships:{label:"Campeonatos",description:"Cadastrar competições e temporadas (se autorizado).",keywords:"competicao torneio campeonato temporada edicao categoria"},
  standings:{label:"Classificação",description:"Consultar classificação de futebol e futsal por edição.",keywords:"tabela ranking saldo vitorias pontos"},
+ coachingStaff:{label:"Comissões técnicas",description:"Consultar e editar técnicos vinculados às equipes.",keywords:"técnico treinador comissão equipe"},
  teams:{label:"Equipes",description:"Consultar e editar times, escudos, técnicos e elencos.",keywords:"time equipe bandeira escudo tecnico treinador modalidades arquivar reativar ficha elenco historico"},
  players:{label:"Jogadores",description:"Cadastrar e editar atletas, camisa, posição e titular/reserva.",keywords:"jogador atleta numero camisa posicao titular reserva banco elenco"},
  documentation:{label:"Guias e documentação",description:"Orientações e links para usar em outro computador.",keywords:"ajuda manual guia documento link computador compartilhar"},
