@@ -5496,6 +5496,7 @@ const publicTeamProfiles = new Map();
 const publicTeamProfileWatches = new Map();
 document.addEventListener("toggle", event => {
  const card = event.target;
+ if (card.matches?.("details[data-compare-teams]") && card.isConnected) publicComparisonOpen = card.open;
  if (!card.matches?.("details[data-public-team]") || !card.isConnected) return;
  const id = card.dataset.publicTeam;
  if (card.open) {
@@ -5524,6 +5525,45 @@ function publicTeamRoster(id) {
  return `<h4>Técnico(a)</h4><p>${esc(profile.coach || "Não informado")}</p>
  <h4>Elenco publicado</h4>${athletes.length ? `<ul>${athletes.map(athlete=>`<li>${esc(athlete)}</li>`).join("")}</ul>` : '<p>Nenhum atleta publicado.</p>'}`;
 }
+const publicTeamTabs = new Map();
+const publicComparison = ["", ""];
+let publicComparisonOpen = false, publicComparisonGames = new Map();
+
+function completedPublicTeamGame(game) {
+ return ["Encerrada","Homologada"].includes(game.status);
+}
+
+function comparePublicTeams(byTeam) {
+ const rows = publicComparison.map(id => {
+  const games = (byTeam.get(id) || []).filter(completedPublicTeamGame);
+  const results = games.map(game => {
+   const scores = gameResult(game);
+   return Math.sign((scores[0] - scores[1]) * (game.home === id ? 1 : -1));
+  });
+  return [name(id),games.length,...[1,0,-1].map(result=>results.filter(value=>value===result).length)];
+ });
+ if (!publicComparison.every(Boolean) || publicComparison[0] === publicComparison[1])
+  return '<p class="muted">Escolha duas equipes diferentes.</p>';
+ return table(["Equipe","Jogos concluídos","Vitórias","Empates","Derrotas"],rows.map(row=>tr(row)),false);
+}
+
+document.addEventListener("click", event => {
+ const tab = event.target.closest("[data-public-team-tab]");
+ const card = tab?.closest("[data-public-team]");
+ if (!card || admin) return;
+ publicTeamTabs.set(card.dataset.publicTeam,tab.dataset.publicTeamTab);
+ for (const button of card.querySelectorAll("[data-public-team-tab]"))
+  button.setAttribute("aria-pressed",String(button === tab));
+ for (const panel of card.querySelectorAll("[data-public-team-panel]"))
+  panel.hidden = panel.dataset.publicTeamPanel !== tab.dataset.publicTeamTab;
+});
+document.addEventListener("change", event => {
+ const select = event.target.closest("[data-public-team-compare]");
+ if (!select || admin) return;
+ publicComparison[Number(select.dataset.publicTeamCompare)] = select.value;
+ $("#public-team-comparison-output").innerHTML = comparePublicTeams(publicComparisonGames);
+});
+
 function publicTeamsPanel() {
  const byTeam = new Map();
  for (const game of state.matches) {
@@ -5537,20 +5577,32 @@ function publicTeamsPanel() {
  const ids = new Set(byTeam.keys());
  if (!publicEdition && !publicFilter) for (const id of teams.keys()) ids.add(id);
  const entries = [...ids].sort((a,b) => name(a).localeCompare(name(b),"pt-BR",{numeric:true}));
- return `<section aria-label="Equipes"><h2>Equipes</h2><div class="grid public-team-grid">${entries.map(id => {
+ for (const index of [0,1]) if (!ids.has(publicComparison[index])) publicComparison[index] = "";
+ publicComparisonGames = byTeam;
+ const comparison = entries.length > 1 ? `<details class="card" data-compare-teams ${publicComparisonOpen?"open":""}><summary>Comparar equipes</summary><p>Resultados concluídos na modalidade selecionada.</p><div class="formgrid">${publicComparison.map((selected,index)=>`<label>Equipe ${index + 1}<select data-public-team-compare="${index}"><option value="">Selecione</option>${entries.map(id=>`<option value="${esc(id)}" ${id===selected?"selected":""}>${esc(name(id))}</option>`).join("")}</select></label>`).join("")}</div><div id="public-team-comparison-output" aria-live="polite">${comparePublicTeams(byTeam)}</div></details>` : "";
+ return `<section aria-label="Equipes"><h2>Equipes</h2>${comparison}<div class="grid public-team-grid">${entries.map(id => {
   const team = teams.get(id);
   const games = (byTeam.get(id) || []).slice().sort((a,b)=>String(b.date || "").localeCompare(String(a.date || "")));
   const sports = [...new Set(games.map(game => game.sport).filter(Boolean))].sort();
   const count = games.length ? `${games.length} ${games.length === 1 ? "partida" : "partidas"} nesta seleção` : "Aguardando primeira partida";
+  const completed = games.filter(completedPublicTeamGame);
+  const groups = [...new Set(games.map(game=>[game.competition,phaseLabel(game)].filter(Boolean).join(" · ")).filter(Boolean))];
+  const venues = [...new Set(completed.map(game=>String(game.place || "").trim()).filter(Boolean))];
+  const activeTab = publicTeamTabs.get(id) || "club";
+  const panel = (key,html) => `<div data-public-team-panel="${key}" ${activeTab===key?"":"hidden"}>${html}</div>`;
+  const list = (items,message) => items.length ? `<ul>${items.map(item=>`<li>${esc(item)}</li>`).join("")}</ul>` : `<p class="muted">${message}</p>`;
   return `<details class="card public-team-card" data-public-team="${esc(id)}" ${openPublicTeams.has(id)?"open":""}>
    <summary>${team?.badge ? badge(team) : ""}<span><strong>${esc(name(id))}</strong><small>${esc(count)}</small></span><span class="public-team-chevron" aria-hidden="true">⌄</span></summary>
-   <div class="public-team-body"><dl><div><dt>Modalidades</dt><dd>${esc(sports.join(" · ") || "A definir")}</dd></div>
-   <div><dt>Categoria</dt><dd>${esc(team?.category || "Não informada")}</dd></div></dl>
-   <div data-public-team-roster>${publicTeamRoster(id)}</div>
-   ${games.length ? `<h4>Histórico de partidas</h4><ul class="public-team-games">${games.map(game => {
+   <div class="public-team-body">
+   <div class="toolbar" role="group" aria-label="Detalhes da equipe">${[["club","Clube"],["roster","Elenco"],["groups","Competições e grupos"],["history","Jogos disputados"],["venues","Locais"]].map(([key,label])=>`<button type="button" data-public-team-tab="${key}" aria-pressed="${key===activeTab}">${label}</button>`).join("")}</div>
+   ${panel("club",`<dl><div><dt>Sigla</dt><dd>${esc(team?.short || "Não informada")}</dd></div><div><dt>Modalidades</dt><dd>${esc(sports.join(" · ") || "A definir")}</dd></div><div><dt>Categoria</dt><dd>${esc(team?.category || "Não informada")}</dd></div></dl>`)}
+   ${panel("roster",`<div data-public-team-roster>${publicTeamRoster(id)}</div>`)}
+   ${panel("groups",list(groups,"Nenhuma competição ou grupo publicado."))}
+   ${panel("venues",list(venues,"Nenhum local informado nos jogos disputados."))}
+   ${panel("history",completed.length ? `<ul class="public-team-games">${completed.map(game => {
     const opponent = game.home === id ? game.away : game.home;
-    return `<li><button type="button" data-public-dispute="${esc(game.id)}"><strong>Adversário: ${esc(name(opponent))}</strong><small>${esc([game.sport,game.status,game.date ? format(game.date) : "",["Encerrada","Homologada"].includes(game.status) ? gameResult(game).join(" × ") : ""].filter(Boolean).join(" · "))}</small></button></li>`;
-   }).join("")}</ul>` : ""}
+    return `<li><button type="button" data-public-dispute="${esc(game.id)}"><strong>${esc(name(game.home))} ${gameResult(game).join(" × ")} ${esc(name(game.away))}</strong><small>${esc(["Adversário: " + name(opponent),game.sport,game.date ? format(game.date) : "",game.place].filter(Boolean).join(" · "))}</small></button></li>`;
+   }).join("")}</ul>` : '<p class="muted">Ainda não há jogos disputados nesta seleção.</p>')}
    </div></details>`;
  }).join("") || empty("Nenhuma equipe nesta seleção.")}</div></section>`;
 }
