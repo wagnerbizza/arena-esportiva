@@ -3194,3 +3194,12 @@ button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin)[aria-press
     --arena-input: #fff;
   }
 }
+
+[data-mural-public]:not([hidden]) {
+  margin-block:16px;
+  border-inline-start:4px solid var(--accent);
+}
+[data-mural-public] article + article { border-top:1px solid var(--line); margin-top:12px; }
+.arena-mural-message { white-space:pre-wrap; overflow-wrap:anywhere; }
+#arenaMuralForm { display:grid; gap:12px; margin-bottom:24px; }
+[data-mural-list] { display:grid; gap:12px; }

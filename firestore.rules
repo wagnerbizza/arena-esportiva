@@ -383,9 +383,9 @@ service cloud.firestore {
     && d.id == uid && nonempty(d.name,100) && bounded(d.email,254)
     && d.role in ['pending','operator'] && d.enabled is bool && d.matches is list && d.matches.size() <= 100
     && d.matches.toSet().size() == d.matches.size()
-    && d.get('permissions',[]) is list && d.get('permissions',[]).size() <= 5
+    && d.get('permissions',[]) is list && d.get('permissions',[]).size() <= 6
     && d.get('permissions',[]).toSet().size() == d.get('permissions',[]).size()
-    && d.get('permissions',[]).hasOnly(['rosters','matchesCreate','championships','gamesView','historyCorrections'])
+    && d.get('permissions',[]).hasOnly(['rosters','matchesCreate','championships','gamesView','historyCorrections','muralPublish'])
     && d.get('followedEditions',[]) is list && d.get('followedEditions',[]).size() <= 20
     && d.get('followedEditions',[]).toSet().size() == d.get('followedEditions',[]).size()
     && ((d.role == 'operator' && d.enabled) || d.get('followedEditions',[]) == [])
@@ -628,6 +628,46 @@ service cloud.firestore {
     && pair(request.resource.data,'matches',id,resource.data) && publishedMatch(request.resource.data,id) && validMatchUpdate(request.resource.data,resource.data);
    allow delete: if cleanupAllowed(id,resource.data);
    allow update: if testClassify(request.resource.data,resource.data,id,'matches') && publishedMatch(request.resource.data,id);
+  }
+  function muralEditor() {
+   return owner() || (operator() && 'muralPublish' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('permissions',[]));
+  }
+  function muralPublicData(d) {
+   return {'title':d.title,'body':d.body,'pinned':d.pinned,'expiresAt':d.expiresAt,'updatedAt':d.updatedAt};
+  }
+  function validMural(d,id) {
+   let publicPath = /databases/$(database)/documents/publicMural/$(id);
+   return d.keys().hasOnly(['title','body','pinned','expiresAt','updatedAt','author','updatedBy','status'])
+    && nonempty(d.title,100) && nonempty(d.body,1200)
+    && d.pinned is bool && (d.expiresAt == null || d.expiresAt is timestamp)
+    && d.updatedAt == request.time && d.updatedBy == request.auth.uid
+    && d.status in ['draft','published','archived']
+    && (d.status == 'published'
+     ? existsAfter(publicPath) && getAfter(publicPath).data == muralPublicData(d)
+     : !existsAfter(publicPath));
+  }
+  match /muralMessages/{id} {
+   allow read: if owner() || (muralEditor() && resource.data.author == request.auth.uid);
+   allow create: if muralEditor() && validMural(request.resource.data,id)
+    && request.resource.data.author == request.auth.uid
+    && (owner() || (!request.resource.data.pinned && request.resource.data.status != 'archived'));
+   allow update: if muralEditor() && validMural(request.resource.data,id)
+    && request.resource.data.author == resource.data.author
+    && (owner() || (resource.data.author == request.auth.uid
+     && resource.data.status != 'archived' && request.resource.data.status != 'archived'
+     && request.resource.data.pinned == resource.data.pinned));
+  }
+  match /publicMural/{id} {
+   allow read: if true;
+   allow create, update: if muralEditor()
+    && existsAfter(/databases/$(database)/documents/muralMessages/$(id))
+    && getAfter(/databases/$(database)/documents/muralMessages/$(id)).data.updatedAt == request.time
+    && getAfter(/databases/$(database)/documents/muralMessages/$(id)).data.status == 'published'
+    && request.resource.data == muralPublicData(getAfter(/databases/$(database)/documents/muralMessages/$(id)).data);
+   allow delete: if muralEditor()
+    && existsAfter(/databases/$(database)/documents/muralMessages/$(id))
+    && getAfter(/databases/$(database)/documents/muralMessages/$(id)).data.updatedAt == request.time
+    && getAfter(/databases/$(database)/documents/muralMessages/$(id)).data.status != 'published';
   }
   match /publicSettings/main {
    allow read: if true;

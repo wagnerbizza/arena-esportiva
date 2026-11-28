@@ -1982,7 +1982,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=audiencia-tempo-real-1");
+    const { connectSpark } = await import("./spark-store.js?v=mural-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -2255,12 +2255,14 @@ function render() {
   if (admin && !C.demo && (!user || !role)) {
     syncPersonalTools();
     app.innerHTML = accessView();
+    syncMural();
     closeTimeline();
     if (accessBusy) app.querySelectorAll("button").forEach((b) => b.disabled = true);
     return;
   }
   if (!admin) {
     app.innerHTML = publicPageHTML();
+    syncMural();
     $("#filter").value = publicFilter;
     if (state.settings.banner)
       $("#hero").style.backgroundImage =
@@ -2269,7 +2271,7 @@ function render() {
     return;
   }
   // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
-  if (role !== "admin" && !["overview", "matches", "operation", "reportCenter", "audience", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","coachingStaff","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canPrepareRegistrationSheets()?["registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[])].includes(section)) {
+  if (role !== "admin" && !["overview", "matches", "operation", "reportCenter", "audience", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","coachingStaff","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canPrepareRegistrationSheets()?["registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[]), ...(canManageMural()?["mural"]:[])].includes(section)) {
     section = "overview";
     selected = "";
   }
@@ -2277,6 +2279,7 @@ function render() {
   const sections = [
     ["overview", "Início"],
     ["audience", "Audiência"],
+    ...(canManageMural()?[["mural","Mural de recados"]]:[]),
     ["championships", "Campeonatos"],
     ["standings", "Classificação"],
     ["teams", "Equipes"],
@@ -2306,8 +2309,11 @@ function render() {
     ["monitor", "Operadores e partidas"],
     ["imports", "Importar"],
   ];
+  const muralForm=canManageMural()&&section==="mural"&&muralScope===role+":"+user?.uid?$("#arenaMuralForm"):null;
   const pageControls = arenaPageControls();
   app.innerHTML = `${audienceMonitorBar()}${pageControls}${locationTrail()}${workspaceNavigation(sections)}${floatingGameClock()}<div class="sectionhead admin-heading noprint" data-custom-area="title:${esc(section)}"><div><span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span>${gameBarSettingsButton("title:"+section)}</div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel():""}${view()}</div>${relatedArenaScreens()}`;
+  if(muralForm)$("#arenaMuralForm")?.replaceWith(muralForm);
+  syncMural();
   audienceMonitorObserver?.disconnect();
   const audienceMonitor = app.querySelector(".arena-audience-monitor");
   if (audienceMonitor) audienceMonitorObserver?.observe(audienceMonitor);
@@ -2339,7 +2345,7 @@ function render() {
   }
 }
 function publicPageHTML() {
-  return `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(publicEdition || systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section>${C.demo ? "" : shareEditionControls(publicEdition)}${liveStatusPanel("public")}<div class="sectionhead"><div><h2>Acompanhe os jogos</h2>${C.demo?"":`<p class="public-audience-badge" data-public-audience>${publicAudienceBadge()}</p>`}</div><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
+  return `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(publicEdition || systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section>${C.demo ? "" : shareEditionControls(publicEdition)}${liveStatusPanel("public")}${muralPublicCard()}<div class="sectionhead"><div><h2>Acompanhe os jogos</h2>${C.demo?"":`<p class="public-audience-badge" data-public-audience>${publicAudienceBadge()}</p>`}</div><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
       D.SPORTS,
       (x) => x,
       (x) => x,
@@ -2364,6 +2370,7 @@ function publicMatches(filter) {
       : empty("Nenhuma partida publicada para esta seleção.");
 }
 function view() {
+  if(section==="mural")return canManageMural()?muralManage():empty("Mural indisponível para este perfil.");
   if(section==="operation")return cabinView();
   if(section==="reportCenter")return reportCenter();
   if(section==="systemCheck")return role==="admin"?systemDiagnosticsView():empty("Verificação exclusiva do administrador.");
@@ -3732,6 +3739,7 @@ function updateOperationSummary(form) {
     ["rosterPermission", "Editar e importar equipes e jogadores"],
     ["championshipPermission", "Criar e editar campeonatos"],
     ["matchCreatePermission", "Criar jogos"],
+    ["muralPublishPermission","Publicar no mural"],
     ["gamesViewPermission", "Consultar todos os jogos publicados"],
     ["historyCorrectPermission", "Anular lances nos jogos liberados"],
     ["phaseEditPermission", "Editar grupos e chaves nos campeonatos liberados"],
@@ -3845,7 +3853,7 @@ function operatorAuthorizationGroups(operator,editionOptions) {
   `<label class="confirmation-check"><input type="checkbox" name="phaseEditPermission" ${checked("editMatchPhases")}><span>Mudar fase, grupo, chave ou rodada.</span></label>`,permissions.includes("editMatchPhases")?1:0);
  const registrations=authorizationSection("records","Fazer cadastros","Cada caixa libera um cadastro. Para operar um jogo criado, marque o jogo ou seu campeonato nas opções acima.",`<label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${checked("rosters")}><span>Criar, editar e importar equipes e jogadores.</span></label><label class="confirmation-check"><input type="checkbox" name="championshipPermission" ${checked("championships")}><span>Criar e editar campeonatos e temporadas.</span></label><label class="confirmation-check"><input type="checkbox" name="matchCreatePermission" ${checked("matchesCreate")}><span>Criar novos jogos.</span></label>`,permissions.filter(id=>["rosters","championships","matchesCreate"].includes(id)).length);
  const viewing=authorizationSection("view","Só consultar jogos","As opções abaixo liberam consulta. Para registrar lances, use Operar campeonatos ou Operar jogos avulsos.",`<fieldset><legend>Campeonatos para consultar</legend>${editionOptions}<label class="confirmation-check"><input type="checkbox" name="gamesViewPermission" ${checked("gamesView")}><span>Consultar todos os jogos publicados.</span></label></fieldset>`,(operator.followedEditions||[]).length+(permissions.includes("gamesView")?1:0));
- return `${operateAll}<div class="toolbar"><button type="button" data-permissions-expand="true">Expandir autorizações</button><button type="button" data-permissions-expand="false">Recolher autorizações</button></div>${operations}${matches}${publication}${history}${sportCorrection}${phases}${registrations}${viewing}`;
+ return `${operateAll}${authorizationSection("mural","Mural de recados","Publicação de recados gerais, independentemente dos jogos.",`<label class="confirmation-check"><input type="checkbox" name="muralPublishPermission" ${checked("muralPublish")}><span>Publicar no mural</span></label>`,permissions.includes("muralPublish")?1:0)}<div class="toolbar"><button type="button" data-permissions-expand="true">Expandir autorizações</button><button type="button" data-permissions-expand="false">Recolher autorizações</button></div>${operations}${matches}${publication}${history}${sportCorrection}${phases}${registrations}${viewing}`;
 }
 document.addEventListener("click",event=>{
  const button=event.target.closest("[data-permissions-expand]");if(!button||role!=="admin")return;
@@ -3881,7 +3889,7 @@ function usersView() {
     permissions.includes("championships") && "Campeonatos",
     permissions.includes("matchesCreate") && "Novas partidas",
   ].filter(Boolean).join(", ") || "Nenhum";
-  const permissionNames={hidePublicGames:"Ocultar jogos do público",operateAllGames:"Operar tudo",rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos",historyCorrections:"Anular lances com justificativa",editMatchPhases:"Editar grupos e chaves",correctMatchSport:"Corrigir modalidade dos jogos liberados"};
+  const permissionNames={muralPublish:"Publicar no mural",hidePublicGames:"Ocultar jogos do público",operateAllGames:"Operar tudo",rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos",historyCorrections:"Anular lances com justificativa",editMatchPhases:"Editar grupos e chaves",correctMatchSport:"Corrigir modalidade dos jogos liberados"};
   const accessAuditRows=(state.accessAudit||[]).slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
   const accessAuditDate=value=>value?.toDate?.().toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})||"Aguardando confirmação do servidor";
   const accessAuditValue=(key,value)=>{
@@ -3967,7 +3975,7 @@ document.addEventListener("submit", async (e) => {
           toast(user?.emailVerified ? "Solicitação registrada. Aguarde a aprovação do administrador principal." : "Solicitação registrada. Confira a confirmação enviada ao seu e-mail.");
         } else {
           await cloud.manageUser({userId:d.userId, access:d.access,
-            matches: new FormData(f).getAll("assignedMatches"), followedEditions: new FormData(f).getAll("followedEditions"), operatedChampionships: new FormData(f).getAll("operatedChampionships"), permissions:[...(f.elements.hidePublicPermission.checked?["hidePublicGames"]:[]),...(f.elements.operateAllPermission.checked?["operateAllGames"]:[]),...(f.elements.rosterPermission.checked?["rosters"]:[]),...(f.elements.matchCreatePermission.checked?["matchesCreate"]:[]),...(f.elements.championshipPermission.checked?["championships"]:[]),...(f.elements.gamesViewPermission.checked?["gamesView"]:[]),...(f.elements.historyCorrectPermission.checked?["historyCorrections"]:[]),...(f.elements.phaseEditPermission.checked?["editMatchPhases"]:[]),...(f.elements.matchSportCorrectionPermission.checked?["correctMatchSport"]:[])], reason:d.reason});
+            matches: new FormData(f).getAll("assignedMatches"), followedEditions: new FormData(f).getAll("followedEditions"), operatedChampionships: new FormData(f).getAll("operatedChampionships"), permissions:[...(f.elements.muralPublishPermission?.checked?["muralPublish"]:[]),...(f.elements.hidePublicPermission.checked?["hidePublicGames"]:[]),...(f.elements.operateAllPermission.checked?["operateAllGames"]:[]),...(f.elements.rosterPermission.checked?["rosters"]:[]),...(f.elements.matchCreatePermission.checked?["matchesCreate"]:[]),...(f.elements.championshipPermission.checked?["championships"]:[]),...(f.elements.gamesViewPermission.checked?["gamesView"]:[]),...(f.elements.historyCorrectPermission.checked?["historyCorrections"]:[]),...(f.elements.phaseEditPermission.checked?["editMatchPhases"]:[]),...(f.elements.matchSportCorrectionPermission.checked?["correctMatchSport"]:[])], reason:d.reason});
           managedUserId = "";
           toast("Permissões salvas e registradas no histórico.");
         }
@@ -5387,6 +5395,7 @@ document.addEventListener("click",async event=>{
 
 // 21 — Organização da central. Permissões continuam validadas pelo Firebase.
 const workspaceDefinitions=[
+ {id:"mural",title:"Comunicação",intro:"Comunicados e recados gerais",sections:["mural"]},
  {id:"games",title:"Jogos",intro:"Operação, agenda e resultados",sections:["overview","operation","matches","createMatch","standings","audience"]},
  {id:"records",title:"Cadastros",intro:"Equipes, jogadores, comissões técnicas e importação",sections:["teams","players","coachingStaff","imports"]},
  {id:"championships",title:"Campeonatos",intro:"Temporadas e inscrições",sections:["championships","registrationSheets"]},
@@ -5397,7 +5406,7 @@ const workspaceDefinitions=[
  {id:"administration",title:"Acessos",intro:"Permissões e operadores",sections:["users","monitor"]},
  {id:"maintenance",title:"Backups e suporte",intro:"Guias, testes e recuperação",sections:["systemCheck","documentation","testData","cleanup"]}
 ];
-function allowedWorkspaceSections(group){return group.sections.filter(id=>role==="admin"||["overview","operation","matches","reportCenter","audience","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","coachingStaff","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
+function allowedWorkspaceSections(group){return group.sections.filter(id=>id==="mural"?canManageMural():role==="admin"||["overview","operation","matches","reportCenter","audience","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","coachingStaff","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
 function publicPanelURL(edition="") {
  const url=new URL("./index.html",location.href);
  if(trainingMode)url.searchParams.set("demonstracao","1");
@@ -5653,6 +5662,84 @@ function publicChallenge(){
  const q=currentSportChallenge(),answered=sportChallengeAnswer!=="";
  return `<section class="card sport-challenge"><span class="tag">INTERVALO ESPORTIVO</span><h2>Quiz esportivo e convivência</h2><div class="arena-quiz-controls"><label>Tema<select data-quiz-topic>${["Todos","Geral","Matemática","Convivência","Vôlei","Futebol"].map(topic=>`<option ${topic===quizTopic?"selected":""}>${topic}</option>`).join("")}</select></label><button type="button" data-quiz-restart>Recomeçar quiz</button></div><p>Desafio ${sportChallengeIndex%quizQuestions().length+1} de ${quizQuestions().length} · ${esc(q.topic||"Geral")}</p><p>Uma brincadeira para aprender enquanto acompanha as partidas. Suas respostas ficam apenas nesta página.</p><p class="quiz-score">Seu placar: <strong>${quizHits} acerto(s) em ${quizAttempts} resposta(s)</strong></p><h3>${esc(q.question)}</h3><div class="toolbar">${q.answers.map((a,i)=>`<button type="button" data-sport-answer="${i}" ${answered?"disabled":""}>${esc(a)}</button>`).join("")}</div>${answered?`<p role="status"><strong>${Number(sportChallengeAnswer)===q.correct?"Acertou!":"Vamos aprender!"}</strong> ${esc(q.explanation)}</p><button type="button" data-sport-next>Próximo desafio</button>`:""}</section>`;
 }
+const canManageMural=()=>!C.demo && (role==="admin" || (role==="operator" && operatorPermissions.includes("muralPublish")));
+let muralExpanded=false;
+let muralRows=[], muralStop, muralScope="", muralError="", muralLoaded=false, muralEditing="", muralBusy=false;
+function muralPublicCard(){
+ return C.demo?"":'<section class="card" data-mural-public aria-label="Mural da Arena" hidden></section>';
+}
+function muralManage(){
+ return '<section class="card" data-mural-manage><form id="arenaMuralForm"><h2>Escrever recado</h2><label>Título<input name="title" required maxlength="100"></label><label>Mensagem<textarea name="body" required maxlength="1200" rows="4"></textarea></label><label>Visível até (opcional)<input name="expires" type="date"></label>'+(role==="admin"?'<label class="confirmation-check"><input name="pinned" type="checkbox"> Destacar no mural público</label>':'')+'<div class="toolbar"><button type="submit" value="published" class="primary">Publicar</button><button type="submit" value="draft">Salvar rascunho</button><button type="button" data-mural-new>Novo recado</button></div></form><h2>Recados cadastrados</h2><div data-mural-list></div></section>';
+}
+function muralDate(row){
+ return row.expiresAt?.toDate?.() || null;
+}
+function updateMural(){
+ const publicBox=app.querySelector("[data-mural-public]");
+ if(publicBox){
+  const rows=muralRows.filter(row=>!muralDate(row)||muralDate(row)>new Date());
+  rows.sort((a,b)=>Number(b.pinned)-Number(a.pinned)||(b.updatedAt?.seconds||0)-(a.updatedAt?.seconds||0));
+
+  publicBox.hidden=!rows.length;
+  const card=row=>`<article><h3>${esc(row.title)}</h3><p class="arena-mural-message">${esc(row.body)}</p></article>`;
+  publicBox.innerHTML=rows.length?`<h2>Mural da Arena</h2>${card(rows[0])}${rows.length>1?`<details ${muralExpanded?"open":""}><summary>Ver mais recados</summary>${rows.slice(1).map(card).join("")}</details>`:""}`:"";
+ }
+ const list=app.querySelector("[data-mural-list]");
+ if(list){
+  const labels={draft:"Rascunho",published:"Publicado",archived:"Arquivado"};
+  const rows=[...muralRows].sort((a,b)=>(b.updatedAt?.seconds||0)-(a.updatedAt?.seconds||0));
+  list.innerHTML=muralError?empty(esc(muralError)):!muralLoaded?empty("Carregando recados…"):!rows.length?empty("Nenhum recado cadastrado."):rows.map(row=>`<article class="card"><h3>${esc(row.title)}</h3><p>${labels[row.status]||""}${row.pinned?" · Destaque":""}${muralDate(row)&&muralDate(row)<=new Date()?" · Expirado":""}</p><p class="arena-mural-message">${esc(row.body)}</p><div class="toolbar">${row.status!=="archived"||role==="admin"?`<button type="button" data-mural-edit="${esc(row.id)}">Editar</button>`:""}${role==="admin"&&row.status!=="archived"?`<button type="button" data-mural-archive="${esc(row.id)}">Arquivar</button>`:""}</div></article>`).join("");
+ }
+}
+function syncMural(){
+ const scope=!cloud||C.demo?"":!admin?"public":canManageMural()&&section==="mural"?role+":"+user?.uid:"";
+ if(scope!==muralScope){
+  muralStop?.();muralStop=null;muralScope=scope;muralRows=[];muralError="";muralEditing="";muralLoaded=false;
+  if(scope){
+   const fail=()=>{if(scope===muralScope){muralError="Não foi possível carregar os recados. Verifique a conexão e as regras do Firestore.";updateMural();}};
+   try{muralStop=cloud.watchMural(admin,rows=>{if(scope===muralScope){muralRows=rows;muralLoaded=true;updateMural();}},fail);}catch{fail();}
+  }
+ }
+ updateMural();
+}
+function fillMuralForm(row){
+ const form=$("#arenaMuralForm");if(!form)return;
+ muralEditing=row?.id||"";form.reset();
+ form.elements.title.value=row?.title||"";form.elements.body.value=row?.body||"";
+ const expiry=muralDate(row||{});
+ if(expiry)form.elements.expires.value=[expiry.getFullYear(),String(expiry.getMonth()+1).padStart(2,"0"),String(expiry.getDate()).padStart(2,"0")].join("-");
+ if(form.elements.pinned)form.elements.pinned.checked=Boolean(row?.pinned);
+ form.elements.title.focus();
+}
+async function submitMural(id,values){
+ if(muralBusy||!canManageMural()||!cloud)return;
+ muralBusy=true;
+ try{await cloud.saveMural(id,values);if(muralEditing===id)fillMuralForm();toast("Recado salvo.");}
+ catch(error){toast(error.message||"Não foi possível salvar o recado.",true);}
+ finally{muralBusy=false;}
+}
+document.addEventListener("submit",e=>{
+ const form=e.target;if(form.id!=="arenaMuralForm")return;
+ e.preventDefault();
+ const title=form.elements.title.value.trim(),body=form.elements.body.value.trim();
+ if(!title||!body){toast("Preencha o título e a mensagem.",true);return;}
+ const date=form.elements.expires.value;
+ void submitMural(muralEditing,{title,body,expiresAt:date?new Date(date+"T23:59:59.999"):null,
+  pinned:Boolean(form.elements.pinned?.checked),status:e.submitter?.value==="draft"?"draft":"published"});
+},true);
+document.addEventListener("click",e=>{
+ const button=e.target.closest("[data-mural-new],[data-mural-edit],[data-mural-archive]");
+ if(!button||!canManageMural())return;
+ if(button.hasAttribute("data-mural-new")){fillMuralForm();return;}
+ const row=muralRows.find(item=>item.id===(button.dataset.muralEdit||button.dataset.muralArchive));
+ if(!row)return;
+ if(button.dataset.muralEdit)fillMuralForm(row);
+ else if(role==="admin"&&confirm("Arquivar este recado e retirá-lo do painel público?"))
+  void submitMural(row.id,{...row,expiresAt:muralDate(row),status:"archived"});
+});
+document.addEventListener("toggle",e=>{if(e.target.matches("[data-mural-public] > details"))muralExpanded=e.target.open;},true);
+setInterval(()=>{if(!admin&&muralRows.some(row=>muralDate(row)&&muralDate(row)<=new Date()))updateMural();},60000);
+
 function publicHub(){
  const tabs=[["active","Jogos atuais"],["live","Ao vivo"],["schedule","Agenda"],["results","Resultados"],["teams","Equipes"],["standings","Classificação"],["fun","Diversão"],["news","Notícias"]];
  return `${publicStatistics()}${publicSportSummary()}<nav class="public-navigation" aria-label="Conteúdo do painel público">${tabs.map(([id,label])=>`<button type="button" data-public-area="${id}" class="${id===publicArea?"active":""}" ${id===publicArea?'aria-current="page"':""}>${label}</button>`).join("")}</nav><div id="publicHubContent">${publicHubContent()}</div>`;

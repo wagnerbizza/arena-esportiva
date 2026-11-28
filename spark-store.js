@@ -1116,7 +1116,7 @@ export async function connectSpark({
       const before = snap.data();
       if (before.deleted === true) throw Error("Este operador foi removido e está disponível apenas para consulta.");
       const granted=access==="active"?[...new Set(permissions===undefined?(before.permissions||[]):permissions)]:[];
-      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView","historyCorrections","editMatchPhases","correctMatchSport","operateAllGames","hidePublicGames"].includes(p)))throw Error("Permissão específica inválida.");
+      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView","historyCorrections","editMatchPhases","correctMatchSport","operateAllGames","hidePublicGames","muralPublish"].includes(p)))throw Error("Permissão específica inválida.");
       const editions = access === "active"
         ? [...new Set(followedEditions ?? before.followedEditions ?? [])] : [];
       const known = new Set(state.championships.map((c) => c.name + " • " + c.season));
@@ -1254,7 +1254,36 @@ export async function connectSpark({
     if(!isOwner())throw Error("Revogação exclusiva do administrador.");
     await F.updateDoc(F.doc(database,"eventCredentials",id),{status:"revogada",updatedAt:F.serverTimestamp()});
   }
+  const canPublishMural = () => isOwner() || (authorized() && (profile?.permissions || []).includes("muralPublish"));
   return {
+    watchMural(manage, update, onFailure) {
+      if (manage && !canPublishMural()) throw Error("Sem autorização para o mural.");
+      const collection=F.collection(database,manage?"muralMessages":"publicMural");
+      const target=manage && !isOwner()?F.query(collection,F.where("author","==",session.uid)):collection;
+      return F.onSnapshot(target,snapshot=>update(snapshot.docs.map(doc=>({...doc.data(),id:doc.id}))),onFailure);
+    },
+    async saveMural(id, values) {
+      if(!canPublishMural())throw Error("Sem autorização para o mural.");
+      const collection=F.collection(database,"muralMessages");
+      const ref=id?F.doc(collection,id):F.doc(collection);
+      const publicRef=F.doc(database,"publicMural",ref.id);
+      const uid=session.uid, admin=isOwner();
+      await F.runTransaction(database,async tx=>{
+        const before=id?(await tx.get(ref)).data():null;
+        if(id&&!before)throw Error("Recado não encontrado.");
+        if(!admin && before && (before.author!==uid || before.status==="archived"))throw Error("Sem autorização para editar este recado.");
+        const data={
+          title:values.title,body:values.body,expiresAt:values.expiresAt,
+          pinned:admin?values.pinned:(before?.pinned||false),
+          status:values.status,author:before?.author||uid,updatedBy:uid,updatedAt:F.serverTimestamp()
+        };
+        tx.set(ref,data);
+        if(data.status==="published"){
+          const {title,body,expiresAt,pinned,updatedAt}=data;
+          tx.set(publicRef,{title,body,expiresAt,pinned,updatedAt});
+        }else if(before?.status==="published")tx.delete(publicRef);
+      });
+    },
     diagnosticRead: async kind => {
       if(!isOwner())throw Error("Diagnóstico exclusivo do administrador.");
       const epoch=generation;
