@@ -43,7 +43,10 @@
  const validPanelColor=value=>Object.hasOwn(panelColors,value)||/^#[0-9a-f]{6}$/i.test(value||'');
  const panelTitle=(prefs,id)=>prefs.names?.[id]||labels[id];
  const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {monitorLayout:2,order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>validPanelColor(saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set([...(saved.monitorLayout===2?[]:['choose','resume']),...saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id))])]:[...defaultMonitor],displayWidth:[35,40,45,50,55,60,65].includes(saved?.displayWidth)?saved.displayWidth:45,stackMonitor:saved?.stackMonitor===true,cabinHeight:Number.isInteger(saved?.cabinHeight)?Math.max(0,Math.min(1600,saved.cabinHeight)):0,cabinWidth:Number.isInteger(saved?.cabinWidth)?Math.max(40,Math.min(100,saved.cabinWidth)):null,side:Array.isArray(saved?.side)?saved.side.filter(id=>Object.hasOwn(monitorCommands,id)):[],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
+ function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {monitorLayout:2,buttonStyles:Object.fromEntries(Object.keys(monitorCommands).filter(id=>saved?.buttonStyles?.[id]).map(id=>{
+  const style=saved.buttonStyles[id];
+  return [id,{label:typeof style.label==='string'?style.label.trim().slice(0,48):'',color:Object.hasOwn(panelColors,style.color)?style.color:''}];
+ })),order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>validPanelColor(saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set([...(saved.monitorLayout===2?[]:['choose','resume']),...saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id))])]:[...defaultMonitor],displayWidth:[35,40,45,50,55,60,65].includes(saved?.displayWidth)?saved.displayWidth:45,stackMonitor:saved?.stackMonitor===true,cabinHeight:Number.isInteger(saved?.cabinHeight)?Math.max(0,Math.min(1600,saved.cabinHeight)):0,cabinWidth:Number.isInteger(saved?.cabinWidth)?Math.max(40,Math.min(100,saved.cabinWidth)):null,side:Array.isArray(saved?.side)?saved.side.filter(id=>Object.hasOwn(monitorCommands,id)):[],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
  let syncedLayout=null;
  const syncMessages=new Map();
  const pendingLayouts=new Map();
@@ -167,7 +170,9 @@
    const beside=prefs.side.includes(id);
    const button=document.createElement('button');
    button.type='button';
-   button.textContent=label;
+   const style=prefs.buttonStyles[id];
+   button.textContent=style?.label||label;
+   if(style?.color)button.style.setProperty('--arena-op-button-color',panelColors[style.color][1]);
    button.dataset.opDockCommand=id;
    button.draggable=true;
    const preview=button.cloneNode(true);
@@ -181,7 +186,7 @@
    }else if(root.hasAttribute('data-op-standby')){
     if(panelId)button.dataset.opQuickPanel=panelId;
     else if(id==='clock')button.dataset.opQuickPanel='time';
-    else button.disabled=true;
+    else button.setAttribute('aria-disabled','true');
    }else if(!source || source.disabled){
     button.setAttribute('aria-disabled','true');
     button.dataset.opUnavailable='';
@@ -198,7 +203,7 @@
    if(!panelId)source.draggable=!source.disabled;
   }
   choices.innerHTML=Object.entries(monitorCommands).filter(([id])=>!prefs.monitor.includes(id)).map(([id,[label]])=>
-   '<button type="button" data-op-editor-drag data-op-dock-command="'+id+'">'+escape(label)+'</button>'
+   '<button type="button" data-op-editor-drag data-op-dock-command="'+id+'">'+escape(prefs.buttonStyles[id]?.label||label)+'</button>'
   ).join('');
  }
  function toolbar(root,prefs){monitorToolbar(root,prefs);const nav=tools(root).querySelector('[data-op-shortcuts]');nav.replaceChildren();const panels=[...root.querySelectorAll('[data-op-panel]')];for(const section of panels){const id=section.dataset.opPanel,fold=section.querySelector('[data-op-fold]'),closed=prefs.collapsed.includes(id);
@@ -390,7 +395,7 @@
   }
   if(config.chooser)root.insertAdjacentHTML("beforeend",config.chooser);
   const timeline=score.querySelector('.match-timeline');if(timeline)timeline.remove();const scoreWrap=document.createElement('section');scoreWrap.className='arena-op-score';const info=document.createElement('details');info.className='arena-op-match-details';info.innerHTML='<summary>Detalhes da partida</summary>';info.append(score);scoreWrap.append(info);const guide=old.querySelector('.match-guide');root.append(scoreWrap);
-  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.id='arenaOpSettings';settings.innerHTML='<summary>Personalizar a cabine</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-layout-options"><legend>Espaço do visor</legend><div class="arena-op-width-options"><label>Largura da cabine <output data-op-width-label></output><input type="range" data-op-width-range min="40" max="100" step="1" value="100"></label><button type="button" data-op-width-auto>Largura automática</button></div><label>Largura do placar em telas largas<select data-op-display-width><option value="35">35%</option><option value="40">40%</option><option value="45">45%</option><option value="50">50%</option><option value="55">55%</option><option value="60">60%</option><option value="65">65%</option></select></label><label><input type="checkbox" data-op-stack-monitor> Dar a largura inteira aos comandos abaixo do placar</label></fieldset><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Arraste cada botão para o visor. Para devolver um atalho à lista, solte-o fora das caixas.</p><div class="arena-op-dock-targets"><div data-op-dock="side"><strong>Ao lado do visor</strong><div data-op-dock-preview="side"></div></div><div data-op-dock="below"><strong>Abaixo do visor</strong><div data-op-dock-preview="below"></div></div><button type="button" data-op-view-monitor>Ver o visor</button></div><div data-op-dock="remove"><strong>Botões disponíveis</strong><div data-op-monitor-choices></div></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><button type="button" data-op-sync>Sincronizar ajustes deste aparelho</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
+  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.id='arenaOpSettings';settings.innerHTML='<summary>Personalizar a cabine</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-layout-options"><legend>Espaço do visor</legend><div class="arena-op-width-options"><label>Largura da cabine <output data-op-width-label></output><input type="range" data-op-width-range min="40" max="100" step="1" value="100"></label><button type="button" data-op-width-auto>Largura automática</button></div><label>Largura do placar em telas largas<select data-op-display-width><option value="35">35%</option><option value="40">40%</option><option value="45">45%</option><option value="50">50%</option><option value="55">55%</option><option value="60">60%</option><option value="65">65%</option></select></label><label><input type="checkbox" data-op-stack-monitor> Dar a largura inteira aos comandos abaixo do placar</label></fieldset><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Arraste os botões para o visor. Para retirá-los, solte fora das caixas. Use o botão direito ou segure um atalho no visor para personalizar.</p><div class="arena-op-dock-targets"><div data-op-dock="side"><strong>Ao lado do visor</strong><div data-op-dock-preview="side"></div></div><div data-op-dock="below"><strong>Abaixo do visor</strong><div data-op-dock-preview="below"></div></div><button type="button" data-op-view-monitor>Ver o visor</button></div><div data-op-dock="remove"><strong>Botões disponíveis</strong><div data-op-monitor-choices></div></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><button type="button" data-op-sync>Sincronizar ajustes deste aparelho</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
   const nav=document.createElement('nav');nav.className='toolbar arena-op-shortcuts';nav.dataset.opShortcuts='';nav.setAttribute('aria-label','Meus atalhos da operação');settings.append(nav);const grid=document.createElement('div');grid.className='arena-op-grid';grid.dataset.opGrid='';root.append(grid);
   for(const [group,label] of [['pinned','Caixas fixadas no topo'],['regular','Caixas desafixadas']]){
    const lane=document.createElement('div');lane.dataset.opGroup=group;
@@ -681,7 +686,7 @@
    visible.splice(target,0,id);
    prefs.order=[...visible,...prefs.order.filter(key=>!visible.includes(key))];
   }
-  if(button.hasAttribute('data-op-reset')){prefs.order=[...defaults];prefs.monitor=[...defaultMonitor];prefs.side=[];prefs.displayWidth=45;prefs.stackMonitor=false;prefs.cabinWidth=null;prefs.cabinHeight=0;prefs.names={};prefs.colors={};prefs.collapsed=[];prefs.locked=[];prefs.favorites=['points','time','events','history'];prefs.compact=false;prefs.columns=false;tools(root).querySelector('[data-op-compact]').checked=false;tools(root).querySelector('[data-op-columns]').checked=false;}
+  if(button.hasAttribute('data-op-reset')){prefs.order=[...defaults];prefs.monitor=[...defaultMonitor];prefs.side=[];prefs.buttonStyles={};prefs.displayWidth=45;prefs.stackMonitor=false;prefs.cabinWidth=null;prefs.cabinHeight=0;prefs.names={};prefs.colors={};prefs.collapsed=[];prefs.locked=[];prefs.favorites=['points','time','events','history'];prefs.compact=false;prefs.columns=false;tools(root).querySelector('[data-op-compact]').checked=false;tools(root).querySelector('[data-op-columns]').checked=false;}
   apply(root,prefs);save(root,prefs);
  });
  function chooseMatch(root){
@@ -921,16 +926,39 @@
   const index=peers.indexOf(id);
   const reorder=index<0?'':'<button value="earlier" '+(index===0?'disabled':'')+'>Mover para antes</button><button value="later" '+(index===peers.length-1?'disabled':'')+'>Mover para depois</button>';
   dialog.setAttribute('aria-labelledby','arenaOpDockTitle');
-  dialog.innerHTML='<form method="dialog"><div class="arena-dialog-heading"><h2 id="arenaOpDockTitle">'+escape(monitorCommands[id][0])+'</h2><button value="cancel" class="arena-close-x" aria-label="Fechar" title="Fechar">×</button></div><div class="toolbar"><button value="side">Ao lado</button><button value="below">Abaixo</button>'+reorder+'<button value="remove">Retirar do visor</button></div></form>';
+  if(document.querySelector('.arena-dock-dialog[open]'))return;
+  const style=prefs.buttonStyles[id]||{};
+  const colors=Object.entries(panelColors).map(([key,[name]])=>'<option value="'+key+'">'+name+'</option>').join('');
+  dialog.innerHTML='<div class="arena-dialog-heading"><h2 id="arenaOpDockTitle">'+escape(monitorCommands[id][0])+'</h2><button type="button" value="cancel" class="arena-close-x" aria-label="Fechar" title="Fechar">×</button></div>'
+   +'<div class="arena-op-button-fields"><label>Nome do botão<input data-op-button-label maxlength="48"></label><label>Cor do botão<select data-op-button-color><option value="">Padrão</option>'+colors+'</select></label></div>'
+   +'<div class="toolbar"><button value="save">Salvar aparência</button><button value="reset">Restaurar aparência</button></div>'
+   +'<div class="toolbar"><button value="side">Ao lado</button><button value="below">Abaixo</button>'+reorder+'<button value="remove">Retirar do visor</button></div>';
+  const labelField=dialog.querySelector('[data-op-button-label]');
+  const colorField=dialog.querySelector('[data-op-button-color]');
+  labelField.value=style.label||'';
+  labelField.placeholder=monitorCommands[id][0];
+  colorField.value=style.color||'';
+  for(const button of dialog.querySelectorAll('button')){
+   button.type='button';
+   button.addEventListener('click',()=>dialog.close(button.value));
+  }
   document.body.append(dialog);
   dialog.addEventListener('close',()=>{
    const action=dialog.returnValue;
    if(root.isConnected){
-    if(['side','below','remove'].includes(action))dockCommand(root,id,action);
+    if(action==='save' || action==='reset'){
+     const current=read(root.dataset.opKey);
+     if(action==='reset')delete current.buttonStyles[id];
+     else current.buttonStyles[id]={label:labelField.value.trim().slice(0,48),color:colorField.value};
+     monitorToolbar(root,current);
+     save(root,current);
+    }else if(['side','below','remove'].includes(action))dockCommand(root,id,action);
     else if(action==='earlier' && index>0)dockCommand(root,id,place,peers[index-1]);
     else if(action==='later' && index>=0 && index<peers.length-1)dockCommand(root,id,place,peers[index+2]);
    }
    dialog.remove();
+   const replacement=root.querySelector('[data-op-dock-command="'+id+'"]');
+   (source.isConnected?source:replacement)?.focus({preventScroll:true});
   },{once:true});
   dialog.showModal();
  }
@@ -943,12 +971,33 @@
  });
  document.addEventListener('pointermove',event=>{
   if(editorDrag?.pointer!==event.pointerId)return;
-  const {source,x,y}=editorDrag;
-  if(Math.hypot(event.clientX-x,event.clientY-y)>7)source.classList.add('arena-op-dragging-shortcut');
+  const {source,root,x,y}=editorDrag;
+  if(!editorDrag.preview){
+   if(Math.hypot(event.clientX-x,event.clientY-y)<=7)return;
+   const preview=document.createElement('div');
+   preview.className='arena-op-shortcut-preview';
+   preview.textContent=source.textContent.trim();
+   preview.setAttribute('aria-hidden','true');
+   document.body.append(preview);
+   source.classList.add('arena-op-dragging-shortcut');
+   editorDrag.preview=preview;
+  }
+  const {clientX,clientY}=event;
+  const preview=editorDrag.preview;
+  preview.style.left=Math.max(4,Math.min(clientX+12,innerWidth-preview.offsetWidth-4))+'px';
+  const top=clientY+18+preview.offsetHeight<=innerHeight?clientY+18:clientY-preview.offsetHeight-12;
+  preview.style.top=Math.max(4,top)+'px';
+  const destination=document.elementFromPoint(clientX,clientY)?.closest('[data-op-dock]');
+  editorDrag.destination?.classList.remove('arena-op-drop-highlight');
+  editorDrag.destination=destination && workspaceFor(destination)===root
+   ? destination : tools(root).querySelector('[data-op-dock="remove"]');
+  editorDrag.destination?.classList.add('arena-op-drop-highlight');
  });
  for(const type of ['pointerup','pointercancel','lostpointercapture'])document.addEventListener(type,event=>{
   if(editorDrag?.pointer!==event.pointerId)return;
-  const {source,root}=editorDrag;editorDrag=null;
+  const {source,root,preview,destination:highlight}=editorDrag;editorDrag=null;
+  preview?.remove();
+  highlight?.classList.remove('arena-op-drop-highlight');
   if(!source.classList.contains('arena-op-dragging-shortcut'))return;
   source.classList.remove('arena-op-dragging-shortcut');
   if(type!=='pointerup'||!root?.isConnected)return;
@@ -972,16 +1021,21 @@
   const destination=event.target.closest('[data-op-dock]');
   if(!dockDrag||!destination||workspaceFor(destination)!==dockDrag.root)return;
   event.preventDefault();event.dataTransfer.dropEffect='copy';
+  if(dockDrag.destination!==destination){
+   dockDrag.destination?.classList.remove('arena-op-drop-highlight');
+   destination.classList.add('arena-op-drop-highlight');
+   dockDrag.destination=destination;
+  }
  });
  document.addEventListener('drop',event=>{
   const destination=event.target.closest('[data-op-dock]');
   if(!dockDrag||!destination||workspaceFor(destination)!==dockDrag.root)return;
   event.preventDefault();
-  const {root,id}=dockDrag;root.classList.remove('arena-docking');dockDrag=null;
+  const {root,id}=dockDrag;dockDrag.destination?.classList.remove('arena-op-drop-highlight');root.classList.remove('arena-docking');dockDrag=null;
   const target=event.target.closest('[data-op-dock-command]');
   if(target?.dataset.opDockCommand!==id)dockCommand(root,id,destination.dataset.opDock,target?.dataset.opDockCommand);
  });
- document.addEventListener('dragend',()=>{dockDrag?.root.classList.remove('arena-docking');dockDrag=null;});
+ document.addEventListener('dragend',()=>{dockDrag?.destination?.classList.remove('arena-op-drop-highlight');dockDrag?.root.classList.remove('arena-docking');dockDrag=null;});
  function openDockOptions(event){
   const source=event.target.closest('[data-op-dock-command]');
   const root=source&&workspaceFor(source);
