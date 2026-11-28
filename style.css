@@ -1280,6 +1280,15 @@ hr {
 .brand-copy { display: flex; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
 .brand-copy b { font-size: 18px; line-height: 1.2; }
 .brand-copy small { font: 10px system-ui, sans-serif; letter-spacing: .12em; }
+
+#trainingBrand {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+#trainingBrand .brand-copy { min-width: 0; }
 .header-actions { flex-wrap: wrap; justify-content: flex-end; }
 .session-identity { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid #34434d; border-radius: 10px; }
 .session-identity[hidden] { display: none; }
