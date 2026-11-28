@@ -3351,3 +3351,35 @@ button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin)[aria-press
   :root:not(.reduce-motion) .public-audience-badge svg { animation-duration:var(--arena-eye-seconds,5s); }
   :root[data-arena-eye-still] .public-audience-badge svg { animation:none; }
 }
+
+/* Tamanho configurado do ícone da previsão */
+.arena-weather-card #arenaWeather .arena-weather-graphic {
+  inline-size:var(--arena-weather-icon-size,30px);
+  block-size:var(--arena-weather-icon-size,30px);
+  font-size:var(--arena-weather-icon-size,30px);
+  flex:0 0 auto;
+}
+.arena-weather-card #arenaWeather .arena-weather-graphic :is(i,b,u,em) {
+  font-size:inherit;
+}
+.arena-public-games-heading {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px 18px;
+  min-inline-size:0;
+}
+.arena-public-games-heading h2 { margin:0; }
+.arena-public-games-audience {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:5px 10px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  color:var(--muted);
+  font-size:.875rem;
+}
+.arena-public-games-audience .public-audience-badge { margin:0; }
+

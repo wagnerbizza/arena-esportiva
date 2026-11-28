@@ -2483,7 +2483,7 @@ document.addEventListener("click",async event=>{
 });
 
 function publicPageHTML() {
-  return `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(publicEdition || systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section>${C.demo ? "" : shareEditionControls(publicEdition)}${liveStatusPanel("public")}${muralPublicCard()}<div class="sectionhead"><div><h2>Acompanhe os jogos</h2>${C.demo?"":`<p class="public-audience-badge" data-public-audience>${publicAudienceBadge()}</p>`}</div><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
+  return `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(publicEdition || systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section>${C.demo ? "" : shareEditionControls(publicEdition)}${liveStatusPanel("public")}${muralPublicCard()}<div class="sectionhead"><div class="arena-public-games-heading"><h2>Acompanhe os jogos</h2>${C.demo?"":`<span class="arena-public-games-audience"><span>Pessoas acompanhando</span><span class="public-audience-badge" data-public-audience>${publicAudienceBadge()}</span></span>`}</div><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
       D.SPORTS,
       (x) => x,
       (x) => x,
