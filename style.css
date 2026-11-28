@@ -3073,16 +3073,14 @@ button:is(.arena-game-bar-settings,.arena-game-bar-pin,.arena-weather-pin,.arena
   inline-size: 20px;
   block-size: 20px;
 }
-button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin,.arena-side-pin)[aria-pressed] {
+body button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin)[aria-pressed],
+body button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin)[aria-pressed]:hover {
   background:none !important;
   border-color:transparent !important;
   box-shadow:none !important;
-  color:var(--text);
+  color:var(--text,#eef3f6) !important;
 }
-button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin,.arena-side-pin)[aria-pressed]:hover {
-  color:var(--accent);
-}
-button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin,.arena-side-pin)[aria-pressed]:focus-visible {
+button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin)[aria-pressed]:focus-visible {
   outline:2px solid var(--accent);
   outline-offset:-3px;
 }
