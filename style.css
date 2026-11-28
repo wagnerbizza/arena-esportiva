@@ -2401,6 +2401,15 @@ body:not([data-admin="true"]) .public-event-icon {
  body.arena-rail-collapsed #arenaSidebar .arena-side-brand-link {flex:0;justify-content:center}
  body.arena-rail-collapsed #arenaSidebar .brand-copy,body.arena-rail-collapsed #arenaSidebar .arena-side-caption,body.arena-rail-collapsed #arenaSidebar .arena-side-home>span,body.arena-rail-collapsed #arenaSidebar summary>span,body.arena-rail-collapsed #arenaSidebar summary:after,body.arena-rail-collapsed #arenaSidebar .arena-side-group>nav,body.arena-rail-collapsed #arenaSidebar .arena-sidebar-footer span,body.arena-rail-collapsed #arenaSidebar .arena-sidebar-footer small {display:none}
  body.arena-rail-collapsed #arenaSidebar .arena-side-home,body.arena-rail-collapsed #arenaSidebar .arena-side-group>summary,body.arena-rail-collapsed #arenaSidebar .arena-sidebar-footer>button,body.arena-rail-collapsed #arenaSidebar .arena-sidebar-footer>a.button {min-height:44px;justify-content:center;padding:10px;gap:0}
+ body.arena-rail-collapsed #arenaSidebar .arena-side-item {
+   display:flex;
+   align-items:center;
+   justify-content:center;
+   min-height:44px;
+   padding:10px;
+   gap:0;
+ }
+ body.arena-rail-collapsed #arenaSidebar .arena-side-item > span:not(.arena-icon) {display:none}
  body.arena-rail-collapsed #arenaSidebar [data-layout-rail] svg {transform:rotate(180deg)}
 }
 @container arena-content (max-width:740px) {body.arena-central-ready .live-console{grid-template-columns:1fr}}
