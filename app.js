@@ -1982,7 +1982,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=mural-anexos-1");
+    const { connectSpark } = await import("./spark-store.js?v=mural-placares-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -2310,9 +2310,11 @@ function render() {
     ["imports", "Importar"],
   ];
   const muralForm=canManageMural()&&section==="mural"&&muralScope===role+":"+user?.uid?$("#arenaMuralForm"):null;
+  const muralConfig=muralForm?$("#arenaMuralSettings")?.closest("details"):null;
   const pageControls = arenaPageControls();
   app.innerHTML = `${audienceMonitorBar()}${pageControls}${locationTrail()}${workspaceNavigation(sections)}${floatingGameClock()}<div class="sectionhead admin-heading noprint" data-custom-area="title:${esc(section)}"><div><span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span>${gameBarSettingsButton("title:"+section)}</div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel():""}${view()}</div>${relatedArenaScreens()}`;
   if(muralForm)$("#arenaMuralForm")?.replaceWith(muralForm);
+  if(muralConfig)$("#arenaMuralSettings")?.closest("details").replaceWith(muralConfig);
   syncMural();
   audienceMonitorObserver?.disconnect();
   const audienceMonitor = app.querySelector(".arena-audience-monitor");
@@ -5664,12 +5666,13 @@ function publicChallenge(){
 }
 const canManageMural=()=>!C.demo && (role==="admin" || (role==="operator" && operatorPermissions.includes("muralPublish")));
 let muralRows=[], muralStop, muralScope="", muralError="", muralLoaded=false, muralEditing="", muralBusy=false;
-let muralSlide=0,muralPaused=false;
+const muralDefaults={title:"Bem-vindo à Arena!",subtitle:"Acompanhe placares, próximos jogos e recados da comunidade.",seconds:10,accent:"#15c3ed",auto:true,results:true,agenda:true,partners:true};
+let muralSettings={...muralDefaults},muralSettingsStop,muralSlide=0,muralPaused=false,muralNext=0;
 const muralMotion=matchMedia("(prefers-reduced-motion: reduce)");
 function muralPublicCard(){
  return C.demo?"":`<section class="card" data-mural-public aria-labelledby="arenaMuralTitle">
    <div class="arena-mural-header"><h2 id="arenaMuralTitle">Mural da Arena</h2>
-   <span class="arena-mural-play" data-mural-motion aria-hidden="true"><span>🏃</span><span>⚽</span><span>🏃</span></span></div>
+   <span class="arena-mural-field" aria-hidden="true"><i></i></span></div>
    <div data-mural-slide aria-live="off"></div>
    <div class="toolbar" data-mural-controls hidden>
     <button type="button" data-mural-step="-1" aria-label="Recado anterior">←</button>
@@ -5684,22 +5687,25 @@ function muralSlides(){
  const messages=muralRows.filter(row=>!muralDate(row)||muralDate(row)>now)
   .sort((a,b)=>Number(b.pinned)-Number(a.pinned)||(b.updatedAt?.seconds||0)-(a.updatedAt?.seconds||0));
  const matches=state.matches.filter(match=>!match.publicHidden&&!match.testData);
- const games=[];
- const live=matches.find(match=>match.status==="Ao vivo");
- const next=matches.filter(match=>match.status==="Agendada")
-  .sort((a,b)=>String(a.date).localeCompare(String(b.date)))[0];
- const latest=matches.filter(match=>["Encerrada","Homologada"].includes(match.status))
-  .sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0];
- for(const [label,match] of [["Ao vivo",live],["Próximo jogo",next],["Último resultado",latest]]){
-  if(!match)continue;
-  const result=match===next?"×":gameResult(match).join(" × ");
-  games.push({title:`${name(match.home)} ${result} ${name(match.away)}`,
-   body:[matchSportLabel(match),match===next&&match.date?format(match.date):"",match.place].filter(Boolean).join(" · "),label});
+ const slides=[{label:"Boas-vindas",title:muralSettings.title,body:muralSettings.subtitle},
+  ...messages.map(row=>({...row,label:row.pinned?"Recado em destaque":"Recado"}))];
+ for(const [label,statuses,enabled] of [
+  ["Ao vivo",["Ao vivo"],true],
+  ["Agenda",["Agendada","Adiada"],muralSettings.agenda],
+  ["Resultado",["Encerrada","Homologada"],muralSettings.results]
+ ]){
+  if(!enabled)continue;
+  const scheduled=label==="Agenda";
+  const games=matches.filter(match=>statuses.includes(match.status)).sort((a,b)=>
+   scheduled?String(a.date).localeCompare(String(b.date)):String(b.date).localeCompare(String(a.date)));
+  for(const match of games){
+   slides.push({label:scheduled?match.status:label,
+    teams:[name(match.home),name(match.away)],score:scheduled?"×":gameResult(match).join(" × "),
+    body:[matchSportLabel(match),match.competition,match.date?format(match.date):"",match.place].filter(Boolean).join(" · ")});
+  }
  }
- const partners=state.partners?.surfaces?.includes("publicPanel")?partnerGroups("preview"):[];
- const slides=[...messages.map(row=>({...row,label:row.pinned?"Recado em destaque":"Recado"})),...games];
+ const partners=muralSettings.partners&&state.partners?.surfaces?.includes("publicPanel")?partnerGroups("preview"):[];
  if(partners.length)slides.push({label:"Organização e apoio",title:"Parceiros da Arena",body:"",partners});
- if(!slides.length)slides.push({label:"Boas-vindas",title:"Bem-vindo à Arena!",body:"Confira aqui os próximos jogos, resultados e comunicados da comunidade."});
  return slides;
 }
 function showMuralSlide(step=0,announce=false){
@@ -5707,17 +5713,19 @@ function showMuralSlide(step=0,announce=false){
  const slides=muralSlides();
  muralSlide=(muralSlide+step+slides.length)%slides.length;
  const row=slides[muralSlide], content=box.querySelector("[data-mural-slide]");
- const markup=`<p class="tag">${esc(row.label)}</p>${muralMediaMarkup(row)}${row.partners?`<div class="arena-partners">${row.partners.flatMap(group=>group.logos.map(url=>`<img src="${esc(url)}" alt="${esc(group.label)}" loading="lazy" referrerpolicy="no-referrer">`)).join("")}</div>`:""}`;
+ const scoreboard=row.teams?`<div class="arena-mural-score"><strong>${esc(row.teams[0])}</strong><b>${esc(row.score)}</b><strong>${esc(row.teams[1])}</strong></div><p class="muted">${esc(row.body)}</p>`:"";
+ const markup=`<div class="arena-mural-frame"><p class="tag">${esc(row.label)}</p>${scoreboard||muralMediaMarkup(row)}${row.partners?`<div class="arena-partners">${row.partners.flatMap(group=>group.logos.map(url=>`<img src="${esc(url)}" alt="${esc(group.label)}" loading="lazy" referrerpolicy="no-referrer">`)).join("")}</div>`:""}</div>`;
+ box.style.setProperty("--arena-mural-accent",/^#[0-9a-f]{6}$/i.test(muralSettings.accent)?muralSettings.accent:muralDefaults.accent);
  if(announce)content.setAttribute("aria-live","polite");
  else if(step)content.setAttribute("aria-live","off");
  if(content.dataset.muralKey!==markup){content.innerHTML=markup;content.dataset.muralKey=markup;}
  const reduced=muralMotion.matches||document.documentElement.classList.contains("reduce-motion");
- box.toggleAttribute("data-mural-paused",muralPaused||reduced);
- box.querySelector("[data-mural-controls]").hidden=slides.length<2&&reduced;
+ box.toggleAttribute("data-mural-paused",muralPaused||reduced||!muralSettings.auto);
+ box.querySelector("[data-mural-controls]").hidden=slides.length<2&&(reduced||!muralSettings.auto);
  for(const control of box.querySelectorAll("[data-mural-step],[data-mural-position]"))control.hidden=slides.length<2;
  box.querySelector("[data-mural-position]").textContent=`${muralSlide+1} / ${slides.length}`;
  const pause=box.querySelector("[data-mural-pause]");
- pause.hidden=reduced;
+ pause.hidden=reduced||!muralSettings.auto;
  pause.textContent=muralPaused?"Retomar":"Pausar";
 }
 document.addEventListener("click",event=>{
@@ -5725,14 +5733,16 @@ document.addEventListener("click",event=>{
  if(!button)return;
  if(button.hasAttribute("data-mural-pause"))muralPaused=!muralPaused;
  else muralPaused=true;
+ muralNext=Date.now()+muralSettings.seconds*1000;
  showMuralSlide(Number(button.dataset.muralStep)||0,true);
 });
 muralMotion.addEventListener("change",()=>showMuralSlide());
 setInterval(()=>{
  const box=app.querySelector("[data-mural-public]");
- if(!box||document.hidden||box.matches(":hover,:focus-within"))return;
- showMuralSlide(muralPaused||muralMotion.matches||document.documentElement.classList.contains("reduce-motion")?0:1);
-},10000);
+ if(!box||document.hidden||box.matches(":hover,:focus-within")||Date.now()<muralNext)return;
+ muralNext=Date.now()+muralSettings.seconds*1000;
+ showMuralSlide(!muralSettings.auto||muralPaused||muralMotion.matches||document.documentElement.classList.contains("reduce-motion")?0:1);
+},1000);
 const muralFileTypes={png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",webp:"image/webp",pdf:"application/pdf",zip:"application/zip"};
 const muralFileLimit=200*1024;
 function muralLink(value){
@@ -5769,8 +5779,47 @@ function downloadMuralFile(id){
   link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  }catch{toast("Não foi possível baixar o anexo.",true);}
 }
+function muralSettingsForm(){
+ const fields=[["auto","Rodízio automático"],["results","Mostrar todos os resultados"],["agenda","Mostrar agenda"],["partners","Mostrar parceiros"]];
+ return `<details class="card arena-mural-config"><summary>Configurar visor público</summary><form id="arenaMuralSettings">
+ <label>Mensagem de boas-vindas<input name="title" maxlength="100" required value="${esc(muralSettings.title)}"></label>
+ <label>Descrição<input name="subtitle" maxlength="220" required value="${esc(muralSettings.subtitle)}"></label>
+ <label>Segundos por tela<input name="seconds" type="number" min="5" max="60" required value="${esc(muralSettings.seconds)}"></label>
+ <label>Cor do visor<input name="accent" type="color" value="${esc(muralSettings.accent)}"></label>
+ ${fields.map(([id,label])=>`<label class="confirmation-check"><input type="checkbox" name="${id}" ${muralSettings[id]?"checked":""}> ${label}</label>`).join("")}
+ <div class="toolbar"><button type="submit" class="primary">Salvar visor</button><button type="button" data-mural-settings-default>Restaurar valores padrão</button></div>
+ </form></details>`;
+}
+function fillMuralSettings(form,values){
+ for(const [key,value] of Object.entries(values)){
+  const input=form.elements.namedItem(key);if(!input)continue;
+  if(input.type==="checkbox")input.checked=value;
+  else input.value=value;
+ }
+}
+document.addEventListener("submit",async event=>{
+ const form=event.target;if(form.id!=="arenaMuralSettings")return;
+ event.preventDefault();
+ if(!canManageMural()||!cloud)return;
+ const values={};
+ for(const key of Object.keys(muralDefaults)){
+  const input=form.elements.namedItem(key);
+  values[key]=input.type==="checkbox"?input.checked:input.type==="number"?input.valueAsNumber:input.value.trim();
+ }
+ if(!values.title||!values.subtitle)return;
+ const button=event.submitter;
+ if(button?.disabled)return;
+ if(button)button.disabled=true;
+ try{await cloud.saveMuralSettings(values);toast("Visor público atualizado.");}
+ catch(error){toast(error.message||"Falha ao salvar o visor.",true);}
+ finally{if(button)button.disabled=false;}
+},true);
+document.addEventListener("click",event=>{
+ const button=event.target.closest("[data-mural-settings-default]");
+ if(button)fillMuralSettings(button.form,muralDefaults);
+});
 function muralManage(){
- return '<section class="card" data-mural-manage><form id="arenaMuralForm"><h2>Escrever recado</h2><label>Título<input name="title" required maxlength="100"></label><label>Mensagem<textarea name="body" required maxlength="1200" rows="4"></textarea></label><label>Visível até (opcional)<input name="expires" type="date"></label><fieldset class="arena-mural-options"><legend>Aparência e anexos</legend><label class="confirmation-check"><input name="customColor" type="checkbox"> Usar cor de destaque</label><label>Cor de destaque<input name="accent" type="color" value="#15c3ed"></label><label>Imagem, PDF ou ZIP<input name="attachment" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf,.zip"></label><small>Um arquivo de até 200 KB por recado. Para arquivos maiores, use um link HTTPS compartilhável.</small><label class="confirmation-check" data-mural-existing hidden><input name="removeAttachment" type="checkbox"> <span>Remover anexo atual</span></label><label>Link externo (opcional)<input name="mediaLink" type="url" maxlength="1500" placeholder="https://"></label></fieldset>'+(role==="admin"?'<label class="confirmation-check"><input name="pinned" type="checkbox"> Destacar no mural público</label>':'')+'<div class="toolbar"><button type="submit" value="published" class="primary">Publicar</button><button type="submit" value="draft">Salvar rascunho</button><button type="button" data-mural-new>Novo recado</button></div></form><h2>Recados cadastrados</h2><div data-mural-list></div></section>';
+ return muralSettingsForm()+'<section class="card" data-mural-manage><form id="arenaMuralForm"><h2>Escrever recado</h2><label>Título<input name="title" required maxlength="100"></label><label>Mensagem<textarea name="body" required maxlength="1200" rows="4"></textarea></label><label>Visível até (opcional)<input name="expires" type="date"></label><fieldset class="arena-mural-options"><legend>Aparência e anexos</legend><label class="confirmation-check"><input name="customColor" type="checkbox"> Usar cor de destaque</label><label>Cor de destaque<input name="accent" type="color" value="#15c3ed"></label><label>Imagem, PDF ou ZIP<input name="attachment" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf,.zip"></label><small>Um arquivo de até 200 KB por recado. Para arquivos maiores, use um link HTTPS compartilhável.</small><label class="confirmation-check" data-mural-existing hidden><input name="removeAttachment" type="checkbox"> <span>Remover anexo atual</span></label><label>Link externo (opcional)<input name="mediaLink" type="url" maxlength="1500" placeholder="https://"></label></fieldset>'+(role==="admin"?'<label class="confirmation-check"><input name="pinned" type="checkbox"> Destacar no mural público</label>':'')+'<div class="toolbar"><button type="submit" value="published" class="primary">Publicar</button><button type="submit" value="draft">Salvar rascunho</button><button type="button" data-mural-new>Novo recado</button></div></form><h2>Recados cadastrados</h2><div data-mural-list></div></section>';
 }
 function muralDate(row){
  return row.expiresAt?.toDate?.() || null;
@@ -5787,8 +5836,17 @@ function updateMural(){
 function syncMural(){
  const scope=!cloud||C.demo?"":!admin?"public":canManageMural()&&section==="mural"?role+":"+user?.uid:"";
  if(scope!==muralScope){
-  muralStop?.();muralStop=null;muralScope=scope;muralRows=[];muralError="";muralEditing="";muralLoaded=false;
+  muralStop?.();muralSettingsStop?.();muralStop=null;muralSettingsStop=null;muralScope=scope;muralRows=[];muralError="";muralEditing="";muralLoaded=false;
   if(scope){
+   muralNext=Date.now()+muralSettings.seconds*1000;
+   muralSettingsStop=cloud.watchMuralSettings(values=>{
+    if(scope!==muralScope)return;
+    muralSettings={...muralDefaults,...values};
+    muralNext=Date.now()+muralSettings.seconds*1000;
+    const form=$("#arenaMuralSettings");
+    if(form&&!form.closest("details").open)fillMuralSettings(form,muralSettings);
+    if(!admin)showMuralSlide();
+   });
    const fail=()=>{if(scope===muralScope){muralError="Não foi possível carregar os recados. Verifique a conexão e as regras do Firestore.";updateMural();}};
    try{muralStop=cloud.watchMural(admin,rows=>{if(scope===muralScope){muralRows=rows;muralLoaded=true;updateMural();}},fail);}catch{fail();}
   }

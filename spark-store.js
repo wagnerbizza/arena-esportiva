@@ -1256,6 +1256,13 @@ export async function connectSpark({
   }
   const canPublishMural = () => isOwner() || (authorized() && (profile?.permissions || []).includes("muralPublish"));
   return {
+    watchMuralSettings(update) {
+      return F.onSnapshot(F.doc(database,"muralDisplay","main"),snap=>update(snap.data()||{}),()=>{});
+    },
+    async saveMuralSettings(values) {
+      if(!canPublishMural())throw Error("Sem autorização para configurar o mural.");
+      await F.setDoc(F.doc(database,"muralDisplay","main"),values);
+    },
     watchMural(manage, update, onFailure) {
       if (manage && !canPublishMural()) throw Error("Sem autorização para o mural.");
       const collection=F.collection(database,manage?"muralMessages":"publicMural");

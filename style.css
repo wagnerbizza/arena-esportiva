@@ -3212,27 +3212,42 @@ button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin)[aria-press
 
 .arena-mural-header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 20px; }
 .arena-mural-header h2 { margin:0; }
-.arena-mural-play {
-  position:relative;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  width:min(180px,100%);
-  padding:6px 12px;
-  border:1px solid var(--line);
-  border-radius:12px;
-  background:color-mix(in srgb,var(--panel) 84%,#28a06b);
+[data-mural-public] {
+  border-inline-start-color:var(--arena-mural-accent,var(--accent));
+  background:linear-gradient(130deg,color-mix(in srgb,var(--panel) 89%,var(--arena-mural-accent,var(--accent))),var(--panel) 60%);
 }
-.arena-mural-play span:first-child { transform:scaleX(-1); }
+.arena-mural-field {
+  position:relative; display:grid; place-items:center;
+  inline-size:100px; block-size:42px;
+  border:1px solid var(--arena-mural-accent,var(--accent)); border-radius:6px;
+  background:linear-gradient(90deg,transparent 49%,var(--line) 49% 51%,transparent 51%);
+}
+.arena-mural-field::before { content:""; inline-size:18px; block-size:18px; border:1px solid var(--line); border-radius:50%; }
+.arena-mural-field i { position:absolute; inline-size:7px; block-size:7px; border-radius:50%; background:var(--arena-mural-accent,var(--accent)); }
 [data-mural-public] [hidden] { display:none; }
-[data-mural-slide] { min-block-size:6rem; }
+[data-mural-slide] { min-block-size:9rem; }
 [data-mural-controls] { align-items:center; margin-top:12px; }
-@media (prefers-reduced-motion:no-preference) {
-  :root:not(.reduce-motion) [data-mural-public]:not([data-mural-paused]) .arena-mural-play span:nth-child(2) {
-    animation:arena-mural-pass 2s ease-in-out infinite alternate;
-  }
+.arena-mural-score {
+  display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center;
+  gap:clamp(6px,2vw,16px); text-align:center;
 }
-@keyframes arena-mural-pass {
-  from { transform:translateX(-30px) rotate(-65deg); }
-  to { transform:translateX(30px) rotate(65deg); }
+.arena-mural-score strong { padding:.75em .4em; background:var(--control); border-radius:10px; overflow-wrap:anywhere; }
+.arena-mural-score b { font:700 clamp(1.4rem,4vw,2.8rem) "Barlow Condensed",sans-serif; }
+#arenaMuralSettings { display:grid; gap:12px; margin-top:14px; }
+@media (prefers-reduced-motion:no-preference) {
+  :root:not(.reduce-motion) [data-mural-public]:not([data-mural-paused]) .arena-mural-field i {
+    animation:arena-mural-pass 3s cubic-bezier(.4,0,.4,1) infinite alternate;
+  }
+  :root:not(.reduce-motion) .arena-mural-frame { animation:arena-mural-enter .38s ease-out both; }
+}
+@keyframes arena-mural-pass { from { transform:translate(-33px,6px); } to { transform:translate(33px,-6px); } }
+@keyframes arena-mural-enter { from { opacity:.25; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
+
+@media screen {
+  :where(h1,h2,h3) { letter-spacing:.025em; }
+  .arena-mural-header h2,
+  .arena-mural-content h3 { letter-spacing:.025em; line-height:1.2; }
+  .arena-mural-score strong { letter-spacing:.015em; line-height:1.35; }
+  .arena-mural-score b { letter-spacing:.035em; white-space:nowrap; }
+  .arena-mural-frame :is(.muted,.arena-mural-message) { line-height:1.6; }
 }
