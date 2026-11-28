@@ -45,7 +45,7 @@
  const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {monitorLayout:2,buttonStyles:Object.fromEntries(Object.keys(monitorCommands).filter(id=>saved?.buttonStyles?.[id]).map(id=>{
   const style=saved.buttonStyles[id];
-  return [id,{label:typeof style.label==='string'?style.label.trim().slice(0,48):'',color:Object.hasOwn(panelColors,style.color)?style.color:''}];
+  return [id,{label:typeof style.label==='string'?style.label.trim().slice(0,48):'',color:validPanelColor(style.color)?style.color:''}];
  })),order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>validPanelColor(saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set([...(saved.monitorLayout===2?[]:['choose','resume']),...saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id))])]:[...defaultMonitor],displayWidth:[35,40,45,50,55,60,65].includes(saved?.displayWidth)?saved.displayWidth:45,stackMonitor:saved?.stackMonitor===true,cabinHeight:Number.isInteger(saved?.cabinHeight)?Math.max(0,Math.min(1600,saved.cabinHeight)):0,cabinWidth:Number.isInteger(saved?.cabinWidth)?Math.max(40,Math.min(100,saved.cabinWidth)):null,side:Array.isArray(saved?.side)?saved.side.filter(id=>Object.hasOwn(monitorCommands,id)):[],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
  let syncedLayout=null;
  const syncMessages=new Map();
@@ -172,7 +172,7 @@
    button.type='button';
    const style=prefs.buttonStyles[id];
    button.textContent=style?.label||label;
-   if(style?.color)button.style.setProperty('--arena-op-button-color',panelColors[style.color][1]);
+   if(style?.color)button.style.setProperty('--arena-op-button-color',panelColors[style.color]?.[1]||style.color);
    button.dataset.opDockCommand=id;
    button.draggable=true;
    const preview=button.cloneNode(true);
@@ -928,19 +928,31 @@
   dialog.setAttribute('aria-labelledby','arenaOpDockTitle');
   if(document.querySelector('.arena-dock-dialog[open]'))return;
   const style=prefs.buttonStyles[id]||{};
-  const colors=Object.entries(panelColors).map(([key,[name]])=>'<option value="'+key+'">'+name+'</option>').join('');
+  const colors=Object.values(panelColors).map(([name,color])=>'<button type="button" data-op-color-preset="'+color+'" style="border-bottom:4px solid '+color+'">'+name+'</button>').join('');
   dialog.innerHTML='<div class="arena-dialog-heading"><h2 id="arenaOpDockTitle">'+escape(monitorCommands[id][0])+'</h2><button type="button" value="cancel" class="arena-close-x" aria-label="Fechar" title="Fechar">×</button></div>'
-   +'<div class="arena-op-button-fields"><label>Nome do botão<input data-op-button-label maxlength="48"></label><label>Cor do botão<select data-op-button-color><option value="">Padrão</option>'+colors+'</select></label></div>'
+   +'<div class="arena-op-button-fields"><label>Nome do botão<input data-op-button-label maxlength="48"></label><label>Cor do botão<input type="color" data-op-button-color></label></div>'
+   +'<div class="toolbar">'+colors+'<button type="button" value="default-color">Cor padrão</button></div>'
    +'<div class="toolbar"><button value="save">Salvar aparência</button><button value="reset">Restaurar aparência</button></div>'
    +'<div class="toolbar"><button value="side">Ao lado</button><button value="below">Abaixo</button>'+reorder+'<button value="remove">Retirar do visor</button></div>';
   const labelField=dialog.querySelector('[data-op-button-label]');
   const colorField=dialog.querySelector('[data-op-button-color]');
   labelField.value=style.label||'';
   labelField.placeholder=monitorCommands[id][0];
-  colorField.value=style.color||'';
+  let customColor=Boolean(style.color);
+  colorField.value=panelColors[style.color]?.[1]||style.color||'#203240';
+  colorField.addEventListener('input',()=>{customColor=true;});
+
   for(const button of dialog.querySelectorAll('button')){
    button.type='button';
-   button.addEventListener('click',()=>dialog.close(button.value));
+   button.addEventListener('click',()=>{
+    if(button.dataset.opColorPreset){
+     colorField.value=button.dataset.opColorPreset;
+     customColor=true;
+    }else if(button.value==='default-color'){
+     colorField.value='#203240';
+     customColor=false;
+    }else dialog.close(button.value);
+   });
   }
   document.body.append(dialog);
   dialog.addEventListener('close',()=>{
@@ -949,7 +961,7 @@
     if(action==='save' || action==='reset'){
      const current=read(root.dataset.opKey);
      if(action==='reset')delete current.buttonStyles[id];
-     else current.buttonStyles[id]={label:labelField.value.trim().slice(0,48),color:colorField.value};
+     else current.buttonStyles[id]={label:labelField.value.trim().slice(0,48),color:customColor?colorField.value:''};
      monitorToolbar(root,current);
      save(root,current);
     }else if(['side','below','remove'].includes(action))dockCommand(root,id,action);
@@ -968,15 +980,26 @@
   if(!source||!event.isPrimary||event.button!==0)return;
   editorDrag={source,root:workspaceFor(source),x:event.clientX,y:event.clientY,pointer:event.pointerId};
   source.setPointerCapture(event.pointerId);
+  if(event.pointerType!=='mouse')editorDrag.timer=setTimeout(()=>{
+   const {root}=editorDrag;
+   editorDrag=null;
+   dockMenu(root,source);
+  },600);
  });
  document.addEventListener('pointermove',event=>{
   if(editorDrag?.pointer!==event.pointerId)return;
   const {source,root,x,y}=editorDrag;
   if(!editorDrag.preview){
    if(Math.hypot(event.clientX-x,event.clientY-y)<=7)return;
+   clearTimeout(editorDrag.timer);
    const preview=document.createElement('div');
    preview.className='arena-op-shortcut-preview';
    preview.textContent=source.textContent.trim();
+   const style=getComputedStyle(source);
+   preview.style.inlineSize=source.offsetWidth+'px';
+   preview.style.minBlockSize=source.offsetHeight+'px';
+   for(const prop of ['background-color','color','border-radius','font-size','font-weight'])
+    preview.style.setProperty(prop,style.getPropertyValue(prop));
    preview.setAttribute('aria-hidden','true');
    document.body.append(preview);
    source.classList.add('arena-op-dragging-shortcut');
@@ -995,7 +1018,8 @@
  });
  for(const type of ['pointerup','pointercancel','lostpointercapture'])document.addEventListener(type,event=>{
   if(editorDrag?.pointer!==event.pointerId)return;
-  const {source,root,preview,destination:highlight}=editorDrag;editorDrag=null;
+  const {source,root,preview,timer,destination:highlight}=editorDrag;editorDrag=null;
+  clearTimeout(timer);
   preview?.remove();
   highlight?.classList.remove('arena-op-drop-highlight');
   if(!source.classList.contains('arena-op-dragging-shortcut'))return;

@@ -434,7 +434,11 @@ body .arena-op-strip .arena-op-monitor-tools > button {
   position:fixed;
   z-index:10000;
   pointer-events:none;
-  max-inline-size:min(230px,calc(100vw - 8px));
+  max-inline-size:calc(100vw - 8px);
+  box-sizing:border-box;
+  display:grid;
+  place-items:center;
+  text-align:center;
   padding:9px 14px;
   border:1px solid var(--accent);
   border-radius:9px;
