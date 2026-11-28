@@ -357,7 +357,7 @@
    choose.type='button';choose.className='primary';choose.dataset.opChoose='';
    choose.textContent='Escolher jogo';controls.prepend(choose);
   }
-  controls.append(toolsGroup);
+  strip.prepend(toolsGroup);
   const rail=document.createElement('div');
   rail.className='arena-op-display-rail';
   rail.append(controls,side);

@@ -172,7 +172,7 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 .arena-op-strip {
   display:grid;
   grid-template-columns:minmax(0,var(--arena-display-width,45%)) minmax(0,1fr);
-  grid-template-areas:"display rail" "activity activity" "shortcuts shortcuts";
+  grid-template-areas:"tools tools" "display rail" "activity activity" "shortcuts shortcuts";
   align-items:start;
   gap:10px 14px;
 }
@@ -214,7 +214,7 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 @container arena-cabin (max-width:720px) {
   .arena-op-strip {
     grid-template-columns:minmax(0,1fr);
-    grid-template-areas:"display" "rail" "activity" "shortcuts";
+    grid-template-areas:"tools" "display" "rail" "activity" "shortcuts";
   }
 }
 @media(max-width:767px) {
@@ -229,8 +229,16 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
 .arena-op-choice label { flex:1 1 130px; }
 .arena-op-choice [data-op-place] { display:inline-flex; align-items:center; gap:4px; min-height:44px; user-select:none; }
 .arena-op-choice [data-op-place] > * { pointer-events:none; }
-.arena-op-dock-targets { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
-.arena-op-dock-targets [data-op-dock] { flex:1 1 130px; display:grid; place-items:center; padding:8px; border:1px dashed var(--accent); border-radius:8px; color:var(--text); }
+.arena-op-monitor-options { min-inline-size:0; }
+.arena-op-dock-targets {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));
+  align-items:stretch;
+  gap:8px;
+  margin-bottom:10px;
+}
+.arena-op-dock-targets > [data-op-view-monitor] { grid-column:1/-1; justify-self:start; }
+.arena-op-dock-targets [data-op-dock] { min-inline-size:0; display:grid; padding:8px; border:1px dashed var(--accent); border-radius:8px; color:var(--text); }
 
 .arena-op-primary { display:flex; flex-wrap:wrap; gap:8px; }
 .arena-op-primary:empty,
@@ -252,7 +260,13 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
   }
 }
 
-[data-op-dock-preview] { display:flex; flex-wrap:wrap; gap:6px; }
+[data-op-dock-preview] { display:flex; flex-wrap:wrap; gap:6px; inline-size:100%; min-inline-size:0; }
+[data-op-dock-preview] > button {
+  max-inline-size:100%;
+  min-inline-size:0;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
 [data-op-dock-preview]:not(:empty) { margin-block-start:8px; }
 .arena-op-dock-targets [data-op-dock] { align-content:start; justify-items:start; }
 [data-op-dock-command][aria-disabled=true] { opacity:.65; }
@@ -274,7 +288,7 @@ body.arena-central-ready.arena-operation-page:has(#arenaMenuToggle:not([hidden])
 
 .arena-op-stack-monitor .arena-op-strip {
   grid-template-columns:minmax(0,1fr);
-  grid-template-areas:"display" "rail" "activity" "shortcuts";
+  grid-template-areas:"tools" "display" "rail" "activity" "shortcuts";
 }
 .arena-op-strip :is(.arena-op-monitor,.arena-op-monitor-side):not(:empty) {
   display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,150px),1fr)); width:100%;
@@ -330,7 +344,9 @@ body.arena-central-ready.arena-operation-page:has(#arenaMenuToggle:not([hidden])
   display:flex;
   align-items:center;
   gap:8px;
-  margin-inline-start:auto;
+  grid-area:tools;
+  justify-self:start;
+  flex-wrap:wrap;
 }
 body .arena-op-strip .arena-op-monitor-tools > button {
   flex:0 0 44px;
@@ -354,6 +370,6 @@ body .arena-op-strip .arena-op-monitor-tools > button {
   min-block-size:44px;
   padding:8px 12px;
 }
-[data-op-standby]:not(.arena-docking) .arena-op-strip :is(.arena-op-monitor-side,.arena-op-monitor-row) {
+[data-op-standby]:not(.arena-docking):not(:has(> .arena-op-settings[open])) .arena-op-strip :is(.arena-op-monitor-side,.arena-op-monitor-row) {
   display:none;
 }
