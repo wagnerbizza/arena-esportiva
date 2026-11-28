@@ -3242,6 +3242,13 @@ button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin)[aria-press
 }
 @keyframes arena-mural-pass { from { transform:translate(-33px,6px); } to { transform:translate(33px,-6px); } }
 @keyframes arena-mural-enter { from { opacity:.25; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
+@media (prefers-reduced-motion:no-preference) {
+  :root:not(.reduce-motion) [data-mural-effect="fade"] .arena-mural-frame { animation:arena-mural-fade .55s ease-out both; }
+  :root:not(.reduce-motion) [data-mural-effect="rise"] .arena-mural-frame { animation:arena-mural-enter .55s ease-out both; }
+  :root:not(.reduce-motion) [data-mural-effect="slide"] .arena-mural-frame { animation:arena-mural-slide .55s ease-out both; }
+}
+@keyframes arena-mural-fade { from { opacity:.25; } to { opacity:1; } }
+@keyframes arena-mural-slide { from { opacity:.25; transform:translateX(7px); } to { opacity:1; transform:translateX(0); } }
 
 @media screen {
   :where(h1,h2,h3) { letter-spacing:.025em; }

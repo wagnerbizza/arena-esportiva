@@ -5687,8 +5687,10 @@ function muralSlides(){
  const messages=muralRows.filter(row=>!muralDate(row)||muralDate(row)>now)
   .sort((a,b)=>Number(b.pinned)-Number(a.pinned)||(b.updatedAt?.seconds||0)-(a.updatedAt?.seconds||0));
  const matches=state.matches.filter(match=>!match.publicHidden&&!match.testData);
- const slides=[{label:"Boas-vindas",title:muralSettings.title,body:muralSettings.subtitle},
-  ...messages.map(row=>({...row,label:row.pinned?"Recado em destaque":"Recado"}))];
+ const notices=messages.map(row=>({...row,label:row.pinned?"Recado em destaque":"Recado"}));
+ const slides=[{label:"Boas-vindas",title:muralSettings.title,body:muralSettings.subtitle}];
+ let shownGames=0;
+ if(notices.length)slides.push(notices[0]);
  for(const [label,statuses,enabled] of [
   ["Ao vivo",["Ao vivo"],true],
   ["Agenda",["Agendada","Adiada"],muralSettings.agenda],
@@ -5702,8 +5704,11 @@ function muralSlides(){
    slides.push({label:scheduled?match.status:label,
     teams:[name(match.home),name(match.away)],score:scheduled?"×":gameResult(match).join(" × "),
     body:[matchSportLabel(match),match.competition,match.date?format(match.date):"",match.place].filter(Boolean).join(" · ")});
+   shownGames++;
+   if(notices.length)slides.push(notices[shownGames%notices.length]);
   }
  }
+ slides.push(...notices.slice(shownGames+1));
  const partners=muralSettings.partners&&state.partners?.surfaces?.includes("publicPanel")?partnerGroups("preview"):[];
  if(partners.length)slides.push({label:"Organização e apoio",title:"Parceiros da Arena",body:"",partners});
  return slides;
@@ -5718,7 +5723,13 @@ function showMuralSlide(step=0,announce=false){
  box.style.setProperty("--arena-mural-accent",/^#[0-9a-f]{6}$/i.test(muralSettings.accent)?muralSettings.accent:muralDefaults.accent);
  if(announce)content.setAttribute("aria-live","polite");
  else if(step)content.setAttribute("aria-live","off");
- if(content.dataset.muralKey!==markup){content.innerHTML=markup;content.dataset.muralKey=markup;}
+ if(content.dataset.muralKey!==markup){
+  const effects=["fade","rise","slide"];
+  const choices=effects.filter(effect=>effect!==box.dataset.muralEffect);
+  box.dataset.muralEffect=choices[Math.floor(Math.random()*choices.length)];
+  content.innerHTML=markup;content.dataset.muralKey=markup;
+  muralNext=Date.now()+Math.min(60,muralSettings.seconds+(row.teams?4:0))*1000;
+ }
  const reduced=muralMotion.matches||document.documentElement.classList.contains("reduce-motion");
  box.toggleAttribute("data-mural-paused",muralPaused||reduced||!muralSettings.auto);
  box.querySelector("[data-mural-controls]").hidden=slides.length<2&&(reduced||!muralSettings.auto);
