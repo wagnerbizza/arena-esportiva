@@ -6280,9 +6280,9 @@ function matchStartGuide(m){
  return `<section class="card match-guide"><span class="tag">MESA DE OPERAÇÃO</span><h3 data-clock-guide-label>${label}</h3><p>${ended?(role==="admin" && m.status!=="Cancelada" ? "Confira a súmula e o histórico. Para registrar novos lances, reabra a partida com um motivo." : "Confira o resultado e o histórico da partida."):running?"Use os botões de pontuação para registrar os lances. Pausar o jogo também para o cronômetro.":"Confira as equipes e a etapa. Você pode configurar o tempo antes de começar ou usar o relógio atual."}</p>${!ended?`<div class="toolbar">${!running?`<button type="button" class="primary" data-guided-start ${guidedStartBusy?"disabled":""}>${live?"Iniciar cronômetro":["Pausada","Suspensa"].includes(m.status)?"Retomar jogo e cronômetro":"Iniciar jogo e cronômetro"}</button><button type="button" data-open-clock>Configurar tempo</button>`:""}</div><small>Iniciar/retomar preserva o tempo acumulado. Ajustes e mudanças de etapa continuam disponíveis abaixo.</small>`:""}</section>`;
 }
 function updateArenaFavicon(){
- const logo=state.settings.logo||"";
+ const logo=(trainingMode ? trainingBrand().logo : state.settings.logo) || "";
  const safe=/^https:\/\//i.test(logo)||/^data:image\/(png|jpeg|webp);base64,/i.test(logo);
- const url=safe?logo:"data:image/svg+xml,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#111c24"/><text x="32" y="46" text-anchor="middle" font-size="44" fill="#baff55" font-family="Arial">A</text></svg>');
+ const url=safe?logo:"data:image/svg+xml,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#111c24"/><text x="32" y="46" text-anchor="middle" font-size="44" fill="#15c3ed" font-family="Arial">A</text></svg>');
  let icon=document.getElementById("arenaFavicon");
  if(!icon){icon=document.createElement("link");icon.id="arenaFavicon";icon.rel="icon";document.head.appendChild(icon);}
  if(icon.getAttribute("href")!==url){icon.removeAttribute("type");icon.href=url;}
