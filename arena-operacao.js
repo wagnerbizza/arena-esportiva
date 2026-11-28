@@ -158,11 +158,7 @@
   menu.replaceChildren();side.replaceChildren();
   const primary=root.querySelector('[data-op-primary]');
   primary.replaceChildren();
-  if(root.hasAttribute('data-op-standby')){
-   const start=document.createElement('button');
-   start.type='button';start.className='primary';start.dataset.opNoMatch='';
-   start.textContent='Iniciar partida';primary.append(start);
-  }else{
+  if(!root.hasAttribute('data-op-standby')){
    for(const id of ['resume','pause']){
     const [label,selector]=monitorCommands[id];
     const source=root.querySelector(selector);
@@ -196,6 +192,7 @@
     else if(id==='clock')button.dataset.opQuickPanel='time';
     else button.dataset.opNoMatch='';
    }else if(!source || source.disabled){
+    button.setAttribute('aria-disabled','true');
     button.dataset.opUnavailable='';
     button.title=root.hasAttribute('data-op-standby')?'Escolha uma partida para usar este comando':'Comando indisponível na situação atual';
    }else if(['notices','events'].includes(panelId))button.dataset.opQuickPanel=panelId;
@@ -341,16 +338,18 @@
   side.setAttribute('aria-label','Atalhos ao lado do visor');
   const controls=document.createElement('div');
   controls.className='arena-op-display-controls';
-  controls.append(editMonitor,pin);
+  const toolsGroup=document.createElement('div');
+  toolsGroup.className='arena-op-monitor-tools';
+  toolsGroup.append(editMonitor,pin);
   if(match.status==='Ao vivo' || config.standby){
    const events=document.createElement('button');
    events.type='button';events.dataset.opQuickPanel='events';
    events.textContent='Cartões e faltas';
    controls.prepend(events);
-   if(config.standby && !prefs.monitor.includes('notices')){
+   if(config.standby){
     const notices=document.createElement('button');
     notices.type='button';notices.dataset.opQuickPanel='notices';notices.textContent='Avisos';
-    controls.prepend(notices);
+    controls.append(notices);
    }
   }
   if(config.standby){
@@ -358,6 +357,7 @@
    choose.type='button';choose.className='primary';choose.dataset.opChoose='';
    choose.textContent='Escolher jogo';controls.prepend(choose);
   }
+  controls.append(toolsGroup);
   const rail=document.createElement('div');
   rail.className='arena-op-display-rail';
   rail.append(controls,side);
@@ -373,7 +373,7 @@
    follow.innerHTML=icon('<path d="M9 3h6v6l4 4v2H5v-2l4-4V3Zm3 12v6"/>'+
     (config.clockFollowed?'':'<path d="M3 3l18 18"/>'));
    follow.setAttribute('aria-pressed',String(config.clockFollowed));
-   controls.append(follow);
+   toolsGroup.append(follow);
   }
   const activity=document.createElement('p');
   activity.className='arena-op-monitor-event';

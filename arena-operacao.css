@@ -47,7 +47,6 @@ main:has(> .arena-weather-card.is-pinned) .arena-op-strip.is-pinned {
   background:transparent !important; color:var(--text) !important;
   border:0; box-shadow:none;
 }
-.arena-op-strip .arena-op-score-pin:hover { color:var(--accent) !important; }
 @media print { .arena-op-fold-actions, [data-op-fold] { display:none!important; } }
 
 .arena-op-strip { flex-wrap:wrap; }
@@ -325,4 +324,36 @@ body.arena-central-ready.arena-operation-page:has(#arenaMenuToggle:not([hidden])
 @media (pointer:coarse) {
   .arena-op-strip .arena-op-resize-bottom:not(:focus-visible) { pointer-events:auto; opacity:1; }
   .arena-op-resize-bottom > span { opacity:1; }
+}
+
+.arena-op-monitor-tools {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-inline-start:auto;
+}
+body .arena-op-strip .arena-op-monitor-tools > button {
+  flex:0 0 44px;
+  inline-size:44px;
+  block-size:44px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  background:transparent !important;
+  border-color:transparent !important;
+  box-shadow:none !important;
+  color:var(--text) !important;
+}
+.arena-op-monitor-tools > button:focus-visible {
+  outline:2px solid var(--focus,var(--accent));
+  outline-offset:-3px;
+}
+.arena-op-strip .arena-op-display-controls > button {
+  inline-size:auto;
+  block-size:auto;
+  min-block-size:44px;
+  padding:8px 12px;
+}
+[data-op-standby]:not(.arena-docking) .arena-op-strip :is(.arena-op-monitor-side,.arena-op-monitor-row) {
+  display:none;
 }
