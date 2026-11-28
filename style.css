@@ -3287,3 +3287,67 @@ button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin)[aria-press
 .arena-external-score { min-width:0; border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--bg); overflow-wrap:anywhere; }
 .arena-external-score h3 { margin-block:.45em; }
 .arena-external-score b { display:inline-block; padding-inline:.35em; color:var(--text); }
+
+.arena-mural-school-heading { margin:16px 0 6px; }
+[data-external-sports].arena-mural-external {
+  border:0;
+  border-block-start:1px solid var(--line);
+  padding-block-start:16px;
+  margin:20px 0 0;
+}
+.arena-mural-external h2 { margin-block:0 12px; }
+@media (prefers-reduced-motion:no-preference) {
+  :root:not(.reduce-motion) [data-mural-public]:not([data-mural-paused]) [data-ball-motion="random"] i {
+    animation:arena-mural-random-ball var(--arena-ball-cycle,3s) ease-in-out infinite;
+  }
+  :root:not(.reduce-motion) [data-mural-public]:not([data-mural-paused]) [data-ball-motion="horizontal"] i {
+    animation-duration:var(--arena-ball-cycle,3s);
+  }
+  :root:not(.reduce-motion) [data-mural-public]:not([data-mural-paused]) [data-ball-motion="off"] i { animation:none; }
+}
+@keyframes arena-mural-random-ball {
+  0%,100% { transform:translate(0,0); }
+  25% { transform:translate(var(--arena-ball-x1),var(--arena-ball-y1)); }
+  50% { transform:translate(var(--arena-ball-x2),var(--arena-ball-y2)); }
+  75% { transform:translate(var(--arena-ball-x3),var(--arena-ball-y3)); }
+}
+
+[data-external-sports] .arena-external-scores {
+  display:grid;
+  grid-template-columns:none;
+  grid-auto-flow:column;
+  grid-auto-columns:min(100%,19rem);
+  overflow-x:auto;
+  scroll-snap-type:x mandatory;
+  padding-block:4px 10px;
+}
+[data-external-sports] .arena-external-score { scroll-snap-align:start; }
+.arena-external-match {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  align-items:center;
+  gap:4px;
+  text-align:center;
+  margin-block:10px;
+}
+.arena-external-match b { font-size:1.4rem; white-space:nowrap; }
+[data-external-sports] arena-news ul { list-style:none; padding:0; }
+[data-external-sports] arena-news li + li { margin-block-start:8px; }
+[data-external-sports] arena-news li a {
+  display:inline-flex;
+  align-items:center;
+  min-block-size:44px;
+  overflow-wrap:anywhere;
+  text-underline-offset:3px;
+}
+[data-external-step] { min-inline-size:44px; }
+
+.public-audience-badge svg {
+  inline-size:var(--arena-eye-size,24px);
+  block-size:var(--arena-eye-size,24px);
+  flex:none;
+}
+@media (prefers-reduced-motion:no-preference) {
+  :root:not(.reduce-motion) .public-audience-badge svg { animation-duration:var(--arena-eye-seconds,5s); }
+  :root[data-arena-eye-still] .public-audience-badge svg { animation:none; }
+}

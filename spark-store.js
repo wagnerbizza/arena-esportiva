@@ -1116,7 +1116,7 @@ export async function connectSpark({
       const before = snap.data();
       if (before.deleted === true) throw Error("Este operador foi removido e está disponível apenas para consulta.");
       const granted=access==="active"?[...new Set(permissions===undefined?(before.permissions||[]):permissions)]:[];
-      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView","historyCorrections","editMatchPhases","correctMatchSport","operateAllGames","hidePublicGames","muralPublish","externalScores","externalNews"].includes(p)))throw Error("Permissão específica inválida.");
+      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView","historyCorrections","editMatchPhases","correctMatchSport","operateAllGames","hidePublicGames","muralPublish","externalScores","externalNews","adjustBars"].includes(p)))throw Error("Permissão específica inválida.");
       const editions = access === "active"
         ? [...new Set(followedEditions ?? before.followedEditions ?? [])] : [];
       const known = new Set(state.championships.map((c) => c.name + " • " + c.season));
@@ -1256,6 +1256,14 @@ export async function connectSpark({
   }
   const canPublishMural = () => isOwner() || (authorized() && (profile?.permissions || []).includes("muralPublish"));
   return {
+    watchAudienceAppearance(update) {
+      return F.onSnapshot(F.doc(database,"audienceAppearance","main"),snap=>update(snap.data()||{}),()=>update({}));
+    },
+    async saveAudienceAppearance(values) {
+      if(!isOwner()&&!(authorized()&&(profile?.permissions||[]).includes("adjustBars")))
+        throw Error("Sem autorização para personalizar barras.");
+      await F.setDoc(F.doc(database,"audienceAppearance","main"),values);
+    },
     watchExternalSports(kind,update) {
       return F.onSnapshot(F.doc(database,"externalSports",kind),snapshot=>update(snapshot.data()?.enabled===true),()=>update(false));
     },
@@ -1269,7 +1277,7 @@ export async function connectSpark({
       return F.onSnapshot(F.doc(database,"muralDisplay","main"),snap=>update(snap.data()||{}),()=>{});
     },
     async saveMuralSettings(values) {
-      if(!canPublishMural())throw Error("Sem autorização para configurar o mural.");
+      if(!canPublishMural()||(!isOwner()&&!(profile?.permissions||[]).includes("adjustBars")))throw Error("Sem autorização para configurar o mural.");
       await F.setDoc(F.doc(database,"muralDisplay","main"),values);
     },
     watchMural(manage, update, onFailure) {
