@@ -134,7 +134,10 @@ async function loadBrand() {
   }
   if (/^(https:\/\/|data:image\/(png|jpeg|webp);base64,)/i.test(branding.logo || '')) {
     const logo = document.getElementById('demo-logo');
-    logo.onload = () => { logo.hidden = false; };
+    logo.onload = () => {
+      logo.hidden = false;
+      document.getElementById('arenaFavicon').href = logo.src;
+    };
     logo.src = branding.logo;
   }
 }
