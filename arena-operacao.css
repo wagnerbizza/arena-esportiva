@@ -340,13 +340,22 @@ body.arena-central-ready.arena-operation-page:has(#arenaMenuToggle:not([hidden])
   .arena-op-resize-bottom > span { opacity:1; }
 }
 
+.arena-op-monitor-header {
+  grid-area:tools;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:4px 12px;
+  min-inline-size:0;
+}
 .arena-op-monitor-tools {
   display:flex;
   align-items:center;
-  gap:8px;
-  grid-area:tools;
-  justify-self:start;
+  justify-content:flex-end;
   flex-wrap:wrap;
+  gap:var(--arena-bar-control-gap,4px);
+  margin-inline-start:auto;
 }
 body .arena-op-strip .arena-op-monitor-tools > button {
   flex:0 0 44px;
@@ -370,6 +379,40 @@ body .arena-op-strip .arena-op-monitor-tools > button {
   min-block-size:44px;
   padding:8px 12px;
 }
-[data-op-standby]:not(.arena-docking):not(:has(> .arena-op-settings[open])) .arena-op-strip :is(.arena-op-monitor-side,.arena-op-monitor-row) {
-  display:none;
+
+.arena-op-monitor-title { margin:0; font-size:1.25rem; overflow-wrap:anywhere; }
+.arena-op-display-status {
+  justify-self:center;
+  font-weight:700;
+  color:#fda4af;
 }
+.arena-op-display-status[data-op-live="true"] { color:#86efac; }
+.arena-op-display-status[data-op-live="true"]::before {
+  content:"";
+  display:inline-block;
+  inline-size:.55em;
+  block-size:.55em;
+  margin-inline-end:.45em;
+  border-radius:50%;
+  background:currentColor;
+}
+:root[data-theme="light"] .arena-op-display-status { color:#a51d33; }
+:root[data-theme="light"] .arena-op-display-status[data-op-live="true"] { color:#166534; }
+@media (prefers-reduced-motion:no-preference) {
+  :root:not(.reduce-motion) .arena-op-display-status[data-op-live="true"]::before {
+    animation:arena-monitor-live 1.5s ease-in-out infinite alternate;
+  }
+}
+@keyframes arena-monitor-live { to { opacity:.5; transform:scale(1.35); } }
+.arena-op-dock-targets > [data-op-dock] {
+  min-block-size:90px;
+  background:color-mix(in srgb,var(--panel) 92%,var(--accent));
+}
+.arena-op-monitor-options strong {
+  display:block;
+  font-size:1.05rem;
+  color:var(--text);
+}
+.arena-op-monitor-options [data-op-monitor-choices] { margin-block-start:8px; }
+[data-op-editor-drag] { touch-action:none; user-select:none; cursor:grab; }
+[data-op-editor-drag].arena-op-dragging-shortcut { opacity:.55; cursor:grabbing; }

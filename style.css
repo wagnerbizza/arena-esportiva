@@ -1326,6 +1326,18 @@ hr {
 :root { color-scheme: dark; --text: #eef3f6; --control: #24313b; --input: #0c131a; --focus: #ffdc66; }
 :root[data-theme="light"] { color-scheme: light; --bg:#f2f5f8; --panel:#fff; --line:#aab6c2; --muted:#425266; --text:#172534; --control:#e3eaf0; --input:#fff; --focus:#174bba; }
 body { color:var(--text); }
+/* Resposta breve ao pressionar ações, inclusive com teclado. */
+@media screen {
+  :where(button:not(:disabled), a.button):not([aria-disabled="true"],[role="slider"]):active {
+    filter:brightness(.9);
+  }
+}
+@media screen and (prefers-reduced-motion:no-preference) {
+  :root:not(.reduce-motion):not([data-demo-motion="true"])
+  :where(button:not(:disabled), a.button):not([aria-disabled="true"],[role="slider"]):active {
+    translate:0 1px;
+  }
+}
 button,a.button { background:var(--control); color:var(--text); min-height:44px; }
 input,select,textarea { background:var(--input); color:var(--text); border-color:var(--line); }
 :root[data-theme="light"] .brand b,:root[data-theme="light"] .tag,:root[data-theme="light"] a:not(.button),:root[data-theme="light"] .live { color:#365d00; }

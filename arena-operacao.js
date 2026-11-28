@@ -8,10 +8,11 @@
  const chevron=icon('<path d="m6 9 6 6 6-6"/>');
  const grip=icon('<path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" stroke-width="3.5"/>');
  const monitorCommands = {
+  choose: ['Escolher jogo'],
   startClock: ['Iniciar cronômetro', '[data-clock-command="iniciar"]'],
   stopClock: ['Parar cronômetro', '[data-clock-command="parar"]'],
   end: ['Encerrar', '[data-status="Encerrada"]'],
-  resume: ['Iniciar / continuar', '[data-guided-start]'],
+  resume: ['Iniciar partida / continuar', '[data-guided-start]'],
   pause: ['Pausar jogo', '[data-status="Pausada"]'],
   suspend: ['Suspender', '[data-status="Suspensa"]'],
   notices: ['Avisos', null, 'notices'],
@@ -35,14 +36,14 @@
   clearNotice: ['Retirar aviso', '[data-fast-notice="retirar"]'],
   ...Object.fromEntries(defaults.filter(id=>id!=='notices').map(id=>['panel-'+id,[labels[id],null,id]])),
  };
- const defaultMonitor = ['notices'];
- const dedicatedCommands = ['end','resume','pause'];
+ const defaultMonitor = ['choose','resume','notices'];
+
  const sessionPreferences=new Map();
  const panelColors={azul:['Azul','#45a4ff'],verde:['Verde','#49c99a'],laranja:['Laranja','#f4a858'],roxo:['Roxo','#b58cff'],rosa:['Rosa','#ee80ac']};
  const validPanelColor=value=>Object.hasOwn(panelColors,value)||/^#[0-9a-f]{6}$/i.test(value||'');
  const panelTitle=(prefs,id)=>prefs.names?.[id]||labels[id];
  const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>validPanelColor(saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set(saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id)))]:[...defaultMonitor],displayWidth:[35,40,45,50,55,60,65].includes(saved?.displayWidth)?saved.displayWidth:45,stackMonitor:saved?.stackMonitor===true,cabinHeight:Number.isInteger(saved?.cabinHeight)?Math.max(0,Math.min(1600,saved.cabinHeight)):0,cabinWidth:Number.isInteger(saved?.cabinWidth)?Math.max(40,Math.min(100,saved.cabinWidth)):null,side:Array.isArray(saved?.side)?saved.side.filter(id=>Object.hasOwn(monitorCommands,id)):[],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
+ function read(key){let saved=sessionPreferences.get(key);if(!saved)try{saved=JSON.parse(localStorage.getItem(key));}catch{}return {monitorLayout:2,order:[...new Set([...(Array.isArray(saved?.order)?saved.order.filter(id=>defaults.includes(id)):[]),...defaults])],favorites:Array.isArray(saved?.favorites)?[...new Set(saved.favorites.filter(id=>defaults.includes(id)))]:['points','time','events','history'],names:Object.fromEntries(defaults.filter(id=>typeof saved?.names?.[id]==="string").map(id=>[id,saved.names[id].trim().slice(0,64)])),colors:Object.fromEntries(defaults.filter(id=>validPanelColor(saved?.colors?.[id])).map(id=>[id,saved.colors[id]])),locked:Array.isArray(saved?.locked)?saved.locked.filter(id=>defaults.includes(id)):[],collapsed:Array.isArray(saved?.collapsed)?saved.collapsed.filter(id=>defaults.includes(id)):[],monitor:Array.isArray(saved?.monitor)?[...new Set([...(saved.monitorLayout===2?[]:['choose','resume']),...saved.monitor.filter(id=>Object.hasOwn(monitorCommands,id))])]:[...defaultMonitor],displayWidth:[35,40,45,50,55,60,65].includes(saved?.displayWidth)?saved.displayWidth:45,stackMonitor:saved?.stackMonitor===true,cabinHeight:Number.isInteger(saved?.cabinHeight)?Math.max(0,Math.min(1600,saved.cabinHeight)):0,cabinWidth:Number.isInteger(saved?.cabinWidth)?Math.max(40,Math.min(100,saved.cabinWidth)):null,side:Array.isArray(saved?.side)?saved.side.filter(id=>Object.hasOwn(monitorCommands,id)):[],scorePinned:saved?.scorePinned!==false,compact:saved?.compact===true,columns:saved?.columns===true};}
  let syncedLayout=null;
  const syncMessages=new Map();
  const pendingLayouts=new Map();
@@ -156,26 +157,11 @@
   const choices=tools(root).querySelector('[data-op-monitor-choices]');
   const side=root.querySelector('[data-op-monitor-side]');
   menu.replaceChildren();side.replaceChildren();
-  const primary=root.querySelector('[data-op-primary]');
-  primary.replaceChildren();
-  if(!root.hasAttribute('data-op-standby')){
-   for(const id of ['resume','pause']){
-    const [label,selector]=monitorCommands[id];
-    const source=root.querySelector(selector);
-    if(!source||source.disabled)continue;
-    const button=document.createElement('button');
-    button.type='button';button.className='primary';
-    button.dataset.opMonitorRun=id;
-    button.textContent=id==='resume'?(source.textContent.trim().startsWith('Retomar')?'Continuar':source.textContent.trim()):label;
-    primary.append(button);
-   }
-  }
   const settings=tools(root);
   const sidePreview=settings.querySelector('[data-op-dock-preview="side"]');
   const belowPreview=settings.querySelector('[data-op-dock-preview="below"]');
   sidePreview.replaceChildren();belowPreview.replaceChildren();
   for(const id of prefs.monitor){
-   if(dedicatedCommands.includes(id))continue;
    const [label,selector,panelId]=monitorCommands[id];
    const source=selector?root.querySelector(selector):root.querySelector('[data-op-panel="'+panelId+'"]');
    const beside=prefs.side.includes(id);
@@ -185,12 +171,17 @@
    button.dataset.opDockCommand=id;
    button.draggable=true;
    const preview=button.cloneNode(true);
-   preview.dataset.opPlace='';
+   preview.dataset.opEditorDrag='';
+   preview.draggable=false;
    (beside?sidePreview:belowPreview).append(preview);
-   if(root.hasAttribute('data-op-standby')){
+   if(id==='choose'){
+    if(!root.hasAttribute('data-op-standby'))continue;
+    button.classList.add('primary');
+    button.dataset.opChoose='';
+   }else if(root.hasAttribute('data-op-standby')){
     if(panelId)button.dataset.opQuickPanel=panelId;
     else if(id==='clock')button.dataset.opQuickPanel='time';
-    else button.dataset.opNoMatch='';
+    else button.disabled=true;
    }else if(!source || source.disabled){
     button.setAttribute('aria-disabled','true');
     button.dataset.opUnavailable='';
@@ -201,18 +192,14 @@
    (beside?side:menu).append(button);
   }
   for(const [id,[,selector,panelId]] of Object.entries(monitorCommands)){
-   if(dedicatedCommands.includes(id))continue;
    const source=selector?root.querySelector(selector):root.querySelector('[data-op-panel="'+panelId+'"] [data-op-drag]');
    if(!source)continue;
    source.dataset.opDockCommand=id;
    if(!panelId)source.draggable=!source.disabled;
   }
-  choices.innerHTML=Object.entries(monitorCommands).filter(([id])=>!dedicatedCommands.includes(id)).map(([id,[label]])=>{
-   const checked=prefs.monitor.includes(id);
-   const placement=checked?(prefs.side.includes(id)?'Ao lado':'Abaixo'):'Posicionar';
-   return '<div class="arena-op-choice"><label><input type="checkbox" data-op-monitor-choice="'+id+'" '+(checked?'checked':'')+'> '+escape(label)+'</label>'+
-    '<button type="button" draggable="true" data-op-dock-command="'+id+'" data-op-place aria-label="Posicionar '+escape(label)+'">'+grip+'<span>'+placement+'</span></button></div>';
-  }).join('');
+  choices.innerHTML=Object.entries(monitorCommands).filter(([id])=>!prefs.monitor.includes(id)).map(([id,[label]])=>
+   '<button type="button" data-op-editor-drag data-op-dock-command="'+id+'">'+escape(label)+'</button>'
+  ).join('');
  }
  function toolbar(root,prefs){monitorToolbar(root,prefs);const nav=tools(root).querySelector('[data-op-shortcuts]');nav.replaceChildren();const panels=[...root.querySelectorAll('[data-op-panel]')];for(const section of panels){const id=section.dataset.opPanel,fold=section.querySelector('[data-op-fold]'),closed=prefs.collapsed.includes(id);
    const title=panelTitle(prefs,id),color=panelColors[prefs.colors[id]]?.[1]||prefs.colors[id];
@@ -336,31 +323,26 @@
   const side=document.createElement('nav');
   side.className='arena-op-monitor-side';side.dataset.opMonitorSide='';side.dataset.opDock='side';
   side.setAttribute('aria-label','Atalhos ao lado do visor');
-  const controls=document.createElement('div');
-  controls.className='arena-op-display-controls';
   const toolsGroup=document.createElement('div');
   toolsGroup.className='arena-op-monitor-tools';
   toolsGroup.append(editMonitor,pin);
-  if(match.status==='Ao vivo' || config.standby){
-   const events=document.createElement('button');
-   events.type='button';events.dataset.opQuickPanel='events';
-   events.textContent='Cartões e faltas';
-   controls.prepend(events);
-   if(config.standby){
-    const notices=document.createElement('button');
-    notices.type='button';notices.dataset.opQuickPanel='notices';notices.textContent='Avisos';
-    controls.append(notices);
-   }
+  const title=document.createElement('h2');
+  title.className='arena-op-monitor-title';
+  title.textContent='Monitor de operação';
+  const heading=document.createElement('div');
+  heading.className='arena-op-monitor-header';
+  heading.append(title,toolsGroup);
+  strip.prepend(heading);
+  if(config.standby || match.status==='Ao vivo'){
+   const status=document.createElement('span');
+   status.className='arena-op-display-status';
+   status.dataset.opLive=String(!config.standby);
+   status.textContent=config.standby?'Aguardando partida':'Ao vivo';
+   strip.querySelector('.arena-op-display').append(status);
   }
-  if(config.standby){
-   const choose=document.createElement('button');
-   choose.type='button';choose.className='primary';choose.dataset.opChoose='';
-   choose.textContent='Escolher jogo';controls.prepend(choose);
-  }
-  strip.prepend(toolsGroup);
   const rail=document.createElement('div');
   rail.className='arena-op-display-rail';
-  rail.append(controls,side);
+  rail.append(side);
   strip.append(rail);
   if(back&&!config.standby)monitorRow.prepend(back);
   if(config.followClock && !config.standby){
@@ -378,10 +360,8 @@
   const activity=document.createElement('p');
   activity.className='arena-op-monitor-event';
   activity.textContent=match.status+(config.monitorEvent?' · Último lance: '+config.monitorEvent:'');
-  const primary=document.createElement('div');
-  primary.className='arena-op-primary';primary.dataset.opPrimary='';
-  monitorRow.prepend(primary);
-  strip.append(activity,monitorRow);
+  if(!config.standby)strip.append(activity);
+  strip.append(monitorRow);
   const resize=document.createElement('button');
   resize.type='button';resize.dataset.opResize='';resize.className='arena-op-resize';
   resize.setAttribute('role','slider');resize.setAttribute('aria-label','Largura da cabine em porcentagem');
@@ -410,7 +390,7 @@
   }
   if(config.chooser)root.insertAdjacentHTML("beforeend",config.chooser);
   const timeline=score.querySelector('.match-timeline');if(timeline)timeline.remove();const scoreWrap=document.createElement('section');scoreWrap.className='arena-op-score';const info=document.createElement('details');info.className='arena-op-match-details';info.innerHTML='<summary>Detalhes da partida</summary>';info.append(score);scoreWrap.append(info);const guide=old.querySelector('.match-guide');root.append(scoreWrap);
-  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.id='arenaOpSettings';settings.innerHTML='<summary>Personalizar a cabine</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-layout-options"><legend>Espaço do visor</legend><div class="arena-op-width-options"><label>Largura da cabine <output data-op-width-label></output><input type="range" data-op-width-range min="40" max="100" step="1" value="100"></label><button type="button" data-op-width-auto>Largura automática</button></div><label>Largura do placar em telas largas<select data-op-display-width><option value="35">35%</option><option value="40">40%</option><option value="45">45%</option><option value="50">50%</option><option value="55">55%</option><option value="60">60%</option><option value="65">65%</option></select></label><label><input type="checkbox" data-op-stack-monitor> Dar a largura inteira aos comandos abaixo do placar</label></fieldset><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Marque a caixa para exibir o atalho. Arraste pela alça até um dos destinos abaixo, ou toque no botão Posicionar, Ao lado ou Abaixo.</p><div class="arena-op-dock-targets"><div data-op-dock="side"><strong>Ao lado do visor</strong><div data-op-dock-preview="side"></div></div><div data-op-dock="below"><strong>Abaixo do visor</strong><div data-op-dock-preview="below"></div></div><button type="button" data-op-view-monitor>Ver o visor</button></div><div data-op-monitor-choices></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><button type="button" data-op-sync>Sincronizar ajustes deste aparelho</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
+  const settings=document.createElement('details');settings.className='card arena-op-settings';settings.id='arenaOpSettings';settings.innerHTML='<summary>Personalizar a cabine</summary><label><input type="checkbox" data-op-compact> Controles compactos</label><label><input type="checkbox" data-op-columns> Duas colunas em telas largas</label><fieldset class="arena-op-layout-options"><legend>Espaço do visor</legend><div class="arena-op-width-options"><label>Largura da cabine <output data-op-width-label></output><input type="range" data-op-width-range min="40" max="100" step="1" value="100"></label><button type="button" data-op-width-auto>Largura automática</button></div><label>Largura do placar em telas largas<select data-op-display-width><option value="35">35%</option><option value="40">40%</option><option value="45">45%</option><option value="50">50%</option><option value="55">55%</option><option value="60">60%</option><option value="65">65%</option></select></label><label><input type="checkbox" data-op-stack-monitor> Dar a largura inteira aos comandos abaixo do placar</label></fieldset><fieldset class="arena-op-monitor-options"><legend>Botões no placar</legend><p>Arraste cada botão para o visor. Para devolver um atalho à lista, solte-o fora das caixas.</p><div class="arena-op-dock-targets"><div data-op-dock="side"><strong>Ao lado do visor</strong><div data-op-dock-preview="side"></div></div><div data-op-dock="below"><strong>Abaixo do visor</strong><div data-op-dock-preview="below"></div></div><button type="button" data-op-view-monitor>Ver o visor</button></div><div data-op-dock="remove"><strong>Botões disponíveis</strong><div data-op-monitor-choices></div></div></fieldset><div data-op-order></div><button type="button" data-op-reset>Restaurar organização padrão</button><button type="button" data-op-sync>Sincronizar ajustes deste aparelho</button><p data-op-save-status role="status">Personalização local da mesa.</p>';root.append(settings);
   const nav=document.createElement('nav');nav.className='toolbar arena-op-shortcuts';nav.dataset.opShortcuts='';nav.setAttribute('aria-label','Meus atalhos da operação');settings.append(nav);const grid=document.createElement('div');grid.className='arena-op-grid';grid.dataset.opGrid='';root.append(grid);
   for(const [group,label] of [['pinned','Caixas fixadas no topo'],['regular','Caixas desafixadas']]){
    const lane=document.createElement('div');lane.dataset.opGroup=group;
@@ -829,16 +809,6 @@
   const source=command?.[1]&&root.querySelector(command[1]);
   if(!root.hasAttribute('data-op-standby')&&source&&!source.disabled)source.click();
  });
- document.addEventListener('change',event=>{
-  const input=event.target.closest('[data-op-monitor-choice]');if(!input)return;
-  const root=workspaceFor(input);if(!root)return;
-  const prefs=read(root.dataset.opKey),id=input.dataset.opMonitorChoice;
-  if(!Object.hasOwn(monitorCommands,id))return;
-  prefs.monitor=input.checked?[...new Set([...prefs.monitor,id])]:prefs.monitor.filter(key=>key!==id);
-  monitorToolbar(root,prefs);
-  tools(root).querySelector('[data-op-monitor-choice="'+id+'"]')?.focus({preventScroll:true});
-  save(root,prefs);
- });
  document.addEventListener('change',event=>{if(!event.target.matches('[data-op-compact],[data-op-columns],[data-op-display-width],[data-op-stack-monitor]'))return;const root=workspaceFor(event.target);if(!root)return;const prefs=read(root.dataset.opKey);prefs.compact=tools(root).querySelector('[data-op-compact]').checked;prefs.columns=tools(root).querySelector('[data-op-columns]').checked;prefs.displayWidth=Number(tools(root).querySelector('[data-op-display-width]').value);prefs.stackMonitor=tools(root).querySelector('[data-op-stack-monitor]').checked;apply(root,prefs);save(root,prefs);});
  window.addEventListener('storage',event=>{if(event.key?.startsWith('arena-operation-layout-v1:'))sessionPreferences.delete(event.key);});
  function preview(account) {
@@ -947,7 +917,7 @@
   const dialog=document.createElement('dialog');
   dialog.className='card arena-dock-dialog';
   const prefs=read(root.dataset.opKey), place=prefs.side.includes(id)?'side':'below';
-  const peers=prefs.monitor.filter(key=>!dedicatedCommands.includes(key)&&(prefs.side.includes(key)?'side':'below')===place);
+  const peers=prefs.monitor.filter(key=>(prefs.side.includes(key)?'side':'below')===place);
   const index=peers.indexOf(id);
   const reorder=index<0?'':'<button value="earlier" '+(index===0?'disabled':'')+'>Mover para antes</button><button value="later" '+(index===peers.length-1?'disabled':'')+'>Mover para depois</button>';
   dialog.setAttribute('aria-labelledby','arenaOpDockTitle');
@@ -964,6 +934,30 @@
   },{once:true});
   dialog.showModal();
  }
+ let editorDrag;
+ document.addEventListener('pointerdown',event=>{
+  const source=event.target.closest('[data-op-editor-drag]');
+  if(!source||!event.isPrimary||event.button!==0)return;
+  editorDrag={source,root:workspaceFor(source),x:event.clientX,y:event.clientY,pointer:event.pointerId};
+  source.setPointerCapture(event.pointerId);
+ });
+ document.addEventListener('pointermove',event=>{
+  if(editorDrag?.pointer!==event.pointerId)return;
+  const {source,x,y}=editorDrag;
+  if(Math.hypot(event.clientX-x,event.clientY-y)>7)source.classList.add('arena-op-dragging-shortcut');
+ });
+ for(const type of ['pointerup','pointercancel','lostpointercapture'])document.addEventListener(type,event=>{
+  if(editorDrag?.pointer!==event.pointerId)return;
+  const {source,root}=editorDrag;editorDrag=null;
+  if(!source.classList.contains('arena-op-dragging-shortcut'))return;
+  source.classList.remove('arena-op-dragging-shortcut');
+  if(type!=='pointerup'||!root?.isConnected)return;
+  const hit=document.elementFromPoint(event.clientX,event.clientY);
+  const destination=hit?.closest('[data-op-dock]');
+  const place=destination&&workspaceFor(destination)===root?destination.dataset.opDock:'remove';
+  const before=place==='remove'?undefined:hit?.closest('[data-op-dock-command]')?.dataset.opDockCommand;
+  if(before!==source.dataset.opDockCommand)dockCommand(root,source.dataset.opDockCommand,place,before);
+ });
  let dockDrag, dockPress, dockTimer, dockSuppressedUntil=0;
  document.addEventListener('dragstart',event=>{
   const source=event.target.closest('[data-op-dock-command][draggable="true"]');
@@ -1001,7 +995,7 @@
  document.addEventListener('pointerdown',event=>{
   const source=event.target.closest('[data-op-dock-command]');
   const root=source&&workspaceFor(source);
-  if(!root||!event.isPrimary||event.pointerType==='mouse'||source.hasAttribute('data-op-drag'))return;
+  if(!root||!event.isPrimary||event.pointerType==='mouse'||source.matches('[data-op-drag],[data-op-editor-drag]'))return;
   cancelDockPress();
   dockPress={x:event.clientX,y:event.clientY};
   dockTimer=setTimeout(()=>{dockSuppressedUntil=Date.now()+850;dockMenu(root,source);},600);
