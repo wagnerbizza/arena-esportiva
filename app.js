@@ -1173,8 +1173,19 @@ const accountLabels = {
 const activeAccountLabel = () => !C.demo && role === "admin" ? accountLabels[user?.uid] : null;
 const accountName = () => activeAccountLabel()?.name || user?.displayName || (state.users || []).find((p) => p.id === user?.uid)?.name || user?.email?.split("@")[0] || "Conta conectada";
 // Títulos por contexto, sem alterar a identidade personalizada salva.
+function trainingBrand() {
+ const fallback={title:"Arena • Central Esporte",logo:"",color:"#15c3ed"};
+ try {
+  const saved=JSON.parse(localStorage.getItem("arena-marca-publica-v1")) || {};
+  return {
+   title:typeof saved.title==="string" && saved.title.trim() ? saved.title : fallback.title,
+   logo:/^(https:\/\/|data:image\/(png|jpeg|webp);base64,)/i.test(saved.logo || "") ? saved.logo : fallback.logo,
+   color:/^#[0-9a-f]{6}$/i.test(saved.color || "") ? saved.color : fallback.color
+  };
+ } catch { return fallback; }
+}
 function systemDisplayName(){
- const title=String(state.settings.title||'').trim();
+ const title=String((trainingMode?trainingBrand().title:state.settings.title)||'').trim();
  return !title || /^(arena|arena esportiva)\s*[•—–-]?\s*(esporte|esportes) ao vivo$/i.test(title) ? 'Arena Esportiva' : title;
 }
 function panelDisplayName(){return trainingMode?'Treinamento — dados fictícios':role==='admin'?'Painel do Administrador':role==='operator'?'Painel do Operador':'Acesso à organização';}
@@ -1182,7 +1193,10 @@ function renderBrandAndIdentity() {
   updateArenaFavicon();
   renderConnectionStatus();
   const brand = $("#systemBrand");
-  if (brand) brand.innerHTML = `<span class="system-logo">${state.settings.logo ? `<img src="${esc(state.settings.logo)}" alt="Logo da organização" onerror="this.hidden=true">` : '<span aria-hidden="true">◈</span>'}</span><span class="brand-copy"><b>${esc(systemDisplayName())}</b><small>CENTRAL ESPORTIVA</small></span>`;
+  const logo=trainingMode ? trainingBrand().logo : state.settings.logo;
+  if (brand) brand.innerHTML = `<span class="system-logo">${logo ? `<img src="${esc(logo)}" alt="Logo da organização" onerror="this.hidden=true">` : '<span aria-hidden="true">◈</span>'}</span><span class="brand-copy"><b>${esc(systemDisplayName())}</b><small>CENTRAL ESPORTIVA</small></span>`;
+  const trainingIdentity=$("#trainingBrand");
+  if(trainingIdentity && brand) trainingIdentity.innerHTML=brand.innerHTML;
   const identity = $("#sessionIdentity");
   if (!identity) return;
   identity.hidden = !admin || (!user && !C.demo);
@@ -2231,7 +2245,7 @@ function render() {
   resetTeamProfileContext();
   resetRemovedContext();
   hideContextHelp();
-  document.documentElement.style.setProperty("--accent", state.settings.color);
+  document.documentElement.style.setProperty("--accent", trainingMode ? trainingBrand().color : state.settings.color);
   document.title = systemDisplayName()+" — "+(admin?panelDisplayName():"Jogos e Resultados");
   renderBrandAndIdentity();
   syncArenaLayout();
@@ -4986,7 +5000,7 @@ function setupTraining() {
     link.href=url.href;link.target="_blank";link.rel="noopener";link.dataset.trainingEntry="";link.textContent="Treinamento — dados fictícios";bar.append(link);return;
   }
   const banner=document.createElement("section");banner.className="card noprint";banner.style.cssText="margin:16px 5%;border:3px solid #ba891a";
-  banner.innerHTML='<h2>Demonstração — somente dados fictícios</h2><p>Este treino funciona apenas neste navegador, sem conexão com o Firebase. Sua conta e os resultados reais permanecem na outra aba.</p><div class="toolbar"><label>Simular perfil<select id="trainingRole"><option value="admin">Administrador</option><option value="operator">Operador</option><option value="operator-rosters">Operador com cadastros</option><option value="operator-matches">Operador que cria partidas</option><option value="operator-championships">Operador que gerencia campeonatos</option><option value="operator-games-view">Operador que acompanha jogos</option></select></label><button type="button" id="trainingReset">Reiniciar apenas o treino</button><a class="button" id="trainingCentral">Voltar à central real</a><a class="button" id="trainingPublic" target="_blank" rel="noopener">Ver painel público do treino</a></div><p class="muted">Para começar, abra Partidas → Operar partida → Iniciar jogo. Cadastros e lançamentos daqui não são publicados no evento real. As permissões simuladas são apenas uma orientação; não representam contas reais.</p>';
+  banner.innerHTML='<div class="brand" id="trainingBrand"></div><h2>Treinamento de partida</h2><p>Escolha um perfil e pratique com dados fictícios salvos neste navegador.</p><div class="toolbar"><label>Simular perfil<select id="trainingRole"><option value="admin">Administrador</option><option value="operator">Operador</option><option value="operator-rosters">Operador com cadastros</option><option value="operator-matches">Operador que cria partidas</option><option value="operator-championships">Operador que gerencia campeonatos</option><option value="operator-games-view">Operador que acompanha jogos</option></select></label><button type="button" id="trainingReset">Reiniciar apenas o treino</button><a class="button" id="trainingCentral">Voltar à central real</a><a class="button" id="trainingPublic" target="_blank" rel="noopener">Ver painel público do treino</a></div><p class="muted">Na Cabine de Operação, selecione um jogo de treino, inicie o cronômetro e registre um lance. Depois, confira o placar no painel público do treino.</p>';
   bar.after(banner);
   const central=new URL("painel.html",location.href);central.search="";document.getElementById("trainingCentral").href=central.href;
   const pub=new URL("index.html",location.href);pub.search="?demonstracao=1";document.getElementById("trainingPublic").href=pub.href;

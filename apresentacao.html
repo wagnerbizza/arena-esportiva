@@ -144,7 +144,7 @@
     }
   </style>
   <script src="config.js"></script>
-  <script src="apresentacao-arena.js?v=4" defer></script>
+  <script src="apresentacao-arena.js?v=placar-interativo-1" defer></script>
 </head>
 <body>
   <header class="demo-header" id="inicio">
@@ -187,6 +187,11 @@
           <div class="demo-score" id="demo-valor">Aurora 2 × 1 Horizonte</div>
           <p id="demo-info">Futebol · segundo tempo · 64 minutos.</p>
         </div>
+        <div class="demo-play" id="demo-play" aria-label="Testar placar fictício">
+          <button type="button" id="demo-gol-aurora">Gol do Aurora</button>
+          <button type="button" id="demo-gol-horizonte">Gol do Horizonte</button>
+          <button type="button" id="demo-reiniciar">Reiniciar placar</button>
+        </div>
         <div class="demo-links">
           <button type="button" id="demo-anterior">← Anterior</button>
           <button type="button" id="demo-proximo">Próximo →</button>
@@ -213,6 +218,11 @@
   <footer class="demo-footer"><a href="#inicio">Voltar ao início ↑</a></footer>
   <button type="button" class="accessibility-float" data-demo-preferences aria-label="Preferências de leitura"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><circle cx="12" cy="4" r="2"/><path d="M3 8h18M12 7v7m0 0-5 7m5-7 5 7"/></svg></button>
   <style>
+    .demo-hero #demonstracao { border-top: 3px solid var(--accent); }
+    .demo-play { display:flex; flex-wrap:wrap; gap:8px; margin-block:16px; }
+    .demo-play[hidden] { display:none; }
+    .demo-play button { flex:1 1 140px; }
+    #demo-valor { overflow-wrap:anywhere; }
     #demo-access { width: min(560px, calc(100% - 32px)); box-sizing: border-box; max-height: calc(100dvh - 32px); overflow: auto; }
     #demo-access .access-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
     #demo-access .access-heading form { margin: 0; }

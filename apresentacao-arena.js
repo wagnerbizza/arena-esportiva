@@ -7,13 +7,32 @@ const examples = [
 const stage = document.getElementById('demo-etapa');
 const value = document.getElementById('demo-valor');
 const detail = document.getElementById('demo-info');
+const play = document.getElementById('demo-play');
 let current = 0;
+let goals = [2, 1];
+
+function renderDemoScore() {
+  value.textContent = `Aurora ${goals[0]} × ${goals[1]} Horizonte`;
+}
+
+for (const [index, team] of ['aurora', 'horizonte'].entries()) {
+  document.getElementById('demo-gol-' + team).addEventListener('click', () => {
+    goals[index] += 1;
+    renderDemoScore();
+  });
+}
+document.getElementById('demo-reiniciar').addEventListener('click', () => {
+  goals = [2, 1];
+  renderDemoScore();
+});
 
 function changeExample(direction) {
   current = (current + direction + examples.length) % examples.length;
   const [title, score, description] = examples[current];
   stage.textContent = (current + 1) + ' de ' + examples.length + ' · ' + title;
-  value.textContent = score;
+  play.hidden = current !== 0;
+  if (current === 0) renderDemoScore();
+  else value.textContent = score;
   detail.textContent = description;
   if (document.documentElement.dataset.demoMotion !== 'true' &&
       !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -94,6 +113,10 @@ async function loadBrand() {
   const snapshot = await firestore.getDoc(firestore.doc(database, 'publicSettings', 'main'));
   const branding = snapshot.data();
   if (!branding) return;
+  try {
+    const { title, logo, color } = branding;
+    localStorage.setItem('arena-marca-publica-v1', JSON.stringify({ title, logo, color }));
+  } catch {}
   if (branding.title) document.getElementById('demo-brand-name').textContent = branding.title;
   if (/^#[0-9a-f]{6}$/i.test(branding.color || '')) {
     systemAccent = branding.color;
