@@ -3073,6 +3073,19 @@ button:is(.arena-game-bar-settings,.arena-game-bar-pin,.arena-weather-pin,.arena
   inline-size: 20px;
   block-size: 20px;
 }
+button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin,.arena-side-pin)[aria-pressed] {
+  background:none !important;
+  border-color:transparent !important;
+  box-shadow:none !important;
+  color:var(--text);
+}
+button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin,.arena-side-pin)[aria-pressed]:hover {
+  color:var(--accent);
+}
+button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin,.arena-side-pin)[aria-pressed]:focus-visible {
+  outline:2px solid var(--accent);
+  outline-offset:-3px;
+}
 #arenaTopMatchMonitor > .arena-game-bar-pin,
 .arena-weather-card > .arena-weather-pin {
   inset-inline-end: var(--arena-bar-control-inset);
