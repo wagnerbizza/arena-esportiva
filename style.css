@@ -2759,6 +2759,32 @@ label[for="sideFunctionSearch"] > .arena-icon { display:none; }
 #arenaGameBarSettings label { display:flex; align-items:center; gap:8px; }
 #arenaGameBarSettings input { width:auto; }
 
+#arenaGameBarSettings .arena-settings-colors { display:grid; gap:8px; }
+#arenaGameBarSettings .arena-settings-color-row {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:12px;
+}
+#arenaGameBarSettings .arena-settings-color-row label,
+#arenaGameBarSettings .arena-settings-color-row input { margin:0; }
+
+body .arena-function-search[data-custom-area="search"].arena-game-bar-compact,
+body.arena-layout-v2 .arena-function-search[data-custom-area="search"].arena-game-bar-compact {
+  padding-block:6px;
+}
+.arena-function-search.arena-game-bar-compact > label { margin-block-end:4px; }
+.arena-function-search.arena-game-bar-compact .navigation-search-row { gap:6px; }
+.arena-function-search.arena-custom-large-buttons .navigation-search-row > button {
+  min-block-size:60px;
+}
+.arena-function-search.arena-custom-large-buttons .navigation-search-row > button:not(.arena-game-bar-settings) {
+  padding-inline:22px;
+}
+.arena-function-search.arena-custom-large-buttons .navigation-search-row > .arena-game-bar-settings {
+  inline-size:60px;
+}
+
 [data-custom-area] > .arena-game-bar-settings,
 .arena-list-heading > .arena-game-bar-settings {
   display:inline-grid; place-items:center; inline-size:44px; min-block-size:44px;
