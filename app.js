@@ -1492,9 +1492,9 @@ function showGameBarSettings(key="games") {
   const opener=document.activeElement;
   dialog.innerHTML=`<div class="arena-dialog-heading"><h2 id="arenaGameBarSettingsTitle">${title}</h2><button type="button" class="arena-close-x" aria-label="Fechar" title="Fechar">×</button></div>
   <form><div class="arena-settings-colors">
+  <div class="arena-settings-color-row"><label for="arenaSettingsBorder">Cor da borda</label><input id="arenaSettingsBorder" name="color" type="color" value="${border}"></div>
   <div class="arena-settings-color-row"><label><input name="useBackground" type="checkbox" ${prefs.background?"checked":""}> <span>Personalizar fundo</span></label><input name="background" type="color" aria-label="Cor de fundo" value="${background}"></div>
   <div class="arena-settings-color-row"><label><input name="useButtons" type="checkbox" ${prefs.buttons?"checked":""}> <span>Personalizar botões</span></label><input name="buttons" type="color" aria-label="Cor dos botões" value="${buttons}"></div>
-  <div class="arena-settings-color-row"><label for="arenaSettingsBorder">Cor da borda</label><input id="arenaSettingsBorder" name="color" type="color" value="${border}"></div>
   </div>
   <label><input name="compact" type="checkbox" ${prefs.compact?"checked":""}> Espaçamento compacto</label>
   <label><input name="large" type="checkbox" ${prefs.large?"checked":""}> Botões maiores</label>
