@@ -1275,12 +1275,12 @@ export async function connectSpark({
         const data={
           title:values.title,body:values.body,expiresAt:values.expiresAt,
           pinned:admin?values.pinned:(before?.pinned||false),
-          status:values.status,author:before?.author||uid,updatedBy:uid,updatedAt:F.serverTimestamp()
+          status:values.status,...(values.media?{media:values.media}:{}),author:before?.author||uid,updatedBy:uid,updatedAt:F.serverTimestamp()
         };
         tx.set(ref,data);
         if(data.status==="published"){
           const {title,body,expiresAt,pinned,updatedAt}=data;
-          tx.set(publicRef,{title,body,expiresAt,pinned,updatedAt});
+          tx.set(publicRef,{title,body,expiresAt,pinned,updatedAt,...(data.media?{media:data.media}:{})});
         }else if(before?.status==="published")tx.delete(publicRef);
       });
     },

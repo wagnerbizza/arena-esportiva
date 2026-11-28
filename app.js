@@ -1982,7 +1982,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=mural-1");
+    const { connectSpark } = await import("./spark-store.js?v=mural-anexos-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -5668,8 +5668,44 @@ let muralRows=[], muralStop, muralScope="", muralError="", muralLoaded=false, mu
 function muralPublicCard(){
  return C.demo?"":'<section class="card" data-mural-public aria-label="Mural da Arena" hidden></section>';
 }
+const muralFileTypes={png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",webp:"image/webp",pdf:"application/pdf",zip:"application/zip"};
+const muralFileLimit=200*1024;
+function muralLink(value){
+ try{const url=new URL(value);return url.protocol==="https:"&&!url.username&&!url.password?url.href:"";}catch{return "";}
+}
+function muralFileType(name){
+ return muralFileTypes[String(name||"").split(".").pop().toLowerCase()]||"";
+}
+function muralMediaMarkup(row){
+ const media=row.media||{},link=muralLink(media.link);
+ const color=/^#[0-9a-f]{6}$/i.test(media.color||"")?media.color:"";
+ const file=media.file, mime=muralFileType(file?.name);
+ const valid=mime&&typeof file.data==="string"&&/^[A-Za-z0-9+/]+={0,2}$/.test(file.data);
+ return `<div class="arena-mural-content" ${color?`style="--mural-color:${color}"`:""}><h3>${esc(row.title)}</h3><p class="arena-mural-message">${esc(row.body)}</p>${valid&&mime.startsWith("image/")?`<img class="arena-mural-image" loading="lazy" alt="${esc(file.name)}" src="data:${mime};base64,${esc(file.data)}">`:""}<div class="toolbar">${valid?`<button type="button" data-mural-download="${esc(row.id)}">Baixar ${esc(file.name)}</button>`:""}${link?`<a class="button" href="${esc(link)}" target="_blank" rel="noopener noreferrer">Abrir link ↗</a>`:""}</div></div>`;
+}
+async function muralFileData(file){
+ if(file.size>muralFileLimit)throw Error("O anexo excede 200 KB. Use o link HTTPS para arquivos maiores.");
+ if(!muralFileType(file.name)||!file.size||file.name.length>150)throw Error("Escolha um arquivo PNG, JPG, WebP, PDF ou ZIP com nome de até 150 caracteres.");
+ return new Promise((resolve,reject)=>{
+  const reader=new FileReader();
+  reader.onload=()=>resolve({name:file.name,data:String(reader.result).split(",")[1]});
+  reader.onerror=()=>reject(Error("Não foi possível ler o arquivo."));
+  reader.readAsDataURL(file);
+ });
+}
+function downloadMuralFile(id){
+ const file=muralRows.find(row=>row.id===id)?.media?.file;
+ if(!muralFileType(file?.name))return;
+ try{
+  const bytes=Uint8Array.from(atob(file.data),char=>char.charCodeAt(0));
+  const url=URL.createObjectURL(new Blob([bytes],{type:"application/octet-stream"}));
+  const link=document.createElement("a");
+  link.href=url;link.download=file.name.replace(/[\\/]/g,"-");
+  link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ }catch{toast("Não foi possível baixar o anexo.",true);}
+}
 function muralManage(){
- return '<section class="card" data-mural-manage><form id="arenaMuralForm"><h2>Escrever recado</h2><label>Título<input name="title" required maxlength="100"></label><label>Mensagem<textarea name="body" required maxlength="1200" rows="4"></textarea></label><label>Visível até (opcional)<input name="expires" type="date"></label>'+(role==="admin"?'<label class="confirmation-check"><input name="pinned" type="checkbox"> Destacar no mural público</label>':'')+'<div class="toolbar"><button type="submit" value="published" class="primary">Publicar</button><button type="submit" value="draft">Salvar rascunho</button><button type="button" data-mural-new>Novo recado</button></div></form><h2>Recados cadastrados</h2><div data-mural-list></div></section>';
+ return '<section class="card" data-mural-manage><form id="arenaMuralForm"><h2>Escrever recado</h2><label>Título<input name="title" required maxlength="100"></label><label>Mensagem<textarea name="body" required maxlength="1200" rows="4"></textarea></label><label>Visível até (opcional)<input name="expires" type="date"></label><fieldset class="arena-mural-options"><legend>Aparência e anexos</legend><label class="confirmation-check"><input name="customColor" type="checkbox"> Usar cor de destaque</label><label>Cor de destaque<input name="accent" type="color" value="#15c3ed"></label><label>Imagem, PDF ou ZIP<input name="attachment" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf,.zip"></label><small>Um arquivo de até 200 KB por recado. Para arquivos maiores, use um link HTTPS compartilhável.</small><label class="confirmation-check" data-mural-existing hidden><input name="removeAttachment" type="checkbox"> <span>Remover anexo atual</span></label><label>Link externo (opcional)<input name="mediaLink" type="url" maxlength="1500" placeholder="https://"></label></fieldset>'+(role==="admin"?'<label class="confirmation-check"><input name="pinned" type="checkbox"> Destacar no mural público</label>':'')+'<div class="toolbar"><button type="submit" value="published" class="primary">Publicar</button><button type="submit" value="draft">Salvar rascunho</button><button type="button" data-mural-new>Novo recado</button></div></form><h2>Recados cadastrados</h2><div data-mural-list></div></section>';
 }
 function muralDate(row){
  return row.expiresAt?.toDate?.() || null;
@@ -5681,14 +5717,14 @@ function updateMural(){
   rows.sort((a,b)=>Number(b.pinned)-Number(a.pinned)||(b.updatedAt?.seconds||0)-(a.updatedAt?.seconds||0));
 
   publicBox.hidden=!rows.length;
-  const card=row=>`<article><h3>${esc(row.title)}</h3><p class="arena-mural-message">${esc(row.body)}</p></article>`;
+  const card=row=>`<article>${muralMediaMarkup(row)}</article>`;
   publicBox.innerHTML=rows.length?`<h2>Mural da Arena</h2>${card(rows[0])}${rows.length>1?`<details ${muralExpanded?"open":""}><summary>Ver mais recados</summary>${rows.slice(1).map(card).join("")}</details>`:""}`:"";
  }
  const list=app.querySelector("[data-mural-list]");
  if(list){
   const labels={draft:"Rascunho",published:"Publicado",archived:"Arquivado"};
   const rows=[...muralRows].sort((a,b)=>(b.updatedAt?.seconds||0)-(a.updatedAt?.seconds||0));
-  list.innerHTML=muralError?empty(esc(muralError)):!muralLoaded?empty("Carregando recados…"):!rows.length?empty("Nenhum recado cadastrado."):rows.map(row=>`<article class="card"><h3>${esc(row.title)}</h3><p>${labels[row.status]||""}${row.pinned?" · Destaque":""}${muralDate(row)&&muralDate(row)<=new Date()?" · Expirado":""}</p><p class="arena-mural-message">${esc(row.body)}</p><div class="toolbar">${row.status!=="archived"||role==="admin"?`<button type="button" data-mural-edit="${esc(row.id)}">Editar</button>`:""}${role==="admin"&&row.status!=="archived"?`<button type="button" data-mural-archive="${esc(row.id)}">Arquivar</button>`:""}</div></article>`).join("");
+  list.innerHTML=muralError?empty(esc(muralError)):!muralLoaded?empty("Carregando recados…"):!rows.length?empty("Nenhum recado cadastrado."):rows.map(row=>`<article class="card"><p>${labels[row.status]||""}${row.pinned?" · Destaque":""}${muralDate(row)&&muralDate(row)<=new Date()?" · Expirado":""}</p>${muralMediaMarkup(row)}<div class="toolbar">${row.status!=="archived"||role==="admin"?`<button type="button" data-mural-edit="${esc(row.id)}">Editar</button>`:""}${role==="admin"&&row.status!=="archived"?`<button type="button" data-mural-archive="${esc(row.id)}">Arquivar</button>`:""}</div></article>`).join("");
  }
 }
 function syncMural(){
@@ -5709,6 +5745,13 @@ function fillMuralForm(row){
  const expiry=muralDate(row||{});
  if(expiry)form.elements.expires.value=[expiry.getFullYear(),String(expiry.getMonth()+1).padStart(2,"0"),String(expiry.getDate()).padStart(2,"0")].join("-");
  if(form.elements.pinned)form.elements.pinned.checked=Boolean(row?.pinned);
+ const media=row?.media||{};
+ form.elements.customColor.checked=/^#[0-9a-f]{6}$/i.test(media.color||"");
+ if(form.elements.customColor.checked)form.elements.accent.value=media.color;
+ form.elements.mediaLink.value=media.link||"";
+ const existing=form.querySelector("[data-mural-existing]");
+ existing.hidden=!media.file;
+ existing.querySelector("span").textContent=media.file?"Remover anexo atual · "+media.file.name:"Remover anexo atual";
  form.elements.title.focus();
 }
 async function submitMural(id,values){
@@ -5718,16 +5761,33 @@ async function submitMural(id,values){
  catch(error){toast(error.message||"Não foi possível salvar o recado.",true);}
  finally{muralBusy=false;}
 }
-document.addEventListener("submit",e=>{
+document.addEventListener("submit",async e=>{
  const form=e.target;if(form.id!=="arenaMuralForm")return;
  e.preventDefault();
+ if(muralBusy||!canManageMural())return;
  const title=form.elements.title.value.trim(),body=form.elements.body.value.trim();
  if(!title||!body){toast("Preencha o título e a mensagem.",true);return;}
+ const rawLink=form.elements.mediaLink.value.trim(),link=muralLink(rawLink);
+ if(rawLink&&!link){toast("Informe um link HTTPS válido.",true);return;}
+ const id=muralEditing,scope=muralScope;
+ const row=muralRows.find(item=>item.id===id);
  const date=form.elements.expires.value;
- void submitMural(muralEditing,{title,body,expiresAt:date?new Date(date+"T23:59:59.999"):null,
-  pinned:Boolean(form.elements.pinned?.checked),status:e.submitter?.value==="draft"?"draft":"published"});
+ const selectedFile=form.elements.attachment.files[0];
+ const values={title,body,expiresAt:date?new Date(date+"T23:59:59.999"):null,
+  pinned:Boolean(form.elements.pinned?.checked),status:e.submitter?.value==="draft"?"draft":"published",
+  media:{color:form.elements.customColor.checked?form.elements.accent.value:"",link,
+   file:form.elements.removeAttachment.checked?null:row?.media?.file||null}};
+ if(selectedFile){
+  muralBusy=true;
+  try{values.media.file=await muralFileData(selectedFile);}
+  catch(error){toast(error.message,true);return;}
+  finally{muralBusy=false;}
+ }
+ if(scope===muralScope&&id===muralEditing)void submitMural(id,values);
 },true);
 document.addEventListener("click",e=>{
+ const download=e.target.closest("[data-mural-download]");
+ if(download){downloadMuralFile(download.dataset.muralDownload);return;}
  const button=e.target.closest("[data-mural-new],[data-mural-edit],[data-mural-archive]");
  if(!button||!canManageMural())return;
  if(button.hasAttribute("data-mural-new")){fillMuralForm();return;}

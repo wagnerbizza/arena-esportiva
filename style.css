@@ -3203,3 +3203,9 @@ button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin)[aria-press
 .arena-mural-message { white-space:pre-wrap; overflow-wrap:anywhere; }
 #arenaMuralForm { display:grid; gap:12px; margin-bottom:24px; }
 [data-mural-list] { display:grid; gap:12px; }
+
+.arena-mural-options { display:grid; gap:10px; min-inline-size:0; }
+.arena-mural-options [hidden] { display:none; }
+.arena-mural-content { border-inline-start:3px solid var(--mural-color,transparent); padding-inline-start:12px; }
+.arena-mural-image { display:block; max-inline-size:100%; max-block-size:320px; object-fit:contain; margin-block:8px; }
+.arena-mural-content .toolbar:empty { display:none; }
