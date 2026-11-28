@@ -1,0 +1,38 @@
+name: Atualizar placares externos
+on:
+  schedule:
+    - cron: '7,27,47 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: placares-externos
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Consultar API-Football
+        env:
+          ARENA_FOOTBALL_KEY: ${{ secrets.ARENA_FOOTBALL_KEY }}
+        run: python3 .github/scripts/atualizar-placares.py "$RUNNER_TEMP/placares.json"
+      - name: Publicar dados em branch própria
+        shell: bash
+        run: |
+          branch=arena-dados-placares
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            git fetch origin "$branch"
+            git switch --detach FETCH_HEAD
+          else
+            git switch --orphan "$branch"
+          fi
+          cp "$RUNNER_TEMP/placares.json" placares.json
+          git add placares.json
+          git commit -m "Atualiza placares externos"
+          git push origin "HEAD:refs/heads/$branch"

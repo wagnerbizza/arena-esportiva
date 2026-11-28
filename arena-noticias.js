@@ -19,15 +19,21 @@
     return request;
   }
 
+  function validArticles(data) {
+    return (Array.isArray(data?.articles) ? data.articles : []).filter(article =>
+      typeof article?.title === "string" && article.title.trim() &&
+      typeof article.url === "string" &&
+      article.url.startsWith("https://agenciabrasil.ebc.com.br/esportes/noticia/")
+    ).slice(0,6);
+  }
+  window.loadArenaSportsNews=async()=>validArticles(await loadNews());
+
   customElements.define("arena-news", class extends HTMLElement {
     async connectedCallback() {
       const data = await loadNews();
       if (!this.isConnected) return;
       const list = document.createElement("ul");
-      for (const article of Array.isArray(data?.articles) ? data.articles.slice(0, 6) : []) {
-        if (typeof article?.title !== "string" || !article.title.trim()) continue;
-        if (typeof article.url !== "string" ||
-            !article.url.startsWith("https://agenciabrasil.ebc.com.br/esportes/noticia/")) continue;
+      for (const article of validArticles(data)) {
         const item = document.createElement("li");
         const link = document.createElement("a");
         link.href = article.url;

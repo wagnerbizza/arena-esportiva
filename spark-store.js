@@ -1116,7 +1116,7 @@ export async function connectSpark({
       const before = snap.data();
       if (before.deleted === true) throw Error("Este operador foi removido e está disponível apenas para consulta.");
       const granted=access==="active"?[...new Set(permissions===undefined?(before.permissions||[]):permissions)]:[];
-      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView","historyCorrections","editMatchPhases","correctMatchSport","operateAllGames","hidePublicGames","muralPublish"].includes(p)))throw Error("Permissão específica inválida.");
+      if(granted.some(p=>!["rosters","matchesCreate","championships","gamesView","historyCorrections","editMatchPhases","correctMatchSport","operateAllGames","hidePublicGames","muralPublish","externalScores","externalNews"].includes(p)))throw Error("Permissão específica inválida.");
       const editions = access === "active"
         ? [...new Set(followedEditions ?? before.followedEditions ?? [])] : [];
       const known = new Set(state.championships.map((c) => c.name + " • " + c.season));
@@ -1256,6 +1256,15 @@ export async function connectSpark({
   }
   const canPublishMural = () => isOwner() || (authorized() && (profile?.permissions || []).includes("muralPublish"));
   return {
+    watchExternalSports(kind,update) {
+      return F.onSnapshot(F.doc(database,"externalSports",kind),snapshot=>update(snapshot.data()?.enabled===true),()=>update(false));
+    },
+    async setExternalSports(kind,enabled) {
+      const permission={scores:"externalScores",news:"externalNews"}[kind];
+      if(!permission||!(isOwner()||(authorized()&&(profile?.permissions||[]).includes(permission))))
+        throw Error("Sem autorização para esta publicação.");
+      await F.setDoc(F.doc(database,"externalSports",kind),{enabled});
+    },
     watchMuralSettings(update) {
       return F.onSnapshot(F.doc(database,"muralDisplay","main"),snap=>update(snap.data()||{}),()=>{});
     },

@@ -1463,6 +1463,13 @@ function gameBarSettingsButton(key="games") {
 }
 function applyGameBarPreferences(prefs, bar=$("#arenaTopMatchMonitor")) {
   if(!bar)return;
+  if(bar.dataset.customArea==="weather"){
+    const size=Number(prefs.iconSize),seconds=Number(prefs.iconSeconds);
+    if(size>=16&&size<=56)bar.style.setProperty("--arena-weather-icon-size",size+"px");
+    else bar.style.removeProperty("--arena-weather-icon-size");
+    bar.style.setProperty("--arena-weather-icon-seconds",(seconds>=1&&seconds<=12?seconds:3)+"s");
+    bar.dataset.weatherMotion=["drift","pulse","off"].includes(prefs.weatherMotion)?prefs.weatherMotion:"drift";
+  }
   bar.classList.toggle("arena-game-bar-compact",prefs.compact===true);
   bar.style.setProperty("--game-bar-border",/^#[0-9a-f]{6}$/i.test(prefs.color||"")?prefs.color:"var(--accent)");
   bar.classList.toggle("arena-custom-large-buttons",prefs.large===true);
@@ -1487,6 +1494,16 @@ function colorSwatch(value,fallback){
   return rgb ? "#"+rgb.slice(1,4).map(n=>Number(n).toString(16).padStart(2,"0")).join("") : fallback;
 }
 function showGameBarSettings(key="games") {
+  if(key==="mural-display"){
+    if(!canManageMural())return;
+    const details=$("#arenaMuralSettings")?.closest("details");
+    if(details){
+      details.open=true;
+      details.scrollIntoView({block:"nearest"});
+      details.querySelector("summary").focus({preventScroll:true});
+    }
+    return;
+  }
   if($("#arenaGameBarSettings")?.open)return;
   const dialog=document.createElement("dialog");
   dialog.id="arenaGameBarSettings";dialog.className="card";
@@ -1511,6 +1528,11 @@ function showGameBarSettings(key="games") {
   </div>
   <label><input name="compact" type="checkbox" ${prefs.compact?"checked":""}> Espaçamento compacto</label>
   <label><input name="large" type="checkbox" ${prefs.large?"checked":""}> Botões maiores</label>
+  ${key==="weather"?`<fieldset><legend>Ícone da previsão</legend>
+  <label>Tamanho (px)<input name="iconSize" type="number" min="16" max="56" value="${Number(prefs.iconSize)||30}" required></label>
+  <label>Segundos por ciclo<input name="iconSeconds" type="number" min="1" max="12" value="${Number(prefs.iconSeconds)||3}" required></label>
+  <label>Movimento<select name="weatherMotion">${[["drift","Deslizar"],["pulse","Pulsar"],["off","Parado"]].map(([value,label])=>`<option value="${value}" ${(prefs.weatherMotion||"drift")===value?"selected":""}>${label}</option>`).join("")}</select></label>
+  </fieldset>`:""}
   ${key==="games"?`<label><input name="hideLast" type="checkbox" ${prefs.hideLast?"checked":""}> Ocultar último lance</label>`:""}
   <div class="toolbar"><button type="submit" class="primary">Salvar ajustes</button><button type="button" data-game-bar-reset>Restaurar padrão</button></div></form>`;
   dialog.querySelector(".arena-close-x").onclick=()=>dialog.close();
@@ -1534,7 +1556,7 @@ function showGameBarSettings(key="games") {
   }
   form.onsubmit=event=>{
     event.preventDefault();event.stopPropagation();
-    saveGameBar({color:borderChanged?form.elements.color.value:prefs.color||"",background:form.elements.useBackground.checked?form.elements.background.value:"",buttons:form.elements.useButtons.checked?form.elements.buttons.value:"",compact:form.elements.compact.checked,large:form.elements.large.checked,hideLast:form.elements.hideLast?.checked===true});
+    saveGameBar({color:borderChanged?form.elements.color.value:prefs.color||"",background:form.elements.useBackground.checked?form.elements.background.value:"",buttons:form.elements.useButtons.checked?form.elements.buttons.value:"",compact:form.elements.compact.checked,large:form.elements.large.checked,hideLast:form.elements.hideLast?.checked===true,...(key==="weather"?{iconSize:form.elements.iconSize.valueAsNumber,iconSeconds:form.elements.iconSeconds.valueAsNumber,weatherMotion:form.elements.weatherMotion.value}:{})});
   };
   dialog.querySelector("[data-game-bar-reset]").onclick=()=>saveGameBar({});
   dialog.addEventListener("close",()=>{
@@ -1982,7 +2004,7 @@ async function boot() {
   }
   render();
   try {
-    const { connectSpark } = await import("./spark-store.js?v=mural-placares-1");
+    const { connectSpark } = await import("./spark-store.js?v=esportes-externos-1");
     cloud = await connectSpark({
       config: C,
       privateView: admin,
@@ -2255,14 +2277,14 @@ function render() {
   if (admin && !C.demo && (!user || !role)) {
     syncPersonalTools();
     app.innerHTML = accessView();
-    syncMural();
+    syncMural();syncExternalSports();
     closeTimeline();
     if (accessBusy) app.querySelectorAll("button").forEach((b) => b.disabled = true);
     return;
   }
   if (!admin) {
     app.innerHTML = publicPageHTML();
-    syncMural();
+    syncMural();syncExternalSports();
     $("#filter").value = publicFilter;
     if (state.settings.banner)
       $("#hero").style.backgroundImage =
@@ -2271,7 +2293,7 @@ function render() {
     return;
   }
   // Uma sessão rebaixada ou trocada não mantém uma aba administrativa aberta.
-  if (role !== "admin" && !["overview", "matches", "operation", "reportCenter", "audience", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","coachingStaff","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canPrepareRegistrationSheets()?["registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[]), ...(canManageMural()?["mural"]:[])].includes(section)) {
+  if (role !== "admin" && !["overview", "matches", "operation", "reportCenter", "audience", "account", "documentation", "qrCodes", "profiles", "preferences", ...(canManageRosters()?["teams","players","coachingStaff","imports"]:[]), ...(canManageChampionships()?["championships"]:[]), ...(canPrepareRegistrationSheets()?["registrationSheets"]:[]), ...(canCreateMatches()?["createMatch"]:[]), ...(canManageMural()?["mural"]:[]),...(canManageExternal()?["externalSports"]:[])].includes(section)) {
     section = "overview";
     selected = "";
   }
@@ -2280,6 +2302,7 @@ function render() {
     ["overview", "Início"],
     ["audience", "Audiência"],
     ...(canManageMural()?[["mural","Mural de recados"]]:[]),
+    ...(canManageExternal()?[["externalSports","Publicação esportiva"]]:[]),
     ["championships", "Campeonatos"],
     ["standings", "Classificação"],
     ["teams", "Equipes"],
@@ -2315,7 +2338,7 @@ function render() {
   app.innerHTML = `${audienceMonitorBar()}${pageControls}${locationTrail()}${workspaceNavigation(sections)}${section==="overview"?muralQuickBar():""}${floatingGameClock()}<div class="sectionhead admin-heading noprint" data-custom-area="title:${esc(section)}"><div><span class="tag">${esc(panelDisplayName())}</span><h1 tabindex="-1">${esc(selected && isOperationSection() ? "Operação de partida" : sections.find(([id])=>id===section)?.[1] || "Visão geral")}</h1><p class="muted">${esc(navigationDescriptions[section]?.description || "Organize o evento e acompanhe os jogos.")}</p></div><span class="status">${C.demo ? "Demonstração" : role === "admin" ? "Administrador principal" : "Operador"}</span>${gameBarSettingsButton("title:"+section)}</div>${section==="overview"?`${accountPendingBanner()}<div class="noprint">${liveStatusPanel("admin")}</div>`:""}<div id="view">${role==="operator" && section==="overview"?operatorStartPanel():""}${view()}</div>${relatedArenaScreens()}`;
   if(muralForm)$("#arenaMuralForm")?.replaceWith(muralForm);
   if(muralConfig)$("#arenaMuralSettings")?.closest("details").replaceWith(muralConfig);
-  syncMural();
+  syncMural();syncExternalSports();
   audienceMonitorObserver?.disconnect();
   const audienceMonitor = app.querySelector(".arena-audience-monitor");
   if (audienceMonitor) audienceMonitorObserver?.observe(audienceMonitor);
@@ -2346,12 +2369,74 @@ function render() {
       : sportsReportPreview() + sportsDetailScreen();
   }
 }
+const externalSportsConfig={
+ scores:{permission:"externalScores",label:"Placares externos"},
+ news:{permission:"externalNews",label:"Notícias esportivas externas"}
+};
+let externalSports={},externalSportsScope="",externalSportsStops=[],externalScoresRequest,externalScoresData;
+const canEditExternal=kind=>!C.demo&&(role==="admin"||(role==="operator"&&operatorPermissions.includes(externalSportsConfig[kind].permission)));
+const canManageExternal=()=>Object.keys(externalSportsConfig).some(canEditExternal);
+function externalSportsPanel(manage){
+ if(C.demo||manage&&!canManageExternal())return "";
+ return `<section class="card" data-external-sports="${manage?"manage":"public"}" ${manage?"":"hidden"}></section>`;
+}
+function updateExternalSports(){
+ const panel=app.querySelector("[data-external-sports]");if(!panel)return;
+ const manage=panel.dataset.externalSports==="manage";
+ const kinds=Object.keys(externalSportsConfig).filter(kind=>manage?canEditExternal(kind):externalSports[kind]);
+ panel.hidden=!kinds.length;
+ if(!kinds.length)return;
+ const data=externalScoresData;
+ const today=new Intl.DateTimeFormat("sv-SE",{timeZone:"America/Sao_Paulo"}).format(new Date());
+ const fresh=data?.day===today;
+ const age=data?.updatedAt?Date.now()-Date.parse(data.updatedAt):Infinity;
+ const live=["1H","HT","2H","ET","BT","P","LIVE"];
+ const scores=fresh&&data.games.length?data.games.map(game=>{
+  const status=live.includes(game.status)?(age<=35*60000?"Em andamento":"Placar sem atualização recente"):
+   ["FT","AET","PEN"].includes(game.status)?"Encerrado":({NS:"Agendado",TBD:"Horário a definir",PST:"Adiado",CANC:"Cancelado",SUSP:"Suspenso",INT:"Interrompido"}[game.status]||"Consulte a fonte");
+  const score=game.score.every(Number.isInteger)?game.score.join(" × "):"×";
+  return `<article class="arena-external-score"><small>${esc(game.league)}${game.round?" · "+esc(game.round):""}</small><h3>${esc(game.home)} <b>${esc(score)}</b> ${esc(game.away)}</h3><p>${esc(status)}${game.status==="NS"&&game.date?" · "+esc(format(game.date)):""}${live.includes(game.status)&&age<=35*60000&&Number.isInteger(game.minute)?" · "+game.minute+"′":""}</p></article>`;
+ }).join(""):`<p>${!data?"Placares indisponíveis no momento.":fresh?"Nenhuma partida publicada para hoje nas competições acompanhadas.":"Aguardando a atualização dos jogos de hoje."}</p>`;
+ const markup=`<h2>${manage?"Publicação esportiva":"Futebol pelo Brasil e pela América"}</h2>${kinds.map(kind=>`<section><h3>${externalSportsConfig[kind].label}</h3>${manage?`<button type="button" data-external-toggle="${kind}" aria-pressed="${Boolean(externalSports[kind])}">${externalSports[kind]?"Retirar do painel público":"Exibir no painel público"}</button>`:""}${kind==="scores"?`<p class="muted">Brasileirão Série A, Paulista e Libertadores · API-Football${data?.updatedAt?" · Consulta em "+esc(format(data.updatedAt)):""}</p><div class="arena-external-scores">${scores}</div>`:`<arena-news>Carregando manchetes…</arena-news><p><a href="https://agenciabrasil.ebc.com.br/esportes" target="_blank" rel="noopener noreferrer">Agência Brasil · Esportes ↗</a></p>`}</section>`).join("")}`;
+ if(panel.dataset.content!==markup){panel.innerHTML=markup;panel.dataset.content=markup;}
+ if(kinds.includes("scores")&&!externalScoresRequest){
+  externalScoresRequest=fetch("https://raw.githubusercontent.com/wagnerbizza/arena-esportiva/arena-dados-placares/placares.json",{cache:"no-store",signal:AbortSignal.timeout(8000)})
+   .then(response=>response.ok?response.json():null).then(payload=>{if(Array.isArray(payload?.games))externalScoresData=payload;})
+   .catch(()=>{}).finally(()=>updateExternalSports());
+ }
+}
+function syncExternalSports(){
+ const scope=cloud&&!C.demo?admin?(user?.uid||""):"public":"";
+ if(scope!==externalSportsScope){
+  externalSportsStops.forEach(stop=>stop());externalSportsStops=[];externalSports={};externalSportsScope=scope;
+  if(scope)for(const kind of Object.keys(externalSportsConfig))externalSportsStops.push(cloud.watchExternalSports(kind,enabled=>{
+   if(scope!==externalSportsScope)return;
+   externalSports[kind]=enabled;updateExternalSports();
+   if(!admin&&kind==="news")showMuralSlide();
+  }));
+ }
+ updateExternalSports();
+}
+setInterval(()=>{
+ if(document.hidden||!app.querySelector("[data-external-sports]:not([hidden])"))return;
+ externalScoresRequest=null;updateExternalSports();
+},120000);
+document.addEventListener("click",async event=>{
+ const control=event.target.closest("[data-external-toggle]");if(!control||control.disabled)return;
+ const kind=control.dataset.externalToggle;
+ if(!Object.hasOwn(externalSportsConfig,kind)||!canEditExternal(kind)||!cloud)return;
+ control.disabled=true;
+ try{await cloud.setExternalSports(kind,!externalSports[kind]);toast("Publicação esportiva atualizada.");}
+ catch(error){toast(error.message||"Não foi possível salvar.",true);}
+ finally{control.disabled=false;}
+});
+
 function publicPageHTML() {
   return `<section class="hero" id="hero"><span class="tag">CENTRAL DE RESULTADOS / TEMPORADA</span><h1>${esc(publicEdition || systemDisplayName())}</h1><p class="muted">${esc(state.settings.subtitle)}</p></section>${C.demo ? "" : shareEditionControls(publicEdition)}${liveStatusPanel("public")}${muralPublicCard()}<div class="sectionhead"><div><h2>Acompanhe os jogos</h2>${C.demo?"":`<p class="public-audience-badge" data-public-audience>${publicAudienceBadge()}</p>`}</div><select id="filter" aria-label="Filtrar modalidade"><option value="">Todas as modalidades</option>${options(
       D.SPORTS,
       (x) => x,
       (x) => x,
-    )}</select></div>${documentBrandingMarkup("publicPanel","header")}${publicHub()}${partnerMarkup("publicPanel")}`;
+    )}</select></div>${documentBrandingMarkup("publicPanel","header")}${externalSportsPanel(false)}${publicHub()}${partnerMarkup("publicPanel")}`;
 }
 function publicMatches(filter) {
   const list = state.matches.filter(m=>(!filter||m.sport===filter)&&
@@ -2372,6 +2457,7 @@ function publicMatches(filter) {
       : empty("Nenhuma partida publicada para esta seleção.");
 }
 function view() {
+  if(section==="externalSports")return externalSportsPanel(true);
   if(section==="mural")return canManageMural()?muralManage():empty("Mural indisponível para este perfil.");
   if(section==="operation")return cabinView();
   if(section==="reportCenter")return reportCenter();
@@ -3742,6 +3828,8 @@ function updateOperationSummary(form) {
     ["championshipPermission", "Criar e editar campeonatos"],
     ["matchCreatePermission", "Criar jogos"],
     ["muralPublishPermission","Publicar no mural"],
+    ["externalScores","Publicar placares externos"],
+    ["externalNews","Publicar notícias externas"],
     ["gamesViewPermission", "Consultar todos os jogos publicados"],
     ["historyCorrectPermission", "Anular lances nos jogos liberados"],
     ["phaseEditPermission", "Editar grupos e chaves nos campeonatos liberados"],
@@ -3855,7 +3943,7 @@ function operatorAuthorizationGroups(operator,editionOptions) {
   `<label class="confirmation-check"><input type="checkbox" name="phaseEditPermission" ${checked("editMatchPhases")}><span>Mudar fase, grupo, chave ou rodada.</span></label>`,permissions.includes("editMatchPhases")?1:0);
  const registrations=authorizationSection("records","Fazer cadastros","Cada caixa libera um cadastro. Para operar um jogo criado, marque o jogo ou seu campeonato nas opções acima.",`<label class="confirmation-check"><input type="checkbox" name="rosterPermission" ${checked("rosters")}><span>Criar, editar e importar equipes e jogadores.</span></label><label class="confirmation-check"><input type="checkbox" name="championshipPermission" ${checked("championships")}><span>Criar e editar campeonatos e temporadas.</span></label><label class="confirmation-check"><input type="checkbox" name="matchCreatePermission" ${checked("matchesCreate")}><span>Criar novos jogos.</span></label>`,permissions.filter(id=>["rosters","championships","matchesCreate"].includes(id)).length);
  const viewing=authorizationSection("view","Só consultar jogos","As opções abaixo liberam consulta. Para registrar lances, use Operar campeonatos ou Operar jogos avulsos.",`<fieldset><legend>Campeonatos para consultar</legend>${editionOptions}<label class="confirmation-check"><input type="checkbox" name="gamesViewPermission" ${checked("gamesView")}><span>Consultar todos os jogos publicados.</span></label></fieldset>`,(operator.followedEditions||[]).length+(permissions.includes("gamesView")?1:0));
- return `${operateAll}${authorizationSection("mural","Mural de recados","Publicação de recados gerais, independentemente dos jogos.",`<label class="confirmation-check"><input type="checkbox" name="muralPublishPermission" ${checked("muralPublish")}><span>Publicar no mural</span></label>`,permissions.includes("muralPublish")?1:0)}<div class="toolbar"><button type="button" data-permissions-expand="true">Expandir autorizações</button><button type="button" data-permissions-expand="false">Recolher autorizações</button></div>${operations}${matches}${publication}${history}${sportCorrection}${phases}${registrations}${viewing}`;
+ return `${operateAll}${authorizationSection("external-sports","Publicação esportiva externa","Delegue cada tipo de publicação separadamente.",Object.entries(externalSportsConfig).map(([kind,item])=>`<label class="confirmation-check"><input type="checkbox" name="${item.permission}" ${checked(item.permission)}><span>Publicar ${item.label.toLowerCase()}</span></label>`).join(""),Object.values(externalSportsConfig).filter(item=>permissions.includes(item.permission)).length)}${authorizationSection("mural","Mural de recados","Publicação de recados gerais, independentemente dos jogos.",`<label class="confirmation-check"><input type="checkbox" name="muralPublishPermission" ${checked("muralPublish")}><span>Publicar no mural</span></label>`,permissions.includes("muralPublish")?1:0)}<div class="toolbar"><button type="button" data-permissions-expand="true">Expandir autorizações</button><button type="button" data-permissions-expand="false">Recolher autorizações</button></div>${operations}${matches}${publication}${history}${sportCorrection}${phases}${registrations}${viewing}`;
 }
 document.addEventListener("click",event=>{
  const button=event.target.closest("[data-permissions-expand]");if(!button||role!=="admin")return;
@@ -3891,7 +3979,7 @@ function usersView() {
     permissions.includes("championships") && "Campeonatos",
     permissions.includes("matchesCreate") && "Novas partidas",
   ].filter(Boolean).join(", ") || "Nenhum";
-  const permissionNames={muralPublish:"Publicar no mural",hidePublicGames:"Ocultar jogos do público",operateAllGames:"Operar tudo",rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos",historyCorrections:"Anular lances com justificativa",editMatchPhases:"Editar grupos e chaves",correctMatchSport:"Corrigir modalidade dos jogos liberados"};
+  const permissionNames={externalScores:"Publicar placares externos",externalNews:"Publicar notícias externas",muralPublish:"Publicar no mural",hidePublicGames:"Ocultar jogos do público",operateAllGames:"Operar tudo",rosters:"Equipes e jogadores",championships:"Campeonatos",matchesCreate:"Novas partidas",gamesView:"Acompanhar todos os jogos",historyCorrections:"Anular lances com justificativa",editMatchPhases:"Editar grupos e chaves",correctMatchSport:"Corrigir modalidade dos jogos liberados"};
   const accessAuditRows=(state.accessAudit||[]).slice().sort((a,b)=>(b.at?.toMillis?.()||0)-(a.at?.toMillis?.()||0));
   const accessAuditDate=value=>value?.toDate?.().toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})||"Aguardando confirmação do servidor";
   const accessAuditValue=(key,value)=>{
@@ -3977,7 +4065,7 @@ document.addEventListener("submit", async (e) => {
           toast(user?.emailVerified ? "Solicitação registrada. Aguarde a aprovação do administrador principal." : "Solicitação registrada. Confira a confirmação enviada ao seu e-mail.");
         } else {
           await cloud.manageUser({userId:d.userId, access:d.access,
-            matches: new FormData(f).getAll("assignedMatches"), followedEditions: new FormData(f).getAll("followedEditions"), operatedChampionships: new FormData(f).getAll("operatedChampionships"), permissions:[...(f.elements.muralPublishPermission?.checked?["muralPublish"]:[]),...(f.elements.hidePublicPermission.checked?["hidePublicGames"]:[]),...(f.elements.operateAllPermission.checked?["operateAllGames"]:[]),...(f.elements.rosterPermission.checked?["rosters"]:[]),...(f.elements.matchCreatePermission.checked?["matchesCreate"]:[]),...(f.elements.championshipPermission.checked?["championships"]:[]),...(f.elements.gamesViewPermission.checked?["gamesView"]:[]),...(f.elements.historyCorrectPermission.checked?["historyCorrections"]:[]),...(f.elements.phaseEditPermission.checked?["editMatchPhases"]:[]),...(f.elements.matchSportCorrectionPermission.checked?["correctMatchSport"]:[])], reason:d.reason});
+            matches: new FormData(f).getAll("assignedMatches"), followedEditions: new FormData(f).getAll("followedEditions"), operatedChampionships: new FormData(f).getAll("operatedChampionships"), permissions:[...Object.values(externalSportsConfig).filter(item=>f.elements[item.permission]?.checked).map(item=>item.permission),...(f.elements.muralPublishPermission?.checked?["muralPublish"]:[]),...(f.elements.hidePublicPermission.checked?["hidePublicGames"]:[]),...(f.elements.operateAllPermission.checked?["operateAllGames"]:[]),...(f.elements.rosterPermission.checked?["rosters"]:[]),...(f.elements.matchCreatePermission.checked?["matchesCreate"]:[]),...(f.elements.championshipPermission.checked?["championships"]:[]),...(f.elements.gamesViewPermission.checked?["gamesView"]:[]),...(f.elements.historyCorrectPermission.checked?["historyCorrections"]:[]),...(f.elements.phaseEditPermission.checked?["editMatchPhases"]:[]),...(f.elements.matchSportCorrectionPermission.checked?["correctMatchSport"]:[])], reason:d.reason});
           managedUserId = "";
           toast("Permissões salvas e registradas no histórico.");
         }
@@ -5397,7 +5485,7 @@ document.addEventListener("click",async event=>{
 
 // 21 — Organização da central. Permissões continuam validadas pelo Firebase.
 const workspaceDefinitions=[
- {id:"mural",title:"Comunicação",intro:"Comunicados e recados gerais",sections:["mural"]},
+ {id:"mural",title:"Comunicação",intro:"Comunicados e recados gerais",sections:["mural","externalSports"]},
  {id:"games",title:"Jogos",intro:"Operação, agenda e resultados",sections:["overview","operation","matches","createMatch","standings","audience"]},
  {id:"records",title:"Cadastros",intro:"Equipes, jogadores, comissões técnicas e importação",sections:["teams","players","coachingStaff","imports"]},
  {id:"championships",title:"Campeonatos",intro:"Temporadas e inscrições",sections:["championships","registrationSheets"]},
@@ -5408,7 +5496,7 @@ const workspaceDefinitions=[
  {id:"administration",title:"Acessos",intro:"Permissões e operadores",sections:["users","monitor"]},
  {id:"maintenance",title:"Backups e suporte",intro:"Guias, testes e recuperação",sections:["systemCheck","documentation","testData","cleanup"]}
 ];
-function allowedWorkspaceSections(group){return group.sections.filter(id=>id==="mural"?canManageMural():role==="admin"||["overview","operation","matches","reportCenter","audience","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","coachingStaff","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
+function allowedWorkspaceSections(group){return group.sections.filter(id=>id==="mural"?canManageMural():id==="externalSports"?canManageExternal():role==="admin"||["overview","operation","matches","reportCenter","audience","documentation","qrCodes","profiles","preferences"].includes(id)||(canManageRosters()&&["teams","players","coachingStaff","imports"].includes(id))||(canManageChampionships()&&id==="championships")||(canPrepareRegistrationSheets()&&id==="registrationSheets")||(canCreateMatches()&&id==="createMatch"));}
 function publicPanelURL(edition="") {
  const url=new URL("./index.html",location.href);
  if(trainingMode)url.searchParams.set("demonstracao","1");
@@ -5666,7 +5754,8 @@ function publicChallenge(){
 }
 const canManageMural=()=>!C.demo && (role==="admin" || (role==="operator" && operatorPermissions.includes("muralPublish")));
 let muralRows=[], muralStop, muralScope="", muralError="", muralLoaded=false, muralEditing="", muralBusy=false;
-const muralDefaults={title:"Bem-vindo à Arena!",subtitle:"Acompanhe placares, próximos jogos e recados da comunidade.",seconds:10,accent:"#15c3ed",auto:true,results:true,agenda:true,partners:true};
+const muralDefaults={title:"Bem-vindo à Arena!",subtitle:"Acompanhe placares, próximos jogos e recados da comunidade.",seconds:10,accent:"#15c3ed",auto:true,results:true,agenda:true,partners:true,news:false,sequence:"interleave",transition:"random"};
+let muralNews=[],muralNewsRequested=false;
 let muralSettings={...muralDefaults},muralSettingsStop,muralSlide=0,muralPaused=false,muralNext=0;
 const muralMotion=matchMedia("(prefers-reduced-motion: reduce)");
 function muralPublicCard(){
@@ -5690,7 +5779,9 @@ function muralSlides(){
  const notices=messages.map(row=>({...row,label:row.pinned?"Recado em destaque":"Recado"}));
  const slides=[{label:"Boas-vindas",title:muralSettings.title,body:muralSettings.subtitle}];
  let shownGames=0;
- if(notices.length)slides.push(notices[0]);
+ const news=muralSettings.news&&externalSports.news?muralNews.map(article=>({label:"Notícia · Agência Brasil",title:article.title,body:"",media:{link:article.url}})):[];
+ const interleave=muralSettings.sequence==="interleave";
+ if(muralSettings.sequence!=="games")slides.push(...(interleave?notices.slice(0,1):notices),...news);
  for(const [label,statuses,enabled] of [
   ["Ao vivo",["Ao vivo"],true],
   ["Agenda",["Agendada","Adiada"],muralSettings.agenda],
@@ -5705,10 +5796,11 @@ function muralSlides(){
     teams:[name(match.home),name(match.away)],score:scheduled?"×":gameResult(match).join(" × "),
     body:[matchSportLabel(match),match.competition,match.date?format(match.date):"",match.place].filter(Boolean).join(" · ")});
    shownGames++;
-   if(notices.length)slides.push(notices[shownGames%notices.length]);
+   if(interleave && notices.length)slides.push(notices[shownGames%notices.length]);
   }
  }
- slides.push(...notices.slice(shownGames+1));
+ if(interleave)slides.push(...notices.slice(shownGames+1));
+ if(muralSettings.sequence==="games")slides.push(...notices,...news);
  const partners=muralSettings.partners&&state.partners?.surfaces?.includes("publicPanel")?partnerGroups("preview"):[];
  if(partners.length)slides.push({label:"Organização e apoio",title:"Parceiros da Arena",body:"",partners});
  return slides;
@@ -5726,7 +5818,7 @@ function showMuralSlide(step=0,announce=false){
  if(content.dataset.muralKey!==markup){
   const effects=["fade","rise","slide"];
   const choices=effects.filter(effect=>effect!==box.dataset.muralEffect);
-  box.dataset.muralEffect=choices[Math.floor(Math.random()*choices.length)];
+  box.dataset.muralEffect=muralSettings.transition==="random"?choices[Math.floor(Math.random()*choices.length)]:muralSettings.transition;
   content.innerHTML=markup;content.dataset.muralKey=markup;
   muralNext=Date.now()+Math.min(60,muralSettings.seconds+(row.teams?2:0))*1000;
  }
@@ -5798,15 +5890,17 @@ function muralQuickBar(){
  </section>`;
 }
 function muralSettingsForm(){
- const fields=[["auto","Rodízio automático"],["results","Mostrar todos os resultados"],["agenda","Mostrar agenda"],["partners","Mostrar parceiros"]];
- return `<details class="card arena-mural-config"><summary>Configurar visor público</summary><form id="arenaMuralSettings">
+ const fields=[["auto","Rodízio automático"],["results","Mostrar todos os resultados"],["agenda","Mostrar agenda"],["partners","Mostrar parceiros"],["news","Mostrar notícias da Agência Brasil"]];
+ return `<section class="card arena-mural-config" data-custom-area="mural-display"><div class="arena-list-heading"><h2>Rodízio do mural</h2>${gameBarSettingsButton("mural-display")}</div><details><summary>Configurar visor público</summary><form id="arenaMuralSettings">
  <label>Mensagem de boas-vindas<input name="title" maxlength="100" required value="${esc(muralSettings.title)}"></label>
  <label>Descrição<input name="subtitle" maxlength="220" required value="${esc(muralSettings.subtitle)}"></label>
  <label>Segundos por tela<input name="seconds" type="number" min="3" max="60" required value="${esc(muralSettings.seconds)}"></label>
+ <label>Sequência<select name="sequence">${([["interleave","Intercalar recados e jogos"],["notices","Recados e notícias primeiro"],["games","Jogos primeiro"]]).map(([value,label])=>`<option value="${value}" ${muralSettings.sequence===value?"selected":""}>${label}</option>`).join("")}</select></label>
+ <label>Transição<select name="transition">${([["random","Variar efeitos"],["fade","Desvanecer"],["rise","Subir"],["slide","Deslizar"],["none","Sem efeito"]]).map(([value,label])=>`<option value="${value}" ${muralSettings.transition===value?"selected":""}>${label}</option>`).join("")}</select></label>
  <label>Cor do visor<input name="accent" type="color" value="${esc(muralSettings.accent)}"></label>
  ${fields.map(([id,label])=>`<label class="confirmation-check"><input type="checkbox" name="${id}" ${muralSettings[id]?"checked":""}> ${label}</label>`).join("")}
  <div class="toolbar"><button type="submit" class="primary">Salvar visor</button><button type="button" data-mural-settings-default>Restaurar valores padrão</button></div>
- </form></details>`;
+ </form></details></section>`;
 }
 function fillMuralSettings(form,values){
  for(const [key,value] of Object.entries(values)){
@@ -5860,6 +5954,10 @@ function syncMural(){
    muralSettingsStop=cloud.watchMuralSettings(values=>{
     if(scope!==muralScope)return;
     muralSettings={...muralDefaults,...values};
+    if(!admin&&muralSettings.news&&!muralNewsRequested&&window.loadArenaSportsNews){
+     muralNewsRequested=true;
+     void window.loadArenaSportsNews().then(rows=>{muralNews=rows;showMuralSlide();});
+    }
     muralNext=Date.now()+muralSettings.seconds*1000;
     const form=$("#arenaMuralSettings");
     if(form&&!form.closest("details").open)fillMuralSettings(form,muralSettings);
@@ -7365,9 +7463,9 @@ function personalTarget(el) {
 function applyPersonalColors() {
   const prefs=readPersonalTools(), colors=prefs.colors;
   applyGameBarPreferences(prefs.gameBar);
-  const weather=admin?document.querySelector(".arena-weather-card"):null;
+  const weather=document.querySelector(".arena-weather-card");
+  if(weather)weather.dataset.customArea="weather";
   if(weather && !weather.querySelector("[data-game-bar-settings]")){
-    weather.dataset.customArea="weather";
     weather.insertAdjacentHTML("beforeend",gameBarSettingsButton("weather"));
   }
   for(const area of document.querySelectorAll("[data-custom-area]"))

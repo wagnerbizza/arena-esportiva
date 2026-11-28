@@ -3258,3 +3258,32 @@ button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin)[aria-press
   .arena-mural-score b { letter-spacing:.035em; white-space:nowrap; }
   .arena-mural-frame :is(.muted,.arena-mural-message) { line-height:1.6; }
 }
+
+
+[data-mural-public] {
+  box-shadow:0 10px 36px color-mix(in srgb,var(--arena-mural-accent,var(--accent)) 13%,transparent);
+}
+[data-mural-effect="none"] .arena-mural-frame { animation:none; }
+.arena-weather-card[data-weather-motion] #arenaWeather[data-weather-icon] [data-weather-summary]::before {
+  font-size:var(--arena-weather-icon-size,30px);
+  line-height:1.1;
+  vertical-align:middle;
+}
+@media (prefers-reduced-motion:no-preference) {
+  :root:not(.reduce-motion) .arena-weather-card[data-weather-motion="drift"] #arenaWeather[data-weather-icon] [data-weather-summary]::before {
+    animation:arena-weather-drift var(--arena-weather-icon-seconds,3s) ease-in-out infinite alternate;
+  }
+  :root:not(.reduce-motion) .arena-weather-card[data-weather-motion="pulse"] #arenaWeather[data-weather-icon] [data-weather-summary]::before {
+    animation:arena-weather-icon-pulse var(--arena-weather-icon-seconds,3s) ease-in-out infinite alternate;
+  }
+}
+.arena-weather-card[data-weather-motion="off"] #arenaWeather[data-weather-icon] [data-weather-summary]::before { animation:none; }
+@keyframes arena-weather-drift { from { transform:translate(-2px,0); } to { transform:translate(3px,-3px); } }
+@keyframes arena-weather-icon-pulse { from { transform:scale(.9); } to { transform:scale(1.1); } }
+
+[data-external-sports]:not([hidden]) { margin-block:16px; border-inline-start:4px solid var(--accent); }
+[data-external-sports] > section + section { margin-block-start:16px; border-block-start:1px solid var(--line); padding-block-start:12px; }
+.arena-external-scores { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:10px; }
+.arena-external-score { min-width:0; border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--bg); overflow-wrap:anywhere; }
+.arena-external-score h3 { margin-block:.45em; }
+.arena-external-score b { display:inline-block; padding-inline:.35em; color:var(--text); }

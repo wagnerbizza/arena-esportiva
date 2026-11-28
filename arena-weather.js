@@ -9,7 +9,7 @@
  let sequence=0,loading=false,lastAttempt=0,searchSequence=0;
  const main=document.querySelector('main');if(!main)return;
  const panel=document.createElement('details');panel.id='arenaWeather';panel.className='arena-weather noprint';panel.setAttribute('aria-label','Previsão do tempo');
- panel.innerHTML='<summary><strong data-weather-title>Previsão do tempo</strong><span data-weather-summary>Consultando previsão…</span></summary><div class="arena-weather-body"><p data-weather-status role="status" aria-live="polite"></p><div class="arena-weather-days" data-weather-days></div><div class="toolbar"><button type="button" data-weather-refresh>Atualizar previsão</button></div><form data-weather-search><label>Cidade<input name="city" type="search" minlength="3" maxlength="100" placeholder="Ex.: São Paulo" required autocomplete="off"></label><button type="submit">Buscar cidade</button></form><div class="arena-weather-results" data-weather-results></div><small>A cidade escolhida vale neste navegador. A previsão pode mudar. Fonte: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>.</small></div>';
+ panel.innerHTML='<summary><strong data-weather-title>Previsão do tempo</strong><span class="arena-weather-condition"><span class="arena-weather-graphic" aria-hidden="true"><i></i><b></b><u></u><em></em></span><span data-weather-summary>Consultando previsão…</span></span></summary><div class="arena-weather-body"><p data-weather-status role="status" aria-live="polite"></p><div class="arena-weather-days" data-weather-days></div><div class="toolbar"><button type="button" data-weather-refresh>Atualizar previsão</button></div><form data-weather-search><label>Cidade<input name="city" type="search" minlength="3" maxlength="100" placeholder="Ex.: São Paulo" required autocomplete="off"></label><button type="submit">Buscar cidade</button></form><div class="arena-weather-results" data-weather-results></div><small>A cidade escolhida vale neste navegador. A previsão pode mudar. Fonte: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>.</small></div>';
  const weatherCard = document.createElement('div');
  weatherCard.className = 'arena-weather-card noprint';
  const pin = document.createElement('button');
@@ -37,6 +37,39 @@
 @keyframes forecast-moon-glow {
   to { opacity: .6; }
 }
+
+.arena-weather-condition { display:inline-flex; gap:10px; align-items:center; min-width:0; }
+#arenaWeather[data-weather-icon]:not([data-weather-icon=""]) [data-weather-summary]::before { content:none; }
+.arena-weather-graphic { display:none; position:relative; flex:none; inline-size:1em; block-size:1em; font-size:var(--arena-weather-icon-size,30px); }
+#arenaWeather[data-weather-icon]:not([data-weather-icon=""]) .arena-weather-graphic { display:inline-block; }
+.arena-weather-graphic i,.arena-weather-graphic b,.arena-weather-graphic u,.arena-weather-graphic em { position:absolute; display:block; }
+.arena-weather-graphic i { inset:15% 22% 27% 20%; border-radius:50%; background:linear-gradient(140deg,#ffe17b,#ff9b31); box-shadow:0 0 .16em #ffb33e99; }
+[data-weather-icon="moon"] .arena-weather-graphic i,[data-weather-icon="partly-night"] .arena-weather-graphic i { background:#cbd5ff; box-shadow:inset -.13em .04em #7a8fc2; }
+[data-weather-icon]:not([data-weather-icon="sun"]):not([data-weather-icon="moon"]) .arena-weather-graphic b { inset:34% 7% 29%; border-radius:1em; background:linear-gradient(#e7f3ff,#7196b6); }
+.arena-weather-graphic b::before { content:"";position:absolute;inline-size:52%;block-size:130%;inset: -43% 29% auto;border-radius:50%;background:inherit; }
+[data-weather-icon]:not([data-weather-icon="sun"]):not([data-weather-icon="moon"]):not([data-weather-icon^="partly"]) .arena-weather-graphic i { display:none; }
+[data-weather-icon^="partly"] .arena-weather-graphic i { inset:8% 44% 42% 10%; }
+[data-weather-icon$="rain"] .arena-weather-graphic u,
+[data-weather-icon="drizzle"] .arena-weather-graphic u,
+[data-weather-icon="storm"] .arena-weather-graphic u,
+[data-weather-icon="snow"] .arena-weather-graphic u {
+ inset:64% auto auto 28%; inline-size:.10em; block-size:.19em; border-radius:1em; background:#57caff;
+ box-shadow:.21em -.03em #57caff,.40em .015em #57caff; transform:rotate(12deg);
+}
+[data-weather-icon="drizzle"] .arena-weather-graphic u { inline-size:.07em; block-size:.09em; box-shadow:.31em 0 #57caff; }
+[data-weather-icon="heavy-rain"] .arena-weather-graphic u { block-size:.27em; }
+[data-weather-icon="snow"] .arena-weather-graphic u { block-size:.10em; background:#eff8ff; box-shadow:.21em -.03em #eff8ff,.40em .015em #eff8ff; }
+[data-weather-icon="storm"] .arena-weather-graphic em { inset:45% 30% auto 48%; block-size:.4em; background:#ffe17b; clip-path:polygon(26% 0,100% 0,55% 44%,90% 44%,0 100%,25% 51%,0 51%); }
+[data-weather-icon="fog"] .arena-weather-graphic em { inset:72% 10% auto; block-size:.07em; background:#afc4d6; box-shadow:0 .13em #afc4d6; }
+@media(prefers-reduced-motion:no-preference) {
+ :root:not(.reduce-motion):not([data-demo-motion="true"]) .arena-weather-card:not([data-weather-motion="off"]) .arena-weather-graphic u { animation:arena-weather-drops calc(var(--arena-weather-icon-seconds,3s) * .44) linear infinite; }
+ :root:not(.reduce-motion):not([data-demo-motion="true"]) .arena-weather-card:not([data-weather-motion="off"]) [data-weather-icon="drizzle"] .arena-weather-graphic u { animation-duration:calc(var(--arena-weather-icon-seconds,3s) * .72); }
+ :root:not(.reduce-motion):not([data-demo-motion="true"]) .arena-weather-card:not([data-weather-motion="off"]) .arena-weather-graphic b { animation:arena-weather-cloud var(--arena-weather-icon-seconds,3s) ease-in-out infinite alternate; }
+ :root:not(.reduce-motion):not([data-demo-motion="true"]) .arena-weather-card[data-weather-motion="pulse"] .arena-weather-graphic { animation:arena-weather-grow var(--arena-weather-icon-seconds,3s) ease-in-out infinite alternate; }
+}
+@keyframes arena-weather-drops { 0%{ opacity:0; translate:0 -.07em } 28%{ opacity:1 } 100%{ opacity:0; translate:0 .16em } }
+@keyframes arena-weather-cloud { from {translate:-.04em 0} to {translate:.05em 0} }
+@keyframes arena-weather-grow { from {scale:.95} to {scale:1.07} }
 #arenaWeather [data-weather-summary]::before {
   display: inline-block;
   margin-inline-end: .45em;
@@ -223,9 +256,9 @@
  function weatherIcon({weather_code:code,is_day:day}){
   if(code===0)return day===0?'moon':day===1?'sun':'';
   if(code===1||code===2)return day===0?'partly-night':day===1?'partly-day':'cloud';
-  return {3:'cloud',45:'fog',48:'fog',51:'rain',53:'rain',55:'rain',56:'rain',57:'rain',
-    61:'rain',63:'rain',65:'rain',66:'rain',67:'rain',71:'snow',73:'snow',75:'snow',
-    77:'snow',80:'rain',81:'rain',82:'rain',85:'snow',86:'snow',95:'storm',96:'storm',99:'storm'}[code]||'';
+  return {3:'cloud',45:'fog',48:'fog',51:'drizzle',53:'drizzle',55:'drizzle',56:'drizzle',57:'drizzle',
+    61:'rain',63:'rain',65:'heavy-rain',66:'rain',67:'rain',71:'snow',73:'snow',75:'snow',
+    77:'snow',80:'rain',81:'rain',82:'heavy-rain',85:'snow',86:'snow',95:'storm',96:'storm',99:'storm'}[code]||'';
  }
  function paint(data,at,stale){
   if(!usable(data))return false;
