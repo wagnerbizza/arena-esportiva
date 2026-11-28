@@ -5663,11 +5663,76 @@ function publicChallenge(){
  return `<section class="card sport-challenge"><span class="tag">INTERVALO ESPORTIVO</span><h2>Quiz esportivo e convivência</h2><div class="arena-quiz-controls"><label>Tema<select data-quiz-topic>${["Todos","Geral","Matemática","Convivência","Vôlei","Futebol"].map(topic=>`<option ${topic===quizTopic?"selected":""}>${topic}</option>`).join("")}</select></label><button type="button" data-quiz-restart>Recomeçar quiz</button></div><p>Desafio ${sportChallengeIndex%quizQuestions().length+1} de ${quizQuestions().length} · ${esc(q.topic||"Geral")}</p><p>Uma brincadeira para aprender enquanto acompanha as partidas. Suas respostas ficam apenas nesta página.</p><p class="quiz-score">Seu placar: <strong>${quizHits} acerto(s) em ${quizAttempts} resposta(s)</strong></p><h3>${esc(q.question)}</h3><div class="toolbar">${q.answers.map((a,i)=>`<button type="button" data-sport-answer="${i}" ${answered?"disabled":""}>${esc(a)}</button>`).join("")}</div>${answered?`<p role="status"><strong>${Number(sportChallengeAnswer)===q.correct?"Acertou!":"Vamos aprender!"}</strong> ${esc(q.explanation)}</p><button type="button" data-sport-next>Próximo desafio</button>`:""}</section>`;
 }
 const canManageMural=()=>!C.demo && (role==="admin" || (role==="operator" && operatorPermissions.includes("muralPublish")));
-let muralExpanded=false;
 let muralRows=[], muralStop, muralScope="", muralError="", muralLoaded=false, muralEditing="", muralBusy=false;
+let muralSlide=0,muralPaused=false;
+const muralMotion=matchMedia("(prefers-reduced-motion: reduce)");
 function muralPublicCard(){
- return C.demo?"":'<section class="card" data-mural-public aria-label="Mural da Arena" hidden></section>';
+ return C.demo?"":`<section class="card" data-mural-public aria-labelledby="arenaMuralTitle">
+   <div class="arena-mural-header"><h2 id="arenaMuralTitle">Mural da Arena</h2>
+   <span class="arena-mural-play" data-mural-motion aria-hidden="true"><span>🏃</span><span>⚽</span><span>🏃</span></span></div>
+   <div data-mural-slide aria-live="off"></div>
+   <div class="toolbar" data-mural-controls hidden>
+    <button type="button" data-mural-step="-1" aria-label="Recado anterior">←</button>
+    <span data-mural-position></span>
+    <button type="button" data-mural-step="1" aria-label="Próximo recado">→</button>
+    <button type="button" data-mural-pause>Pausar</button>
+   </div>
+ </section>`;
 }
+function muralSlides(){
+ const now=new Date();
+ const messages=muralRows.filter(row=>!muralDate(row)||muralDate(row)>now)
+  .sort((a,b)=>Number(b.pinned)-Number(a.pinned)||(b.updatedAt?.seconds||0)-(a.updatedAt?.seconds||0));
+ const matches=state.matches.filter(match=>!match.publicHidden&&!match.testData);
+ const games=[];
+ const live=matches.find(match=>match.status==="Ao vivo");
+ const next=matches.filter(match=>match.status==="Agendada")
+  .sort((a,b)=>String(a.date).localeCompare(String(b.date)))[0];
+ const latest=matches.filter(match=>["Encerrada","Homologada"].includes(match.status))
+  .sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0];
+ for(const [label,match] of [["Ao vivo",live],["Próximo jogo",next],["Último resultado",latest]]){
+  if(!match)continue;
+  const result=match===next?"×":gameResult(match).join(" × ");
+  games.push({title:`${name(match.home)} ${result} ${name(match.away)}`,
+   body:[matchSportLabel(match),match===next&&match.date?format(match.date):"",match.place].filter(Boolean).join(" · "),label});
+ }
+ const partners=state.partners?.surfaces?.includes("publicPanel")?partnerGroups("preview"):[];
+ const slides=[...messages.map(row=>({...row,label:row.pinned?"Recado em destaque":"Recado"})),...games];
+ if(partners.length)slides.push({label:"Organização e apoio",title:"Parceiros da Arena",body:"",partners});
+ if(!slides.length)slides.push({label:"Boas-vindas",title:"Bem-vindo à Arena!",body:"Confira aqui os próximos jogos, resultados e comunicados da comunidade."});
+ return slides;
+}
+function showMuralSlide(step=0,announce=false){
+ const box=app.querySelector("[data-mural-public]");if(!box)return;
+ const slides=muralSlides();
+ muralSlide=(muralSlide+step+slides.length)%slides.length;
+ const row=slides[muralSlide], content=box.querySelector("[data-mural-slide]");
+ const markup=`<p class="tag">${esc(row.label)}</p>${muralMediaMarkup(row)}${row.partners?`<div class="arena-partners">${row.partners.flatMap(group=>group.logos.map(url=>`<img src="${esc(url)}" alt="${esc(group.label)}" loading="lazy" referrerpolicy="no-referrer">`)).join("")}</div>`:""}`;
+ if(announce)content.setAttribute("aria-live","polite");
+ else if(step)content.setAttribute("aria-live","off");
+ if(content.dataset.muralKey!==markup){content.innerHTML=markup;content.dataset.muralKey=markup;}
+ const reduced=muralMotion.matches||document.documentElement.classList.contains("reduce-motion");
+ box.toggleAttribute("data-mural-paused",muralPaused||reduced);
+ box.querySelector("[data-mural-controls]").hidden=slides.length<2&&reduced;
+ for(const control of box.querySelectorAll("[data-mural-step],[data-mural-position]"))control.hidden=slides.length<2;
+ box.querySelector("[data-mural-position]").textContent=`${muralSlide+1} / ${slides.length}`;
+ const pause=box.querySelector("[data-mural-pause]");
+ pause.hidden=reduced;
+ pause.textContent=muralPaused?"Retomar":"Pausar";
+}
+document.addEventListener("click",event=>{
+ const button=event.target.closest("[data-mural-step],[data-mural-pause]");
+ if(!button)return;
+ if(button.hasAttribute("data-mural-pause"))muralPaused=!muralPaused;
+ else muralPaused=true;
+ showMuralSlide(Number(button.dataset.muralStep)||0,true);
+});
+muralMotion.addEventListener("change",()=>showMuralSlide());
+setInterval(()=>{
+ const box=app.querySelector("[data-mural-public]");
+ if(!box||document.hidden||box.matches(":hover,:focus-within"))return;
+ showMuralSlide(muralPaused||muralMotion.matches||document.documentElement.classList.contains("reduce-motion")?0:1);
+},10000);
 const muralFileTypes={png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",webp:"image/webp",pdf:"application/pdf",zip:"application/zip"};
 const muralFileLimit=200*1024;
 function muralLink(value){
@@ -5711,15 +5776,7 @@ function muralDate(row){
  return row.expiresAt?.toDate?.() || null;
 }
 function updateMural(){
- const publicBox=app.querySelector("[data-mural-public]");
- if(publicBox){
-  const rows=muralRows.filter(row=>!muralDate(row)||muralDate(row)>new Date());
-  rows.sort((a,b)=>Number(b.pinned)-Number(a.pinned)||(b.updatedAt?.seconds||0)-(a.updatedAt?.seconds||0));
-
-  publicBox.hidden=!rows.length;
-  const card=row=>`<article>${muralMediaMarkup(row)}</article>`;
-  publicBox.innerHTML=rows.length?`<h2>Mural da Arena</h2>${card(rows[0])}${rows.length>1?`<details ${muralExpanded?"open":""}><summary>Ver mais recados</summary>${rows.slice(1).map(card).join("")}</details>`:""}`:"";
- }
+ if(!admin)showMuralSlide();
  const list=app.querySelector("[data-mural-list]");
  if(list){
   const labels={draft:"Rascunho",published:"Publicado",archived:"Arquivado"};
@@ -5797,7 +5854,6 @@ document.addEventListener("click",e=>{
  else if(role==="admin"&&confirm("Arquivar este recado e retirá-lo do painel público?"))
   void submitMural(row.id,{...row,expiresAt:muralDate(row),status:"archived"});
 });
-document.addEventListener("toggle",e=>{if(e.target.matches("[data-mural-public] > details"))muralExpanded=e.target.open;},true);
 setInterval(()=>{if(!admin&&muralRows.some(row=>muralDate(row)&&muralDate(row)<=new Date()))updateMural();},60000);
 
 function publicHub(){

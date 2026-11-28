@@ -3209,3 +3209,30 @@ button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin)[aria-press
 .arena-mural-content { border-inline-start:3px solid var(--mural-color,transparent); padding-inline-start:12px; }
 .arena-mural-image { display:block; max-inline-size:100%; max-block-size:320px; object-fit:contain; margin-block:8px; }
 .arena-mural-content .toolbar:empty { display:none; }
+
+.arena-mural-header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 20px; }
+.arena-mural-header h2 { margin:0; }
+.arena-mural-play {
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  width:min(180px,100%);
+  padding:6px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:color-mix(in srgb,var(--panel) 84%,#28a06b);
+}
+.arena-mural-play span:first-child { transform:scaleX(-1); }
+[data-mural-public] [hidden] { display:none; }
+[data-mural-slide] { min-block-size:6rem; }
+[data-mural-controls] { align-items:center; margin-top:12px; }
+@media (prefers-reduced-motion:no-preference) {
+  :root:not(.reduce-motion) [data-mural-public]:not([data-mural-paused]) .arena-mural-play span:nth-child(2) {
+    animation:arena-mural-pass 2s ease-in-out infinite alternate;
+  }
+}
+@keyframes arena-mural-pass {
+  from { transform:translateX(-30px) rotate(-65deg); }
+  to { transform:translateX(30px) rotate(65deg); }
+}
