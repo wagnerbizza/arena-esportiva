@@ -3149,3 +3149,36 @@ button:is(.arena-game-bar-pin,.arena-weather-pin,.arena-op-score-pin)[aria-press
 }
 #list-results-teams.arena-team-results-wide { grid-template-columns: minmax(0, 1fr); }
 #list-results-teams > .empty { grid-column: 1 / -1; }
+
+
+/* Identidade legível sobre as superfícies claras e escuras. */
+:root {
+  --arena-brand-ink: #15c3ed;
+  --arena-brand-violet: #d8b4fe;
+  --arena-brand-amber: #ffd477;
+}
+:root[data-theme="light"] {
+  --arena-brand-ink: #075e83;
+  --arena-brand-violet: #6b21a8;
+  --arena-brand-amber: #854d0e;
+}
+:root[data-brand-color="violet"] { --arena-brand-ink: var(--arena-brand-violet); }
+:root[data-brand-color="amber"] { --arena-brand-ink: var(--arena-brand-amber); }
+:root[data-brand-color="text"] { --arena-brand-ink: var(--text); }
+:root :is(#systemBrand, #trainingBrand, #arenaSidebar, .demo-brand) .brand-copy b {
+  color: var(--arena-brand-ink);
+}
+:root:is(.high-contrast, [data-demo-contrast="true"]) :is(#systemBrand, #trainingBrand, #arenaSidebar, .demo-brand) .brand-copy b {
+  color: var(--text);
+}
+@media screen {
+  html[data-theme="light"].high-contrast body.arena-layout-v2 {
+    --bg: #fff;
+    --panel: #fff;
+    --text: #000;
+    --line: #000;
+    --muted: #111;
+    --arena-control: #eee;
+    --arena-input: #fff;
+  }
+}

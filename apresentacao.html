@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Conheça o Arena • Central Esporte</title>
-  <link rel="stylesheet" href="style.css?v=lupa-unica-1">
+  <link rel="stylesheet" href="style.css?v=aparencia-1">
   <link rel="stylesheet" href="arena-extras.css">
   <script src="arena-weather.js" defer></script>
   <style>
@@ -144,7 +144,7 @@
     }
   </style>
   <script src="config.js"></script>
-  <script src="apresentacao-arena.js?v=placar-interativo-1" defer></script>
+  <script type="module" src="apresentacao-arena.js?v=aparencia-1"></script>
 </head>
 <body>
   <header class="demo-header" id="inicio">
@@ -249,7 +249,9 @@
       <button class="arena-close-x" aria-label="Fechar preferências" title="Fechar preferências" autofocus>×</button>
     </form>
     <label for="demo-theme">Tema</label>
-    <select id="demo-theme"><option value="dark">Escuro</option><option value="light">Claro</option></select>
+    <select id="demo-theme"><option value="dark">Escuro</option><option value="light">Claro</option><option value="auto">Automático — seguir dispositivo</option></select>
+    <label for="demo-brand-color">Cor do nome da Arena</label>
+    <select id="demo-brand-color"><option value="blue">Azul Arena</option><option value="text">Branco ou escuro, conforme o tema</option><option value="violet">Roxo</option><option value="amber">Âmbar</option></select>
     <label for="demo-palette">Cor de destaque</label>
     <select id="demo-palette"><option value="system">Cor do sistema</option><option value="blue">Azul</option><option value="violet">Roxo</option><option value="amber">Âmbar</option></select>
     <label for="demo-scale">Tamanho do texto</label>

@@ -1,3 +1,4 @@
+import {applyAppearance, getAppearance, setAppearance, watchAppearance} from "./arena-appearance.js?v=1";
 const examples = [
   ['Placar ao vivo', 'Aurora 2 × 1 Horizonte', 'Futebol · segundo tempo · 64 minutos.'],
   ['Agenda', 'Aurora × Estrela', 'Vôlei · sábado, 14h · Ginásio Central.'],
@@ -75,6 +76,7 @@ const paletteColors = {
 };
 let systemAccent = '';
 const fields = {};
+const brandField = document.getElementById('demo-brand-color');
 for (const name of ['theme', 'palette', 'scale', 'contrast', 'motion']) {
   const field = document.getElementById('demo-' + name);
   const key = 'arena_apresentacao_' + (name === 'theme' ? 'tema' : name);
@@ -85,21 +87,29 @@ for (const name of ['theme', 'palette', 'scale', 'contrast', 'motion']) {
     else if (Array.from(field.options).some(option => option.value === value)) field.value = value;
   } catch {}
   field.addEventListener('change', () => {
+    if (name === 'theme') setAppearance({theme: field.value});
     try { localStorage.setItem(key, field.type === 'checkbox' ? String(field.checked) : field.value); } catch {}
     applyReadingPreferences();
   });
 }
 
 function applyReadingPreferences() {
-  root.dataset.theme = fields.theme.value;
+  fields.theme.value = getAppearance().theme || fields.theme.value;
+  brandField.value = getAppearance().brand || 'blue';
+  applyAppearance(fields.theme.value, brandField.value);
   root.dataset.demoContrast = String(fields.contrast.checked);
   root.dataset.demoMotion = String(fields.motion.checked);
   root.style.fontSize = Number(fields.scale.value) * 100 + '%';
   root.style.setProperty('--demo-scale', fields.scale.value);
-  const custom = paletteColors[fields.palette.value]?.[fields.theme.value === 'light' ? 1 : 0];
+  const custom = paletteColors[fields.palette.value]?.[root.dataset.theme === 'light' ? 1 : 0];
   if (custom || systemAccent) root.style.setProperty('--accent', custom || systemAccent);
   else root.style.removeProperty('--accent');
 }
+brandField.addEventListener('change', () => {
+  setAppearance({brand: brandField.value});
+  applyReadingPreferences();
+});
+watchAppearance(applyReadingPreferences);
 applyReadingPreferences();
 
 async function loadBrand() {

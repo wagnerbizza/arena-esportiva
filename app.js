@@ -1,3 +1,4 @@
+import {applyAppearance, getAppearance, setAppearance, watchAppearance} from "./arena-appearance.js?v=1";
 /* APLICAÇÃO — seções numeradas para facilitar futuras alterações.
    1 conexão | 2 visualização | 3 cadastros | 4 partida | 5 importação | 6 relatórios.
    Nunca acrescente senhas neste arquivo. Dados externos são escapados antes da exibição. */
@@ -4771,10 +4772,11 @@ function readPreferences(saved) {
   } catch { return {...preferenceDefaults}; }
 }
 let preferences = readPreferences();
-const themeQuery = matchMedia("(prefers-color-scheme: dark)");
 function applyPreferences() {
   const root = document.documentElement;
-  root.dataset.theme = preferences.theme === "auto" ? (themeQuery.matches?"dark":"light") : preferences.theme;
+  applyAppearance(getAppearance().theme || preferences.theme);
+  for (const control of document.querySelectorAll("[data-pref=theme]")) control.value = getAppearance().theme || preferences.theme;
+  for (const control of document.querySelectorAll("[data-brand-color]")) control.value = getAppearance().brand || "blue";
   root.dataset.textSize = preferences.text;
   root.classList.toggle("high-contrast",preferences.contrast);
   root.classList.toggle("reduce-motion",preferences.motion);
@@ -4829,12 +4831,13 @@ function setupAccessibility(){
   const main=document.querySelector("main");if(main){main.id="mainContent";main.tabIndex=-1;}
   document.body.insertAdjacentHTML("afterbegin",'<a class="skip-link" href="#mainContent">Pular para o conteúdo principal</a>');
   const region=document.createElement("section");region.className="accessibility-bar noprint";
-  region.innerHTML=`<details id="arenaPreferences"><summary>Aparência, acessibilidade e ajuda</summary><div class="preference-controls"><label>Tema<select data-pref="theme"><option value="dark">Escuro</option><option value="light">Claro</option><option value="auto">Automático — seguir dispositivo</option></select></label><label>Tamanho do texto<select data-pref="text"><option value="normal">Padrão</option><option value="large">Maior</option><option value="larger">Muito maior</option></select></label><label class="preference-check"><input type="checkbox" data-pref="contrast">Contraste reforçado</label><label class="preference-check"><input type="checkbox" data-pref="motion">Reduzir movimentos</label><label class="preference-check"><input type="checkbox" data-pref="help">Mostrar ajuda contextual</label><button type="button" data-reset-preferences>Restaurar preferências</button></div><p>Preferências deste navegador. Use Tab para navegar, Enter para ativar e Esc para fechar a ajuda. No celular, toque em Ajuda da função e depois no controle desejado.</p><button type="button" data-touch-help aria-pressed="false">Ajuda da função: desativada</button><p id="touchHelpStatus" role="status"></p></details>`;
+  region.innerHTML=`<details id="arenaPreferences"><summary>Aparência, acessibilidade e ajuda</summary><div class="preference-controls"><label>Tema<select data-pref="theme"><option value="dark">Escuro</option><option value="light">Claro</option><option value="auto">Automático — seguir dispositivo</option></select></label><label>Cor do nome da Arena<select data-brand-color><option value="blue">Azul Arena</option><option value="text">Branco ou escuro, conforme o tema</option><option value="violet">Roxo</option><option value="amber">Âmbar</option></select></label><label>Tamanho do texto<select data-pref="text"><option value="normal">Padrão</option><option value="large">Maior</option><option value="larger">Muito maior</option></select></label><label class="preference-check"><input type="checkbox" data-pref="contrast">Contraste reforçado</label><label class="preference-check"><input type="checkbox" data-pref="motion">Reduzir movimentos</label><label class="preference-check"><input type="checkbox" data-pref="help">Mostrar ajuda contextual</label><button type="button" data-reset-preferences>Restaurar preferências</button></div><p>Preferências deste navegador. Use Tab para navegar, Enter para ativar e Esc para fechar a ajuda. No celular, toque em Ajuda da função e depois no controle desejado.</p><button type="button" data-touch-help aria-pressed="false">Ajuda da função: desativada</button><p id="touchHelpStatus" role="status"></p></details>`;
   document.getElementById("mode")?.after(region);
   for(const el of region.querySelectorAll("[data-pref]")){if(el.type==="checkbox")el.checked=preferences[el.dataset.pref];else el.value=preferences[el.dataset.pref];}
+  applyPreferences();
   const tip=document.createElement("div");tip.id="arenaContextHelp";tip.role="tooltip";tip.hidden=true;document.body.append(tip);
   let touchHelp=false;
-  document.addEventListener("change",e=>{const k=e.target.dataset.pref;if(!Object.hasOwn(preferenceDefaults,k))return;preferences[k]=e.target.type==="checkbox"?e.target.checked:e.target.value;hideContextHelp();savePreferences();});
+  document.addEventListener("change",e=>{const k=e.target.dataset.pref;if(e.target.hasAttribute("data-brand-color")){setAppearance({brand:e.target.value});applyPreferences();return;}if(!Object.hasOwn(preferenceDefaults,k))return;if(k==="theme")setAppearance({theme:e.target.value});preferences[k]=e.target.type==="checkbox"?e.target.checked:e.target.value;hideContextHelp();savePreferences();});
   document.addEventListener("pointerover",e=>{if(e.pointerType!=="touch")showContextHelp(e.target.closest("button,input,select,textarea,summary"));});
   document.addEventListener("pointerout",e=>{if(helpTarget&&!helpTarget.contains(e.relatedTarget))hideContextHelp();});
   document.addEventListener("focusin",e=>showContextHelp(e.target));
@@ -4843,10 +4846,10 @@ function setupAccessibility(){
   document.addEventListener("click",e=>{
     const b=e.target.closest("button,input,select,textarea");if(!b)return;
     if(b.hasAttribute("data-touch-help")){touchHelp=!touchHelp;b.setAttribute("aria-pressed",String(touchHelp));b.textContent="Ajuda da função: "+(touchHelp?"ativada":"desativada");return;}
-    if(b.hasAttribute("data-reset-preferences")){preferences={...preferenceDefaults};savePreferences();for(const el of region.querySelectorAll("[data-pref]")){if(el.type==="checkbox")el.checked=preferences[el.dataset.pref];else el.value=preferences[el.dataset.pref];}hideContextHelp();return;}
+    if(b.hasAttribute("data-reset-preferences")){preferences={...preferenceDefaults};setAppearance({theme:"dark",brand:"blue"});savePreferences();for(const el of region.querySelectorAll("[data-pref]")){if(el.type==="checkbox")el.checked=preferences[el.dataset.pref];else el.value=preferences[el.dataset.pref];}hideContextHelp();return;}
     if(touchHelp&&!b.closest(".accessibility-bar")&&!b.closest("#arenaTutorial")&&!b.closest("#sessionIdentity")){e.preventDefault();e.stopImmediatePropagation();document.getElementById("touchHelpStatus").textContent=helpFor(b)||"Este controle não possui uma explicação adicional.";showContextHelp(b);}
   },true);
-  themeQuery.addEventListener("change",()=>{if(preferences.theme==="auto")applyPreferences();});
+  watchAppearance(applyPreferences);
 }
 setupAccessibility();
 
@@ -7013,7 +7016,7 @@ function applySyncedInterface(personal) {
     applyPreferences();
     for(const control of document.querySelectorAll("[data-pref]")) {
       if(control.type==="checkbox")control.checked=preferences[control.dataset.pref];
-      else control.value=preferences[control.dataset.pref];
+      else if(control.dataset.pref!=="theme")control.value=preferences[control.dataset.pref];
     }
   }
   applyPersonalColors();
